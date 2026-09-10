@@ -59,6 +59,9 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 export async function signInWithGoogle() {
+  // Clear any legacy mock session before starting live OAuth flow
+  localStorage.removeItem('memoryagent_user')
+
   if (!supabase) {
     const mockUser = {
       id: 'google-user-1',
@@ -68,33 +71,42 @@ export async function signInWithGoogle() {
     localStorage.setItem('memoryagent_user', JSON.stringify(mockUser))
     return { data: { user: mockUser, session: { access_token: 'mock-google-token' } }, error: null }
   }
+
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${window.location.origin}/dashboard`,
+      redirectTo: `${window.location.origin}/`,
+      queryParams: {
+        access_type: 'offline',
+        prompt: 'select_account',
+      },
     },
   })
 }
 
 export async function signOut() {
+  localStorage.removeItem('memoryagent_user')
   if (!supabase) {
-    localStorage.removeItem('memoryagent_user')
     return { error: null }
   }
   return supabase.auth.signOut()
 }
 
 export async function getCurrentSession() {
-  if (!supabase) {
-    const saved = localStorage.getItem('memoryagent_user')
-    if (saved) {
+  if (supabase) {
+    const { data } = await supabase.auth.getSession()
+    if (data?.session) return data
+  }
+  const saved = localStorage.getItem('memoryagent_user')
+  if (saved) {
+    try {
       const user = JSON.parse(saved)
       return { session: { user, access_token: 'mock-token' } }
+    } catch {
+      localStorage.removeItem('memoryagent_user')
     }
-    return { session: null }
   }
-  const { data } = await supabase.auth.getSession()
-  return data
+  return { session: null }
 }
 
 // ─── Experience Memory Database Helpers ──────────────────────────────────────
