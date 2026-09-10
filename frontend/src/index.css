@@ -1,0 +1,139 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --purple:  #a855f7;
+  --fuchsia: #ec4899;
+  --cyan:    #22d3ee;
+  --orange:  #fb923c;
+  --violet:  #7c3aed;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background: #0a0010;
+}
+
+/* ── Display font for headings ───────────────────────────────────────── */
+.font-display { font-family: 'Space Grotesk', sans-serif; }
+
+/* ── Gradient text ──────────────────────────────────────────────────── */
+.gradient-text {
+  background: linear-gradient(135deg, #a855f7 0%, #ec4899 40%, #22d3ee 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.gradient-text-warm {
+  background: linear-gradient(135deg, #fb923c 0%, #ec4899 60%, #a855f7 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ── Glassmorphism ──────────────────────────────────────────────────── */
+.glass {
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.glass-bright {
+  background: rgba(168, 85, 247, 0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+}
+
+/* ── Glow border on hover ───────────────────────────────────────────── */
+.glow-border {
+  position: relative;
+}
+.glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #a855f7, #ec4899, #22d3ee);
+  z-index: -1;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.glow-border:hover::before { opacity: 1; }
+
+/* ── Card hover ─────────────────────────────────────────────────────── */
+.card-hover {
+  transition: transform 200ms ease, box-shadow 200ms ease;
+}
+.card-hover:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 20px 60px rgba(168, 85, 247, 0.2);
+}
+
+/* ── Keyframe Animations ────────────────────────────────────────────── */
+@keyframes float-up {
+  0%   { opacity: 0; transform: translateY(30px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-10px); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position:  200% center; }
+}
+@keyframes pulse-ring {
+  0%   { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(168,85,247,0.5); }
+  70%  { transform: scale(1);    box-shadow: 0 0 0 12px rgba(168,85,247,0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(168,85,247,0); }
+}
+@keyframes marquee {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+@keyframes slide-in-right {
+  0%   { opacity: 0; transform: translateX(40px); }
+  100% { opacity: 1; transform: translateX(0); }
+}
+@keyframes gradient-shift {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Animation classes ──────────────────────────────────────────────── */
+.anim-float-up    { animation: float-up 0.7s ease forwards; }
+.anim-float       { animation: float 4s ease-in-out infinite; }
+.anim-slide-right { animation: slide-in-right 0.7s ease forwards; }
+.anim-spin-slow   { animation: spin-slow 8s linear infinite; }
+.anim-shimmer-text {
+  background: linear-gradient(90deg, #a855f7 0%, #ec4899 25%, #22d3ee 50%, #ec4899 75%, #a855f7 100%);
+  background-size: 200% auto;
+  animation: shimmer 3s linear infinite;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.anim-gradient-bg {
+  background: linear-gradient(270deg, #7c3aed, #a855f7, #ec4899, #22d3ee);
+  background-size: 400% 400%;
+  animation: gradient-shift 6s ease infinite;
+}
+.anim-pulse-ring { animation: pulse-ring 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite; }
+.marquee-track   { animation: marquee 28s linear infinite; }
+
+/* ── Delay utilities ─────────────────────────────────────────────────── */
+.delay-100 { animation-delay: 0.1s; }
+.delay-200 { animation-delay: 0.2s; }
+.delay-300 { animation-delay: 0.3s; }
+.delay-500 { animation-delay: 0.5s; }
