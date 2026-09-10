@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Brain, CheckCircle2, ArrowRight,
   Zap, Database, Menu, X,
-  Sparkles, User, MessageSquare, Star, BookOpen
+  Sparkles, User, MessageSquare, Star, BookOpen, LogOut
 } from 'lucide-react'
 import ThreeMemoryCore from '../components/ThreeMemoryCore'
 import AuthModal from '../components/AuthModal'
@@ -320,22 +320,24 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
 
           <div className="hidden md:flex items-center gap-3">
             {user ? (
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2.5">
                 <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-200 text-xs font-mono">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span>{user.name || user.email.split('@')[0]}</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="max-w-[140px] truncate">{user.name || user.email.split('@')[0]}</span>
                 </div>
                 <a
                   href="/dashboard"
-                  className="text-sm font-bold px-4 py-2 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity"
+                  className="text-xs font-bold px-3.5 py-2 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity"
                 >
                   Dashboard
                 </a>
                 <button
                   onClick={() => signOut()}
-                  className="text-white/50 hover:text-white text-xs font-mono transition-colors cursor-pointer bg-transparent border-0"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 border border-red-500/25 text-xs font-mono transition-all cursor-pointer"
+                  title="Sign out of account"
                 >
-                  Sign out
+                  <LogOut size={13} />
+                  <span>Sign out</span>
                 </button>
               </div>
             ) : (
@@ -381,9 +383,10 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
                 </a>
                 <button
                   onClick={() => signOut()}
-                  className="w-full text-center text-white/50 text-xs py-1"
+                  className="w-full flex items-center justify-center gap-1.5 text-center text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl text-xs py-2 cursor-pointer"
                 >
-                  Sign out
+                  <LogOut size={13} />
+                  <span>Sign out</span>
                 </button>
               </div>
             ) : (
