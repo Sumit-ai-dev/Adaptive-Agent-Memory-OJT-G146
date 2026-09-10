@@ -58,6 +58,24 @@ export async function signInWithEmail(email: string, password: string) {
   return supabase.auth.signInWithPassword({ email, password })
 }
 
+export async function signInWithGoogle() {
+  if (!supabase) {
+    const mockUser = {
+      id: 'google-user-1',
+      email: 'user@gmail.com',
+      user_metadata: { name: 'Google User', avatar_url: 'https://lh3.googleusercontent.com/a/default-user' },
+    }
+    localStorage.setItem('memoryagent_user', JSON.stringify(mockUser))
+    return { data: { user: mockUser, session: { access_token: 'mock-google-token' } }, error: null }
+  }
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/dashboard`,
+    },
+  })
+}
+
 export async function signOut() {
   if (!supabase) {
     localStorage.removeItem('memoryagent_user')

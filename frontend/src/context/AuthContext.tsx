@@ -4,6 +4,7 @@ import {
   isSupabaseConfigured,
   signInWithEmail,
   signUpWithEmail,
+  signInWithGoogle as supabaseSignInWithGoogle,
   signOut as supabaseSignOut,
   getCurrentSession,
 } from '../lib/supabase'
@@ -21,6 +22,7 @@ interface AuthContextType {
   isConfigured: boolean
   signIn: (email: string, pass: string) => Promise<{ error: Error | null }>
   signUp: (email: string, pass: string, name?: string) => Promise<{ error: Error | null }>
+  signInWithGoogle: () => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
 }
 
@@ -90,6 +92,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error ? new Error(error.message) : null }
   }
 
+  const signInWithGoogle = async () => {
+    setLoading(true)
+    const { data, error } = await supabaseSignInWithGoogle()
+    if (!error && data && 'user' in data && data.user) {
+      const u = data.user as { id: string; email?: string; user_metadata?: { name?: string } }
+      setUser({
+        id: u.id,
+        email: u.email || '',
+        name: u.user_metadata?.name || u.email?.split('@')[0],
+      })
+    }
+    setLoading(false)
+    return { error: error ? new Error(error.message) : null }
+  }
+
   const signOut = async () => {
     setLoading(true)
     await supabaseSignOut()
@@ -105,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isConfigured: isSupabaseConfigured,
         signIn,
         signUp,
+        signInWithGoogle,
         signOut,
       }}
     >
