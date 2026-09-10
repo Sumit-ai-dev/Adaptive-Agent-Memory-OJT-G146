@@ -448,11 +448,11 @@ const LLM_PROVIDERS: ProviderConfig[] = [
     taskType: 'AIR-GAPPED COMPLIANCE',
     query: 'Run private localized database migration with zero cloud data egress',
     memoryId: 'MEM-104',
-    memoryMatch: 'Run #104: Local ChromaDB embedding retrieval with air-gapped schema checks',
+    memoryMatch: 'Run #104: Local pgvector embedding retrieval with air-gapped schema checks',
     confidence: '96.4%',
     codeLines: [
       { num: '01', text: '// Local memory query · 100% on-premise execution', color: '#6b7280' },
-      { num: '02', text: 'const localMemory = await chromaClient.query({ embedding: localEmb });', color: '#c084fc' },
+      { num: '02', text: 'const localMemory = await pgvectorClient.query({ embedding: localEmb });', color: '#c084fc' },
       { num: '03', text: 'const ddlPlan = await ollama.generateSafeDDL({ memory: localMemory });', color: '#38bdf8' },
       { num: '04', text: '// Status: Schema migrated in 620ms · 0 bytes external egress', color: '#4ade80' },
     ],
@@ -2051,7 +2051,7 @@ function PerformanceGraph() {
 
 // ─── Features (Removed) ───────────────────────────────────────────────────────
 
-const logos = ['LangGraph', 'ChromaDB', 'FastAPI', 'PostgreSQL', 'React', 'Docker', 'OpenAI', 'Supabase']
+const logos = ['pgvector', 'FastAPI', 'PostgreSQL', 'React', 'Docker', 'OpenAI', 'Supabase', 'Python']
 
 // ─── Landing Page ─────────────────────────────────────────────────────────────
 export default function LandingPage() {
@@ -2119,7 +2119,7 @@ export default function LandingPage() {
               </a>
               <a
                 id="hero-cta-secondary"
-                href="https://github.com"
+                href="https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146"
                 target="_blank"
                 rel="noreferrer"
                 className="flex items-center gap-2 font-semibold px-7 py-4 rounded-2xl cursor-pointer text-sm text-white/70 hover:text-white transition-all duration-200"
@@ -2165,7 +2165,7 @@ export default function LandingPage() {
             { val: 'Memory ON', sub: 'vs Memory OFF evaluation' },
             { val: '< 500ms', sub: 'Experience retrieval latency' },
             { val: 'Reflexion', sub: 'Research-backed architecture' },
-            { val: 'LangGraph', sub: 'Stateful agent orchestration' },
+            { val: 'Python', sub: 'Custom agent orchestration' },
           ].map(s => (
             <div key={s.sub}>
               <p className="text-white text-2xl font-bold mb-1 font-display">{s.val}</p>

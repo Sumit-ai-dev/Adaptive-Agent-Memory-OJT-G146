@@ -8,6 +8,13 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+// ─── DEMO / MOCK DATA LAYER ─────────────────────────────────────────────────
+// NOTE: All data below (seed experiences, simulation logic, telemetry values)
+// is for local demo/development use only. It will be replaced by real FastAPI
+// backend responses once the backend is implemented. Do NOT present these
+// values as actual measured research results.
+// ─────────────────────────────────────────────────────────────────────────────
+
 // ─── Initial Seed / Mock Experiences (matching PRD & Research Docs) ───────────
 const INITIAL_EXPERIENCES: Experience[] = [
   {
@@ -183,7 +190,7 @@ async function simulateAgentExecution(
     onProgress?.({
       type: 'retrieval',
       title: 'Memory Retrieval Triggered',
-      detail: `Querying ChromaDB vector index for similar experiences in domain "${taskDomain}"...`,
+      detail: `Querying pgvector experience index for similar experiences in domain "${taskDomain}"...`,
     })
     await sleep(700)
 
@@ -292,9 +299,13 @@ async function simulateAgentExecution(
   return execution
 }
 
-// ─── Metrics Telemetry Service ───────────────────────────────────────────────
+// ─── MOCK Telemetry Service ──────────────────────────────────────────────────
+// IMPORTANT: These are illustrative demo values only. Real telemetry will be
+// served from the FastAPI backend once it is implemented.
+// DO NOT use these values as actual research measurements.
 
-export function getTelemetryMetrics(): AgentMetricSummary {
+/** @deprecated Use real FastAPI /api/telemetry endpoint once backend is available */
+export function getMockTelemetryMetrics(): AgentMetricSummary {
   return {
     totalTasks: 4820,
     activeMemories: 1247,
@@ -307,3 +318,6 @@ export function getTelemetryMetrics(): AgentMetricSummary {
     mttrMin: 6,
   }
 }
+
+/** Alias kept for backward compatibility during development phase */
+export const getTelemetryMetrics = getMockTelemetryMetrics

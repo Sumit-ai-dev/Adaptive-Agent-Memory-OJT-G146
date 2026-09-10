@@ -80,6 +80,21 @@ export async function getCurrentSession() {
 }
 
 // ─── Experience Memory Database Helpers ──────────────────────────────────────
+// ARCHITECTURE NOTE (Temporary):
+// These helpers write directly from the frontend to Supabase/PostgreSQL.
+// This is acceptable for the current demo/development phase only.
+//
+// TODO: Once the FastAPI backend is implemented, these write operations
+// (dbSaveExperience, dbRecordTaskExecution, dbRecordTrustUpdate) must be
+// moved server-side. The frontend should POST to FastAPI endpoints, and
+// FastAPI should handle all database writes, experience logic, and trust updates.
+//
+// The intended permanent flow is:
+//   Frontend → FastAPI → PostgreSQL + pgvector
+//
+// dbFetchExperiences may remain as a read-only shortcut if Supabase RLS
+// is correctly configured and no business logic is involved.
+// ─────────────────────────────────────────────────────────────────────────────
 
 export async function dbFetchExperiences(domain?: string): Promise<Experience[]> {
   if (!supabase) return []
