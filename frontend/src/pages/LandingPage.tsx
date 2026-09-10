@@ -2,9 +2,11 @@ import { useState, useEffect, useRef } from 'react'
 import {
   Brain, CheckCircle2, ArrowRight,
   Zap, Database, Menu, X,
-  Sparkles, User, MessageSquare, Star, BookOpen
+  Sparkles, User, MessageSquare, Star, BookOpen, LogOut
 } from 'lucide-react'
 import ThreeMemoryCore from '../components/ThreeMemoryCore'
+import AuthModal from '../components/AuthModal'
+import { useAuth } from '../context/AuthContext'
 
 // ─── Demo Simulation Data ─────────────────────────────────────────────────────
 const DEMO_STEPS = [
@@ -295,45 +297,124 @@ function MemoryNodes() {
 
 // ─── Navbar ───────────────────────────────────────────────────────────────────
 function Navbar({ scrolled }: { scrolled: boolean }) {
+  const { user, signOut } = useAuth()
   const [open, setOpen] = useState(false)
+  const [showAuth, setShowAuth] = useState(false)
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
 
   return (
-    <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'glass shadow-lg' : ''}`}>
-      <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center anim-gradient-bg">
-            <Brain size={18} className="text-white" />
+    <>
+      <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'glass shadow-lg' : ''}`}>
+        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center anim-gradient-bg">
+              <Brain size={18} className="text-white" />
+            </div>
+            <span className="text-white font-bold text-lg font-display tracking-tight">MemoryAgent</span>
           </div>
-          <span className="text-white font-bold text-lg font-display tracking-tight">MemoryAgent</span>
+          <div className="hidden md:flex items-center gap-8">
+            {['Features', 'How it works', 'Docs'].map(item => (
+              <a key={item} href="#" className="text-white/60 hover:text-white text-sm font-medium transition-colors duration-150">{item}</a>
+            ))}
+          </div>
+
+          <div className="hidden md:flex items-center gap-3">
+            {user ? (
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-200 text-xs font-mono">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="max-w-[140px] truncate">{user.name || user.email.split('@')[0]}</span>
+                </div>
+                <a
+                  href="/dashboard"
+                  className="text-xs font-bold px-3.5 py-2 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity"
+                >
+                  Dashboard
+                </a>
+                <button
+                  onClick={() => signOut()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 border border-red-500/25 text-xs font-mono transition-all cursor-pointer"
+                  title="Sign out of account"
+                >
+                  <LogOut size={13} />
+                  <span>Sign out</span>
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={() => {
+                    setAuthMode('signin')
+                    setShowAuth(true)
+                  }}
+                  className="text-white/70 hover:text-white text-sm font-medium transition-colors cursor-pointer bg-transparent border-0"
+                >
+                  Sign in
+                </button>
+                <button
+                  onClick={() => {
+                    setAuthMode('signup')
+                    setShowAuth(true)
+                  }}
+                  id="nav-cta"
+                  className="text-sm font-bold px-5 py-2.5 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity border-0"
+                >
+                  Get started →
+                </button>
+              </>
+            )}
+          </div>
+
+          <button className="md:hidden text-white" onClick={() => setOpen(!open)} aria-label="Toggle menu">
+            {open ? <X size={22} /> : <Menu size={22} />}
+          </button>
         </div>
-        <div className="hidden md:flex items-center gap-8">
-          {['Features', 'How it works', 'Docs'].map(item => (
-            <a key={item} href="#" className="text-white/60 hover:text-white text-sm font-medium transition-colors duration-150">{item}</a>
-          ))}
-        </div>
-        <div className="hidden md:flex items-center gap-3">
-          <a href="/dashboard" className="text-white/70 hover:text-white text-sm font-medium transition-colors cursor-pointer">
-            Sign in
-          </a>
-          <a href="/dashboard" id="nav-cta" className="text-sm font-bold px-5 py-2.5 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity">
-            Get started →
-          </a>
-        </div>
-        <button className="md:hidden text-white" onClick={() => setOpen(!open)} aria-label="Toggle menu">
-          {open ? <X size={22} /> : <Menu size={22} />}
-        </button>
-      </div>
-      {open && (
-        <div className="md:hidden glass px-6 pb-5 space-y-4 border-t border-white/10">
-          {['Features', 'How it works', 'Docs'].map(item => (
-            <a key={item} href="#" className="block text-white/80 text-sm font-medium py-1">{item}</a>
-          ))}
-          <a href="/dashboard" className="block text-center text-sm font-bold py-2.5 rounded-xl text-white anim-gradient-bg">
-            Get started →
-          </a>
-        </div>
-      )}
-    </nav>
+
+        {open && (
+          <div className="md:hidden glass px-6 pb-5 space-y-4 border-t border-white/10">
+            {['Features', 'How it works', 'Docs'].map(item => (
+              <a key={item} href="#" className="block text-white/80 text-sm font-medium py-1">{item}</a>
+            ))}
+            {user ? (
+              <div className="space-y-2 pt-2 border-t border-white/10">
+                <p className="text-white/60 text-xs font-mono">{user.email}</p>
+                <a href="/dashboard" className="block text-center text-sm font-bold py-2.5 rounded-xl text-white anim-gradient-bg">
+                  Go to Dashboard
+                </a>
+                <button
+                  onClick={() => signOut()}
+                  className="w-full flex items-center justify-center gap-1.5 text-center text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl text-xs py-2 cursor-pointer"
+                >
+                  <LogOut size={13} />
+                  <span>Sign out</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setAuthMode('signup')
+                  setShowAuth(true)
+                  setOpen(false)
+                }}
+                className="w-full text-center text-sm font-bold py-2.5 rounded-xl text-white anim-gradient-bg cursor-pointer border-0"
+              >
+                Get started →
+              </button>
+            )}
+          </div>
+        )}
+      </nav>
+
+      {/* Supabase Auth Modal */}
+      <AuthModal
+        isOpen={showAuth}
+        initialMode={authMode}
+        onClose={() => setShowAuth(false)}
+        onSuccess={() => {
+          window.location.href = '/dashboard'
+        }}
+      />
+    </>
   )
 }
 
