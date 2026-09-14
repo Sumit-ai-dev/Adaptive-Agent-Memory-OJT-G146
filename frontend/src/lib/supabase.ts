@@ -58,25 +58,53 @@ export async function signInWithEmail(email: string, password: string) {
   return supabase.auth.signInWithPassword({ email, password })
 }
 
-export async function signOut() {
+export async function signInWithGoogle() {
   if (!supabase) {
-    localStorage.removeItem('memoryagent_user')
+    // Google OAuth requires a real Supabase project with Google provider enabled.
+    // Cannot proceed without VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY configured.
+    return {
+      data: null,
+      error: new Error('Google sign-in requires Supabase credentials. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.'),
+    }
+  }
+
+  // Clear any stale mock/dev session before starting the real OAuth flow
+  localStorage.removeItem('memoryagent_user')
+
+  return supabase.auth.signInWithOAuth({
+    provider: 'google',
+    options: {
+      redirectTo: `${window.location.origin}/`,
+      queryParams: {
+        prompt: 'select_account',
+      },
+    },
+  })
+}
+
+export async function signOut() {
+  localStorage.removeItem('memoryagent_user')
+  if (!supabase) {
     return { error: null }
   }
   return supabase.auth.signOut()
 }
 
 export async function getCurrentSession() {
-  if (!supabase) {
-    const saved = localStorage.getItem('memoryagent_user')
-    if (saved) {
+  if (supabase) {
+    const { data } = await supabase.auth.getSession()
+    if (data?.session) return data
+  }
+  const saved = localStorage.getItem('memoryagent_user')
+  if (saved) {
+    try {
       const user = JSON.parse(saved)
       return { session: { user, access_token: 'mock-token' } }
+    } catch {
+      localStorage.removeItem('memoryagent_user')
     }
-    return { session: null }
   }
-  const { data } = await supabase.auth.getSession()
-  return data
+  return { session: null }
 }
 
 // ─── Experience Memory Database Helpers ──────────────────────────────────────
