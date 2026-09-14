@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Brain, CheckCircle2, ArrowRight,
   Zap, Database, Menu, X,
@@ -2137,6 +2138,29 @@ const logos = ['pgvector', 'FastAPI', 'PostgreSQL', 'React', 'Docker', 'OpenAI',
 // ─── Landing Page ─────────────────────────────────────────────────────────────
 export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
+  const [oauthError, setOauthError] = useState<string | null>(null)
+  const { user, loading } = useAuth()
+  const navigate = useNavigate()
+
+  // Auto-redirect to dashboard after OAuth returns a signed-in session
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/dashboard', { replace: true })
+    }
+  }, [user, loading, navigate])
+
+  // Handle OAuth error URL parameters (e.g. error=server_error from Supabase redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
+    const err = params.get('error_description') || hashParams.get('error_description')
+    if (err) {
+      setOauthError(decodeURIComponent(err.replace(/\+/g, ' ')))
+      // Clean the URL so the error doesn't persist on refresh
+      window.history.replaceState({}, '', '/')
+    }
+  }, [])
+
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40)
     window.addEventListener('scroll', fn)
@@ -2146,6 +2170,18 @@ export default function LandingPage() {
   return (
     <div className="min-h-screen bg-[#0a0010] font-sans overflow-x-hidden">
       <Navbar scrolled={scrolled} />
+
+      {/* OAuth Error Banner */}
+      {oauthError && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 p-4 rounded-2xl bg-red-950/90 border border-red-500/40 text-red-300 text-sm font-mono flex items-start gap-3 shadow-xl backdrop-blur-md">
+          <span className="shrink-0 mt-0.5">⚠️</span>
+          <div>
+            <p className="font-bold text-xs uppercase tracking-wider mb-1">Sign-in failed</p>
+            <p className="text-xs text-red-300/80">{oauthError}</p>
+          </div>
+          <button onClick={() => setOauthError(null)} className="ml-auto shrink-0 text-red-400 hover:text-white transition-colors cursor-pointer">✕</button>
+        </div>
+      )}
 
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex items-center overflow-hidden">

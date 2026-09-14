@@ -93,17 +93,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   const signInWithGoogle = async () => {
-    setLoading(true)
-    const { data, error } = await supabaseSignInWithGoogle()
-    if (!error && data && 'user' in data && data.user) {
-      const u = data.user as { id: string; email?: string; user_metadata?: { name?: string } }
-      setUser({
-        id: u.id,
-        email: u.email || '',
-        name: u.user_metadata?.name || u.email?.split('@')[0],
-      })
-    }
-    setLoading(false)
+    // In real Supabase mode, signInWithOAuth redirects the browser to Google.
+    // The page navigates away, so no code after the call runs.
+    // Session is picked up by onAuthStateChange after the OAuth redirect returns.
+    // In mock mode (no Supabase credentials), the mock user is set via onAuthStateChange
+    // through getCurrentSession on next load.
+    const { error } = await supabaseSignInWithGoogle()
     return { error: error ? new Error(error.message) : null }
   }
 

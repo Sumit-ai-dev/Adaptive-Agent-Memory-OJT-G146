@@ -10,7 +10,7 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'signin' }: AuthModalProps) {
-  const { signIn, signUp, signInWithGoogle, isConfigured } = useAuth()
+  const { signIn, signUp, signInWithGoogle } = useAuth()
   const [isSignUp, setIsSignUp] = useState(initialMode === 'signup')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -28,17 +28,15 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
     try {
       const { error } = await signInWithGoogle()
       if (error) {
+        // Only show error if Supabase returned one (e.g. not configured, provider disabled)
         setError(error.message)
-      } else {
-        setSuccessMsg('Signed in with Google!')
-        setTimeout(() => {
-          onClose()
-          onSuccess?.()
-        }, 800)
+        setGoogleLoading(false)
       }
+      // If no error: signInWithOAuth has already triggered browser navigation to Google.
+      // Keep the loading state — the page will navigate away momentarily.
+      // Session is restored via onAuthStateChange when the user returns from Google.
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Google authentication failed')
-    } finally {
       setGoogleLoading(false)
     }
   }
@@ -54,16 +52,27 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
         if (error) {
           setError(error.message)
         } else {
-          setSuccessMsg('Account created successfully! Redirecting...')
-          setTimeout(() => {
-            onClose()
-            onSuccess?.()
-          }, 800)
+          // Sign up succeeded — Supabase sends a confirmation email.
+          // Do NOT redirect: the user must confirm their email before signing in.
+          setSuccessMsg(
+            `We've sent a confirmation link to ${email}. Please check your inbox and click the link, then sign in below.`
+          )
+          // Switch to sign-in mode and keep the email pre-filled so they can sign in after confirming
+          setIsSignUp(false)
+          // Clear the success banner after 5s so the sign-in form is the focus
+          setTimeout(() => setSuccessMsg(''), 5000)
         }
       } else {
         const { error } = await signIn(email, password)
         if (error) {
-          setError(error.message)
+          // Intercept the raw Supabase "Email not confirmed" error with a helpful message
+          if (error.message.toLowerCase().includes('email not confirmed')) {
+            setError(
+              'Your email address is not yet confirmed. Please check your inbox for a confirmation email from MemoryAgent and click the link before signing in.'
+            )
+          } else {
+            setError(error.message)
+          }
         } else {
           setSuccessMsg('Signed in successfully!')
           setTimeout(() => {
@@ -106,7 +115,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 bg-purple-500/15 border border-purple-500/30">
             <Sparkles size={13} className="text-purple-300" />
             <span className="text-purple-300 text-xs font-mono font-bold tracking-wider uppercase">
-              {isConfigured ? '🟢 Live Supabase Auth' : '🟣 Local Dev Auth Mode'}
+              MemoryAgent Auth
             </span>
           </div>
           <h3 className="text-2xl font-display font-bold text-white tracking-tight">
@@ -117,13 +126,6 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
           </p>
         </div>
 
-        {/* Status banner */}
-        {!isConfigured && (
-          <div className="mb-4 p-2.5 rounded-xl bg-purple-950/40 border border-purple-800/40 text-[11px] font-mono text-purple-300 flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span>Dev mode: Instant sign in active. Connect Supabase keys in .env for production.</span>
-          </div>
-        )}
 
         {/* Error / Success Feedback */}
         {error && (

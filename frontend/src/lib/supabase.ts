@@ -59,25 +59,23 @@ export async function signInWithEmail(email: string, password: string) {
 }
 
 export async function signInWithGoogle() {
-  // Clear any legacy mock session before starting live OAuth flow
-  localStorage.removeItem('memoryagent_user')
-
   if (!supabase) {
-    const mockUser = {
-      id: 'google-user-1',
-      email: 'user@gmail.com',
-      user_metadata: { name: 'Google User', avatar_url: 'https://lh3.googleusercontent.com/a/default-user' },
+    // Google OAuth requires a real Supabase project with Google provider enabled.
+    // Cannot proceed without VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY configured.
+    return {
+      data: null,
+      error: new Error('Google sign-in requires Supabase credentials. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.'),
     }
-    localStorage.setItem('memoryagent_user', JSON.stringify(mockUser))
-    return { data: { user: mockUser, session: { access_token: 'mock-google-token' } }, error: null }
   }
+
+  // Clear any stale mock/dev session before starting the real OAuth flow
+  localStorage.removeItem('memoryagent_user')
 
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: `${window.location.origin}/`,
       queryParams: {
-        access_type: 'offline',
         prompt: 'select_account',
       },
     },
