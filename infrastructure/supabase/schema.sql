@@ -13,6 +13,8 @@ create table if not exists public.experiences (
     task_domain text not null check (task_domain in ('research', 'coding', 'analysis', 'planning', 'general')),
     trigger_condition text not null,
     strategy_lesson text not null,
+    pitfall text,
+    confidence numeric(4, 3) not null default 0.850 check (confidence >= 0.0 and confidence <= 1.0),
     trust_score numeric(4, 3) not null default 0.750 check (trust_score >= 0.0 and trust_score <= 1.0),
     uses_count integer not null default 0,
     successes_count integer not null default 0,
@@ -30,12 +32,14 @@ create table if not exists public.task_executions (
     task_input text not null,
     task_domain text not null,
     memory_enabled boolean not null default true,
+    memory_mode text not null default 'adaptive' check (memory_mode in ('off', 'naive', 'adaptive')),
     status text not null default 'completed' check (status in ('pending', 'retrieving', 'reasoning', 'executing', 'reflecting', 'completed', 'failed')),
     final_output text,
     reflection_lesson text,
     tokens_used integer not null default 0,
     latency_ms integer not null default 0,
     outcome_quality text default 'positive' check (outcome_quality in ('positive', 'neutral', 'negative')),
+    outcome_score numeric(4, 3) default null,
     created_at timestamptz not null default now()
 );
 
@@ -134,6 +138,8 @@ returns table (
     task_domain text,
     trigger_condition text,
     strategy_lesson text,
+    pitfall text,
+    confidence numeric,
     trust_score numeric,
     similarity float
 )
@@ -144,12 +150,14 @@ as $$
         e.task_domain,
         e.trigger_condition,
         e.strategy_lesson,
+        e.pitfall,
+        e.confidence,
         e.trust_score,
         1 - (e.embedding <=> query_embedding) as similarity
     from public.experiences e
     where e.status = 'active'
       and (filter_domain is null or e.task_domain = filter_domain)
       and (1 - (e.embedding <=> query_embedding)) > match_threshold
-    order by (1 - (e.embedding <=> query_embedding)) * (e.trust_score * 0.4 + 0.6) desc
+    order by (1 - (e.embedding <=> query_embedding)) * (e.trust_score * 0.3 + 0.7) desc
     limit match_count;
 $$;

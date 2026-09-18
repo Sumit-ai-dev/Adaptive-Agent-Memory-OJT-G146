@@ -131,7 +131,8 @@ Lists historical task execution records with filtering and pagination.
 }
 ```
 
-### GET /agent/executions/:id
+### GET /agent/executions/{id}
+*Path alias: `GET /agent/executions/:id`*  
 Returns granular execution details for a specific run, including complete node trajectory, tools invoked, prompt token usage, retrieved memories, and outcome evaluation.
 
 **Response (200 OK):**
@@ -204,7 +205,8 @@ Lists persistent experiences stored in PostgreSQL + `pgvector` with relevance an
 }
 ```
 
-### GET /memories/:id
+### GET /memories/{id}
+*Path alias: `GET /memories/:id`*  
 Returns detailed metadata for an individual experience, including its source execution provenance.
 
 **Response (200 OK):**
@@ -229,7 +231,8 @@ Returns detailed metadata for an individual experience, including its source exe
 }
 ```
 
-### PATCH /memories/:id
+### PATCH /memories/{id}
+*Path alias: `PATCH /memories/:id`*  
 Updates editable metadata or lifecycle status of an existing experience record.
 
 **Request Body:**
@@ -258,7 +261,8 @@ Updates editable metadata or lifecycle status of an existing experience record.
 
 ## Trust & Lifecycle
 
-### GET /memories/:id/trust-history
+### GET /memories/{id}/trust-history
+*Path alias: `GET /memories/:id/trust-history`*  
 Returns the complete audit log of trust adjustments for an experience, recording each execution outcome and formula transition.
 
 **Response (200 OK):**
@@ -287,7 +291,8 @@ Returns the complete audit log of trust adjustments for an experience, recording
 }
 ```
 
-### POST /memories/:id/deprecate
+### POST /memories/{id}/deprecate
+*Path alias: `POST /memories/:id/deprecate`*  
 Explicitly marks an experience as `deprecated`, immediately removing it from candidate pools in future retrieval cycles.
 
 **Request Body:**
@@ -433,3 +438,84 @@ All non-2xx responses adhere to a consistent error schema:
 * `422 Unprocessable Entity`: Pydantic schema validation failures (e.g., missing required fields, invalid domain enum).
 * `500 Internal Server Error`: Unhandled server exceptions during execution or reflection.
 * `503 Service Unavailable`: External dependency unreachable (e.g., LiteLLM model provider gateway or Supabase database downtime).
+
+---
+
+## External APIs & Third-Party Integration Points
+
+The backend integrates with four categories of external systems. To satisfy the project's zero-cost development mandate and ensure model-agnostic flexibility, all external integrations feature 100% free tiers or local execution alternatives.
+
+### 1. LLM Model Gateways (Reasoning, Execution & Reflection)
+
+The agent uses **LiteLLM** as an abstraction gateway. The agent logic never calls raw provider SDKs directly; it calls LiteLLM with a unified interface (`litellm.completion(...)`), allowing seamless switching across models.
+
+| Provider / Service | Endpoint / Protocol | Auth Header | Model Identifiers | Pricing / Limits | Role in Architecture |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Groq Cloud API** | `https://api.groq.com/openai/v1/chat/completions` (HTTP REST) | `Authorization: Bearer $GROQ_API_KEY` | `groq/llama-3.3-70b-versatile`, `groq/mixtral-8x7b-32768` | Free Tier (30 req/min, 6k tokens/min, 14.4k req/day) | Primary ultra-fast inference for `execute_node` and `reflect_node` |
+| **Local Ollama** | `http://localhost:11434/v1/chat/completions` (HTTP REST) | *None (Localhost)* | `ollama/llama3.2:3b`, `ollama/mistral`, `ollama/qwen2.5:7b` | 100% Free, offline, zero data leaves machine | Zero-cost development & air-gapped benchmark testing |
+| **Google Gemini API** | `https://generativelanguage.googleapis.com/v1beta/openai/chat/completions` (HTTP REST) | `Authorization: Bearer $GEMINI_API_KEY` | `gemini/gemini-1.5-flash`, `gemini/gemini-1.5-pro` | Free Tier (15 RPM, 1M TPM, 1,500 req/day) | Free high-context cloud fallback |
+| **OpenAI API** *(Optional)* | `https://api.openai.com/v1/chat/completions` (HTTP REST) | `Authorization: Bearer $OPENAI_API_KEY` | `openai/gpt-4o-mini`, `openai/gpt-4o` | Pay-as-you-go | Gold standard baseline comparison in benchmarks |
+| **Anthropic API** *(Optional)* | `https://api.anthropic.com/v1/messages` (HTTP REST) | `x-api-key: $ANTHROPIC_API_KEY` | `claude-3-5-sonnet-20241022` | Pay-as-you-go | Secondary baseline comparison |
+
+### 2. External Retrieval & Research Tools
+
+When solving tasks, the agent invokes external research tools during `execute_node`.
+
+| Service / Tool | Endpoint / Protocol | Auth | Free Tier / Policy | Input Parameters | Output Format |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **DuckDuckGo Search** | Python package `duckduckgo-search` / HTML REST (`html.duckduckgo.com`) | *None required* | 100% Free, zero registration, rate-limited reasonably | `query` *(string)*, `max_results` *(int, default: 5)* | List of `{title, href, body}` |
+| **Jina AI Reader** | `https://r.jina.ai/<TARGET_URL>` (HTTP GET) | *None required* (or optional free API key) | Free tier: 20 req/min without key, 200 req/min with free key | Target URL prepended to endpoint | Clean LLM-ready Markdown of full webpage without ads/navbars |
+| **Tavily Search** *(Optional)* | `https://api.tavily.com/search` (POST JSON) | `api_key: $TAVILY_API_KEY` | Free tier: 1,000 queries/month | `{"query": "...", "search_depth": "basic"}` | Structured search results with extracted answers |
+
+### 3. Database, Vector Search & Identity (Supabase)
+
+| Service | Endpoint / Protocol | Connection Details | Auth | Role |
+| :--- | :--- | :--- | :--- | :--- |
+| **Supabase PostgreSQL 16** | `aws-0-ap-south-1.pooler.supabase.com:6543/postgres` (TCP / Session Pooler) | `postgresql://postgres.[ref]:[pw]@...:6543/postgres` | DB Credentials | ACID storage for `experiences`, `task_executions`, `trust_history` |
+| **pgvector Extension** | Embedded inside PostgreSQL | `vector(1536)` (or `vector(384)`) with HNSW cosine index | DB connection | Sub-millisecond similarity search (`1 - (embedding <=> query)`) |
+| **Supabase Auth (GoTrue)** | `https://fuwtdoxzfmghdxgferyf.supabase.co/auth/v1` (HTTPS REST) | Public API gateway | `apikey: $SUPABASE_ANON_KEY`, Bearer JWT | Validates incoming client tokens, extracts `user_id` |
+
+### 4. Telemetry & Observability (LangSmith)
+
+| Service | Endpoint / Protocol | Auth Header | Free Tier / Policy | Role |
+| :--- | :--- | :--- | :--- | :--- |
+| **LangSmith Tracing** | `https://api.smith.langchain.com` (HTTPS / Async Background) | `x-api-key: $LANGCHAIN_API_KEY` | Free Developer Tier (5,000 traces/month) | Full execution tracing: latency per LangGraph node, tokens used, prompts, and tool calls |
+
+---
+
+## End-to-End Architecture Flow (Internal ↔ External)
+
+```
+[Client: React Dashboard / Extension]
+                 │  (1) POST /api/v1/agent/execute (Internal API)
+                 ▼
+     [FastAPI Application]
+                 │  (2) Verify JWT with Supabase Auth (External API)
+                 ▼
+   [LangGraph 5-Node State Machine]
+    ┌────────────────────────────────────────────────────────┐
+    │ 1. retrieve_node:                                      │
+    │    └── Embed query -> Query Supabase pgvector          │
+    │        (Internal DB / External PostgreSQL)             │
+    │                                                        │
+    │ 2. execute_node:                                       │
+    │    ├── LiteLLM -> Groq / Ollama / Gemini (External LLM)│
+    │    └── Tool Calls -> DuckDuckGo / Jina (External Tools)│
+    │                                                        │
+    │ 3. evaluate_node:                                      │
+    │    └── Heuristic rule evaluator (Deterministic Python) │
+    │                                                        │
+    │ 4. reflect_node:                                       │
+    │    └── LiteLLM -> Groq / Ollama (External LLM)         │
+    │        Extracts {Trigger, Strategy, Pitfall}           │
+    │                                                        │
+    │ 5. trust_node:                                         │
+    │    └── EMA trust update -> Save to PostgreSQL          │
+    │        (Internal DB / External PostgreSQL)             │
+    └────────────────────────────────────────────────────────┘
+                 │
+                 ├── (Background) Send traces to LangSmith (External API)
+                 ▼
+[Response 200 OK with Trajectory & Lesson to Client]
+```
+
