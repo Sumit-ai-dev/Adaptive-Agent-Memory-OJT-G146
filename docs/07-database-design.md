@@ -26,7 +26,7 @@ Stores distilled, generalizable units of operational knowledge extracted from ag
 | `success_count` | `int` | `not null default 0` | Cumulative count of successful task executions reusing this memory |
 | `failure_count` | `int` | `not null default 0` | Cumulative count of failed task executions reusing this memory |
 | `status` | `text` | `not null default 'candidate' check (status in ('candidate', 'active', 'deprecated'))` | Lifecycle state: `candidate` (new), `active` (retrievable), `deprecated` (quarantined) |
-| `embedding` | `vector(1536)` | `not null` | Semantic embedding of combined Trigger + Strategy (384-dim for MiniLM, 1536-dim for OpenAI) |
+| `embedding` | `vector(384)` | `not null` | Semantic embedding of combined Trigger + Strategy (384-dim for MiniLM) |
 | `metadata` | `jsonb` | `default '{}'::jsonb` | Extensible metadata (source task ID, model version, benchmark split) |
 | `created_at` | `timestamptz` | `default now()` | Immutable creation timestamp |
 | `updated_at` | `timestamptz` | `default now()` | Timestamp of last trust or status update |
@@ -173,7 +173,7 @@ Semantic retrieval is executed server-side via `match_experiences`:
 
 ```sql
 create or replace function match_experiences(
-    query_embedding vector(1536),
+    query_embedding vector(384),
     match_threshold float default 0.70,
     match_count int default 3,
     filter_domain text default null

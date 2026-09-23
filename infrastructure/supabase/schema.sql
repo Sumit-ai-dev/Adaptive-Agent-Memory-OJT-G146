@@ -20,7 +20,7 @@ create table if not exists public.experiences (
     successes_count integer not null default 0,
     failures_count integer not null default 0,
     status text not null default 'active' check (status in ('active', 'deprecated', 'candidate')),
-    embedding vector(1536), -- Vector embeddings for semantic similarity search
+    embedding vector(384), -- Vector embeddings for semantic similarity search (all-MiniLM-L6-v2)
     created_at timestamptz not null default now(),
     updated_at timestamptz not null default now()
 );
@@ -128,7 +128,7 @@ with check (true);
 -- Semantic Experience Search RPC Function (callable from Supabase Client / FastAPI)
 -- ==============================================================================
 create or replace function match_experiences(
-    query_embedding vector(1536),
+    query_embedding vector(384),
     match_threshold float default 0.70,
     match_count int default 3,
     filter_domain text default null
