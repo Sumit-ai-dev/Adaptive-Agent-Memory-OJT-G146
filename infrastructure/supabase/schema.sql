@@ -158,6 +158,6 @@ as $$
     where e.status = 'active'
       and (filter_domain is null or e.task_domain = filter_domain)
       and (1 - (e.embedding <=> query_embedding)) > match_threshold
-    order by (1 - (e.embedding <=> query_embedding)) * (e.trust_score * 0.3 + 0.7) desc
+    order by (1 - (e.embedding <=> query_embedding)) * 0.70 + (e.trust_score * 0.30) desc
     limit match_count;
 $$;
