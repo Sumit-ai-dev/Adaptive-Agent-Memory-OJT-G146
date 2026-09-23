@@ -2,8 +2,13 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.app.api.v1.router import api_v1_router
-from backend.app.api.v1.health import router as health_router
+try:
+    from app.api.v1.router import api_v1_router
+    from app.api.v1.health import router as health_router
+except ModuleNotFoundError:
+    from backend.app.api.v1.router import api_v1_router
+    from backend.app.api.v1.health import router as health_router
+
 
 app = FastAPI(
     title="Adaptive AI Agent with Persistent Experience Memory",

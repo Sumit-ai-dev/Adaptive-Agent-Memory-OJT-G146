@@ -205,10 +205,16 @@ cd Adaptive-Agent-Memory-OJT-G146
 ---
 
 ### 4. Running Automated Tests
-Run the automated test suite from the repository root:
+
+From the repository root (return to root if currently in `backend/`):
 ```bash
+# Return to the repository root if you are in the backend directory
+cd ..
+
+# Run the automated pytest suite:
 python3 -m pytest tests/test_health.py -v
 ```
+
 
 Expected output:
 ```text
