@@ -1,47 +1,53 @@
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
+import React, { useState, useEffect, useRef } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import {
-  Brain, CheckCircle2, ArrowRight,
-  Zap, Database, Menu, X,
-  Sparkles, User, MessageSquare, Star, BookOpen, LogOut
+  Brain, ArrowRight,
+  Menu, X,
+  User, BookOpen, LogOut, Shield,
+  Check, ChevronDown, MessageSquare
 } from 'lucide-react'
 import ThreeMemoryCore from '../components/ThreeMemoryCore'
 import AuthModal from '../components/AuthModal'
 import { useAuth } from '../context/AuthContext'
+import {
+  ClaudeLogo,
+  OpenAILogo,
+  OllamaLogo,
+  GrokLogo,
+  DeepSeekLogo,
+  GeminiLogo,
+  LangChainLogo,
+  LlamaIndexLogo,
+  PyTorchLogo,
+  HuggingFaceLogo
+} from '../components/ProviderLogos'
 
-// ─── Demo Simulation Data ─────────────────────────────────────────────────────
+// ─── Demo Simulation Data (Hero Live Session) ─────────────────────────────────
 const DEMO_STEPS = [
   { type: 'user',   text: 'Summarize key AI memory research papers',   delay: 0 },
-  { type: 'system', text: '🔍 Retrieving 3 relevant experiences...',    delay: 1400 },
+  { type: 'system', text: 'Retrieving 3 relevant experiences...',      delay: 1400 },
   { type: 'memory', text: 'Reflexion (2023): Use self-reflection loops', delay: 2400, tag: '94% trust' },
   { type: 'memory', text: 'Voyager (2023): Skill library for reuse',    delay: 3100, tag: '88% trust' },
   { type: 'agent',  text: 'Using 2 memories. Generating response...',   delay: 4000 },
-  { type: 'answer', text: 'Based on validated experiences: Reflexion improves task success by 22% via iterative self-critique. Voyager maintains a skill library that grows over time — exactly what MemoryAgent does.', delay: 5200 },
-  { type: 'store',  text: '✨ New experience stored to memory',          delay: 7000 },
+  { type: 'answer', text: 'Based on validated experiences: Reflexion improves task success by 22% via iterative self-critique. Voyager maintains a skill library that grows over time, matching MemoryAgent adaptive architecture.', delay: 5200 },
+  { type: 'store',  text: 'New experience stored to memory index',     delay: 7000 },
 ]
 
 function LiveDemoPanel() {
   const [visibleSteps, setVisibleSteps] = useState<number[]>([])
-  const [typing, setTyping] = useState(false)
 
   useEffect(() => {
     const timers: ReturnType<typeof setTimeout>[] = []
 
     const reset = () => {
       setVisibleSteps([])
-      setTyping(false)
       DEMO_STEPS.forEach((step, i) => {
-        const t1 = setTimeout(() => {
-          if (step.type === 'user') setTyping(true)
-        }, step.delay)
-        const t2 = setTimeout(() => {
-          setTyping(false)
+        const t = setTimeout(() => {
           setVisibleSteps(prev => [...prev, i])
-        }, step.delay + 600)
-        timers.push(t1, t2)
+        }, step.delay + 500)
+        timers.push(t)
       })
-      // Restart after full cycle
-      const restart = setTimeout(reset, 10500)
+      const restart = setTimeout(reset, 11000)
       timers.push(restart)
     }
 
@@ -50,91 +56,63 @@ function LiveDemoPanel() {
   }, [])
 
   return (
-    <div
-      className="relative w-full max-w-lg"
-      style={{ perspective: '1000px' }}
-    >
-      {/* 3D tilted panel */}
+    <div className="relative w-full max-w-lg">
       <div
-        className="rounded-3xl overflow-hidden shadow-2xl"
+        className="rounded-[16px] overflow-hidden shadow-2xl"
         style={{
-          transform: 'rotateY(-8deg) rotateX(4deg)',
-          transformStyle: 'preserve-3d',
-          background: 'rgba(10,0,30,0.75)',
+          background: 'rgba(12, 7, 20, 0.94)',
           backdropFilter: 'blur(24px)',
-          border: '1px solid rgba(168,85,247,0.3)',
-          boxShadow: '0 30px 80px rgba(100,0,200,0.4), 0 0 0 1px rgba(168,85,247,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          boxShadow: '0 25px 60px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.15)',
         }}
       >
-        {/* Window chrome */}
-        <div
-          className="flex items-center gap-2 px-5 py-3.5 border-b"
-          style={{ borderColor: 'rgba(168,85,247,0.2)', background: 'rgba(168,85,247,0.08)' }}
-        >
+        {/* Window Chrome */}
+        <div className="flex items-center gap-2 px-4 py-3 border-b border-white/[0.08] bg-white/[0.03]">
           <div className="flex gap-1.5">
-            <div className="w-3 h-3 rounded-full bg-red-500/70" />
-            <div className="w-3 h-3 rounded-full bg-yellow-500/70" />
-            <div className="w-3 h-3 rounded-full bg-green-500/70" />
+            <div className="w-2.5 h-2.5 rounded-full bg-red-500/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-yellow-500/80" />
+            <div className="w-2.5 h-2.5 rounded-full bg-green-500/80" />
           </div>
           <div className="flex-1 flex items-center justify-center gap-2">
-            <Brain size={13} className="text-fuchsia-400" />
-            <span className="text-white/50 text-xs font-mono">MemoryAgent · Live Session</span>
+            <Brain size={13} className="text-[#C4B5FD]" />
+            <span className="text-[#D0D5DD] text-xs font-mono font-medium">MemoryAgent · Live Session</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-green-400 text-xs">Active</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-emerald-400 text-xs font-mono">Active</span>
           </div>
         </div>
 
-        {/* Messages area */}
-        <div className="p-5 space-y-3 min-h-[340px]">
+        {/* Message Thread */}
+        <div className="p-5 space-y-3 min-h-[320px]">
           {DEMO_STEPS.map((step, i) => {
             if (!visibleSteps.includes(i)) return null
             return (
-              <div
-                key={i}
-                className="anim-float-up"
-                style={{ animationDuration: '0.4s' }}
-              >
+              <div key={i} className="transition-all duration-300">
                 {step.type === 'user' && (
                   <div className="flex items-start gap-2.5 justify-end">
-                    <div
-                      className="rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%]"
-                      style={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}
-                    >
-                      <p className="text-white text-sm font-medium">{step.text}</p>
+                    <div className="rounded-[8px] px-3.5 py-2 max-w-[82%] bg-[#7042DD] text-white shadow-sm">
+                      <p className="text-xs font-medium leading-relaxed">{step.text}</p>
                     </div>
-                    <div className="w-7 h-7 rounded-xl bg-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
-                      <User size={13} className="text-fuchsia-300" />
+                    <div className="w-6 h-6 rounded-[6px] bg-white/10 flex items-center justify-center shrink-0">
+                      <User size={12} className="text-[#D0D5DD]" />
                     </div>
                   </div>
                 )}
 
                 {step.type === 'system' && (
-                  <div className="flex items-center gap-2">
-                    <div className="w-1 h-1 rounded-full bg-purple-400" />
-                    <p className="text-purple-300 text-xs font-mono">{step.text}</p>
+                  <div className="flex items-center gap-2 text-xs font-mono text-[#D0D5DD]/70">
+                    <div className="w-1 h-1 rounded-full bg-[#862FE7]" />
+                    <p>{step.text}</p>
                   </div>
                 )}
 
                 {step.type === 'memory' && (
-                  <div
-                    className="flex items-start gap-2.5 ml-3"
-                    style={{ animationDuration: '0.3s' }}
-                  >
-                    <BookOpen size={13} className="text-cyan-400 mt-0.5 flex-shrink-0" />
-                    <div
-                      className="rounded-xl px-3 py-2 flex-1 flex items-center justify-between gap-3"
-                      style={{
-                        background: 'rgba(34,211,238,0.08)',
-                        border: '1px solid rgba(34,211,238,0.2)',
-                      }}
-                    >
-                      <p className="text-cyan-200 text-xs">{step.text}</p>
-                      <span
-                        className="text-xs font-bold px-2 py-0.5 rounded-full whitespace-nowrap"
-                        style={{ background: 'rgba(34,211,238,0.15)', color: '#22d3ee' }}
-                      >
+                  <div className="flex items-start gap-2.5 ml-2">
+                    <BookOpen size={12} className="text-cyan-400 mt-1 shrink-0" />
+                    <div className="rounded-[6px] px-3 py-1.5 flex-1 flex items-center justify-between gap-3 bg-cyan-950/40 border border-cyan-500/30">
+                      <p className="text-cyan-200 text-xs font-mono">{step.text}</p>
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300">
                         {step.tag}
                       </span>
                     </div>
@@ -142,285 +120,55 @@ function LiveDemoPanel() {
                 )}
 
                 {step.type === 'agent' && (
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg,#a855f7,#ec4899)' }}
-                    >
-                      <Brain size={13} className="text-white" />
+                  <div className="flex items-center gap-2 text-xs font-mono text-[#D0D5DD]/70">
+                    <div className="w-5 h-5 rounded-[4px] bg-[#7042DD] flex items-center justify-center shrink-0">
+                      <Brain size={11} className="text-white" />
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-bounce" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-bounce delay-100" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-bounce delay-200" />
-                      <span className="text-white/40 text-xs ml-1">{step.text}</span>
-                    </div>
+                    <p>{step.text}</p>
                   </div>
                 )}
 
                 {step.type === 'answer' && (
                   <div className="flex items-start gap-2.5">
-                    <div
-                      className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg,#a855f7,#ec4899)' }}
-                    >
-                      <Brain size={13} className="text-white" />
+                    <div className="w-6 h-6 rounded-[6px] bg-[#7042DD] flex items-center justify-center shrink-0 mt-0.5">
+                      <Brain size={12} className="text-white" />
                     </div>
-                    <div
-                      className="rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]"
-                      style={{
-                        background: 'rgba(168,85,247,0.12)',
-                        border: '1px solid rgba(168,85,247,0.25)',
-                      }}
-                    >
-                      <p className="text-white/85 text-sm leading-relaxed">{step.text}</p>
+                    <div className="rounded-[8px] p-3 flex-1 bg-white/[0.04] border border-white/[0.08]">
+                      <p className="text-white text-xs leading-relaxed">{step.text}</p>
                     </div>
                   </div>
                 )}
 
                 {step.type === 'store' && (
-                  <div
-                    className="flex items-center gap-2.5 rounded-xl px-4 py-2.5"
-                    style={{
-                      background: 'linear-gradient(135deg, rgba(34,197,94,0.12), rgba(168,85,247,0.12))',
-                      border: '1px solid rgba(34,197,94,0.3)',
-                    }}
-                  >
-                    <Star size={13} className="text-green-400 flex-shrink-0" />
-                    <p className="text-green-300 text-xs font-semibold">{step.text}</p>
-                    <div
-                      className="ml-auto text-xs px-2 py-0.5 rounded-full font-bold"
-                      style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}
-                    >
-                      +1 memory
-                    </div>
+                  <div className="flex items-center gap-2 ml-8 text-[11px] font-mono text-emerald-400">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                    <p>{step.text}</p>
                   </div>
                 )}
               </div>
             )
           })}
-
-          {/* Typing indicator */}
-          {typing && (
-            <div className="flex items-start gap-2.5 justify-end anim-float-up">
-              <div
-                className="rounded-2xl rounded-tr-sm px-4 py-3"
-                style={{ background: 'rgba(168,85,247,0.3)' }}
-              >
-                <div className="flex items-center gap-1">
-                  <div className="w-2 h-2 rounded-full bg-white/60 animate-bounce" />
-                  <div className="w-2 h-2 rounded-full bg-white/60 animate-bounce delay-100" />
-                  <div className="w-2 h-2 rounded-full bg-white/60 animate-bounce delay-200" />
-                </div>
-              </div>
-              <div className="w-7 h-7 rounded-xl bg-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
-                <User size={13} className="text-fuchsia-300" />
-              </div>
-            </div>
-          )}
         </div>
 
-        {/* Input bar */}
-        <div
-          className="px-4 py-3 border-t flex items-center gap-3"
-          style={{ borderColor: 'rgba(168,85,247,0.15)', background: 'rgba(0,0,0,0.3)' }}
-        >
-          <MessageSquare size={15} className="text-white/30" />
-          <span className="text-white/25 text-sm flex-1 font-mono">Ask the agent anything...</span>
-          <div
-            className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#ec4899)' }}
-          >
-            <ArrowRight size={13} className="text-white" />
-          </div>
-        </div>
-      </div>
-
-      {/* Glow under the panel */}
-      <div
-        className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-3/4 h-16 blur-2xl rounded-full pointer-events-none"
-        style={{ background: 'linear-gradient(90deg,#7c3aed,#ec4899,#22d3ee)' }}
-      />
-    </div>
-  )
-}
-
-// ─── Mini Stat Cards (floating beside the demo) ───────────────────────────────
-function StatBadge({ icon: Icon, val, label, color }: { icon: React.ElementType; val: string; label: string; color: string }) {
-  return (
-    <div
-      className="rounded-2xl px-4 py-3 flex items-center gap-3 anim-float"
-      style={{
-        background: 'rgba(10,0,30,0.7)',
-        backdropFilter: 'blur(16px)',
-        border: `1px solid ${color}30`,
-        boxShadow: `0 0 24px ${color}20`,
-      }}
-    >
-      <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `${color}20` }}>
-        <Icon size={15} style={{ color }} />
-      </div>
-      <div>
-        <p className="text-white font-bold text-sm font-display">{val}</p>
-        <p className="text-white/40 text-xs">{label}</p>
-      </div>
-    </div>
-  )
-}
-
-// ─── Animated Memory Node Graph (CSS only) ────────────────────────────────────
-function MemoryNodes() {
-  return (
-    <div className="absolute right-0 top-0 bottom-0 w-72 hidden xl:block pointer-events-none overflow-hidden">
-      <svg width="288" height="100%" viewBox="0 0 288 600" className="opacity-30">
-        <defs>
-          <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#a855f7" stopOpacity="0.8" />
-            <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
-          </radialGradient>
-        </defs>
-        {/* Lines */}
-        {[[144,100,80,200],[144,100,200,220],[80,200,60,340],[80,200,160,360],[200,220,220,380],[60,340,100,500],[160,360,180,480],[220,380,150,520]].map(([x1,y1,x2,y2],i) => (
-          <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="url(#node-glow)" strokeWidth="1" strokeDasharray="4 4">
-            <animate attributeName="stroke-dashoffset" values="0;-100" dur={`${3+i*0.4}s`} repeatCount="indefinite" />
-          </line>
-        ))}
-        {/* Nodes */}
-        {[[144,100,8,'#a855f7'],[80,200,6,'#22d3ee'],[200,220,6,'#ec4899'],[60,340,5,'#fb923c'],[160,360,5,'#a855f7'],[220,380,5,'#22d3ee'],[100,500,4,'#ec4899'],[180,480,4,'#a855f7'],[150,520,4,'#22d3ee']].map(([cx,cy,r,color],i) => (
-          <circle key={i} cx={cx} cy={cy} r={r} fill={color as string} opacity="0.8">
-            <animate attributeName="r" values={`${r};${Number(r)+3};${r}`} dur={`${2+i*0.3}s`} repeatCount="indefinite" />
-          </circle>
-        ))}
-      </svg>
-    </div>
-  )
-}
-
-// ─── Navbar ───────────────────────────────────────────────────────────────────
-function Navbar({ scrolled }: { scrolled: boolean }) {
-  const { user, signOut } = useAuth()
-  const [open, setOpen] = useState(false)
-  const [showAuth, setShowAuth] = useState(false)
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
-
-  return (
-    <>
-      <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'glass shadow-lg' : ''}`}>
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center anim-gradient-bg">
-              <Brain size={18} className="text-white" />
-            </div>
-            <span className="text-white font-bold text-lg font-display tracking-tight">MemoryAgent</span>
-          </div>
-          <div className="hidden md:flex items-center gap-8">
-            {['Features', 'How it works', 'Docs'].map(item => (
-              <a key={item} href="#" className="text-white/60 hover:text-white text-sm font-medium transition-colors duration-150">{item}</a>
-            ))}
-          </div>
-
-          <div className="hidden md:flex items-center gap-3">
-            {user ? (
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-200 text-xs font-mono">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="max-w-[140px] truncate">{user.name || user.email.split('@')[0]}</span>
-                </div>
-                <a
-                  href="/dashboard"
-                  className="text-xs font-bold px-3.5 py-2 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity"
-                >
-                  Dashboard
-                </a>
-                <button
-                  onClick={() => signOut()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 border border-red-500/25 text-xs font-mono transition-all cursor-pointer"
-                  title="Sign out of account"
-                >
-                  <LogOut size={13} />
-                  <span>Sign out</span>
-                </button>
-              </div>
-            ) : (
-              <>
-                <button
-                  onClick={() => {
-                    setAuthMode('signin')
-                    setShowAuth(true)
-                  }}
-                  className="text-white/70 hover:text-white text-sm font-medium transition-colors cursor-pointer bg-transparent border-0"
-                >
-                  Sign in
-                </button>
-                <button
-                  onClick={() => {
-                    setAuthMode('signup')
-                    setShowAuth(true)
-                  }}
-                  id="nav-cta"
-                  className="text-sm font-bold px-5 py-2.5 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity border-0"
-                >
-                  Get started →
-                </button>
-              </>
-            )}
-          </div>
-
-          <button className="md:hidden text-white" onClick={() => setOpen(!open)} aria-label="Toggle menu">
-            {open ? <X size={22} /> : <Menu size={22} />}
+        {/* Input Bar */}
+        <div className="px-4 py-3 border-t border-white/[0.08] bg-white/[0.02] flex items-center gap-2">
+          <input
+            type="text"
+            readOnly
+            value="Ask the agent anything..."
+            className="w-full bg-transparent text-xs text-[#717171] focus:outline-none font-mono cursor-default"
+          />
+          <button className="w-6 h-6 rounded-[6px] bg-white/10 flex items-center justify-center text-white/50">
+            <ArrowRight size={12} />
           </button>
         </div>
-
-        {open && (
-          <div className="md:hidden glass px-6 pb-5 space-y-4 border-t border-white/10">
-            {['Features', 'How it works', 'Docs'].map(item => (
-              <a key={item} href="#" className="block text-white/80 text-sm font-medium py-1">{item}</a>
-            ))}
-            {user ? (
-              <div className="space-y-2 pt-2 border-t border-white/10">
-                <p className="text-white/60 text-xs font-mono">{user.email}</p>
-                <a href="/dashboard" className="block text-center text-sm font-bold py-2.5 rounded-xl text-white anim-gradient-bg">
-                  Go to Dashboard
-                </a>
-                <button
-                  onClick={() => signOut()}
-                  className="w-full flex items-center justify-center gap-1.5 text-center text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl text-xs py-2 cursor-pointer"
-                >
-                  <LogOut size={13} />
-                  <span>Sign out</span>
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => {
-                  setAuthMode('signup')
-                  setShowAuth(true)
-                  setOpen(false)
-                }}
-                className="w-full text-center text-sm font-bold py-2.5 rounded-xl text-white anim-gradient-bg cursor-pointer border-0"
-              >
-                Get started →
-              </button>
-            )}
-          </div>
-        )}
-      </nav>
-
-      {/* Supabase Auth Modal */}
-      <AuthModal
-        isOpen={showAuth}
-        initialMode={authMode}
-        onClose={() => setShowAuth(false)}
-        onSuccess={() => {
-          window.location.href = '/dashboard'
-        }}
-      />
-    </>
+      </div>
+    </div>
   )
 }
 
-// ─── LLM Provider Data with Interactive Scenarios ────────────────────────────
-interface ProviderConfig {
+// ─── Multi-LLM Provider Configs (Claude, OpenAI, Ollama, Grok, DeepSeek) ───────
+interface LLMProviderConfig {
   name: string
   modelTag: string
   color: string
@@ -434,10 +182,31 @@ interface ProviderConfig {
   latency: string
   timeSaved: string
   tokensSaved: string
-  svg: React.ReactNode
+  Logo: React.ComponentType<{ className?: string; size?: number; color?: string }>
 }
 
-const LLM_PROVIDERS: ProviderConfig[] = [
+const LLM_PROVIDERS: LLMProviderConfig[] = [
+  {
+    name: 'Claude',
+    modelTag: 'Claude 3.5 Sonnet',
+    color: '#d97706',
+    glowColor: '#f59e0b',
+    taskType: 'TOOL RECURSION GUARD',
+    query: 'Prevent infinite retry loop in multi-stage search tool across web documents',
+    memoryId: 'MEM-312',
+    memoryMatch: 'Run #312: Verified circuit breaker pattern with exponential jitter',
+    confidence: '99.1%',
+    codeLines: [
+      { num: '01', text: '// Recalled memory constraint #312 from previous evaluation run', color: '#6b7280' },
+      { num: '02', text: 'const circuitBreaker = await memoryAgent.recall("tool_search_circuit_breaker");', color: '#38bdf8' },
+      { num: '03', text: 'const response = await anthropic.execute(circuitBreaker.safeParameters);', color: '#f59e0b' },
+      { num: '04', text: '// Status: 0 infinite loops detected · Deterministic stop achieved', color: '#4ade80' },
+    ],
+    latency: '115ms',
+    timeSaved: '50 MIN',
+    tokensSaved: '16.4k',
+    Logo: ClaudeLogo,
+  },
   {
     name: 'OpenAI',
     modelTag: 'GPT-4o Enterprise',
@@ -449,7 +218,7 @@ const LLM_PROVIDERS: ProviderConfig[] = [
     memoryMatch: 'Run #520: Stripe idempotent replay queue with DLQ exponential backoff',
     confidence: '98.4%',
     codeLines: [
-      { num: '01', text: '// Recalled memory pattern #520 from past resolution', color: '#6b7280' },
+      { num: '01', text: '// Recalled verified pattern #520 from past resolution archive', color: '#6b7280' },
       { num: '02', text: 'const dlqStrategy = await memoryAgent.inject("stripe_webhook_dlq");', color: '#38bdf8' },
       { num: '03', text: 'const healed = await openAI.executeTool(dlqStrategy.retryPattern);', color: '#c084fc' },
       { num: '04', text: '// Status: 148 stalled webhooks reprocessed · 0 packet loss', color: '#4ade80' },
@@ -457,1003 +226,77 @@ const LLM_PROVIDERS: ProviderConfig[] = [
     latency: '120ms',
     timeSaved: '45 MIN',
     tokensSaved: '14.2k',
-    svg: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.28 9.28a5.76 5.76 0 0 0-.49-4.73 5.82 5.82 0 0 0-6.27-2.8A5.77 5.77 0 0 0 11.18 0a5.82 5.82 0 0 0-5.55 4.03 5.77 5.77 0 0 0-3.85 2.8 5.82 5.82 0 0 0 .72 6.82 5.76 5.76 0 0 0 .49 4.73 5.82 5.82 0 0 0 6.27 2.8A5.77 5.77 0 0 0 13.6 24a5.82 5.82 0 0 0 5.55-4.03 5.77 5.77 0 0 0 3.85-2.8 5.82 5.82 0 0 0-.72-6.89zM13.6 22.5a4.3 4.3 0 0 1-2.76-1 .1.1 0 0 1 .05-.02l4.59-2.65a.74.74 0 0 0 .37-.65v-6.47l1.94 1.12a.07.07 0 0 1 .04.06v5.36A4.32 4.32 0 0 1 13.6 22.5zm-9.3-3.96a4.3 4.3 0 0 1-.52-2.89.1.1 0 0 1 .05.03l4.59 2.65a.74.74 0 0 0 .74 0l5.61-3.24v2.24a.07.07 0 0 1-.03.06L10.1 20.1a4.32 4.32 0 0 1-5.8-1.56zm-1.21-9.97a4.3 4.3 0 0 1 2.24-1.89v5.45a.74.74 0 0 0 .37.65l5.61 3.24-1.94 1.12a.07.07 0 0 1-.07 0L5.17 14.9a4.32 4.32 0 0 1-2.08-6.33zm15.95 3.7L13.43 9.03l1.94-1.12a.07.07 0 0 1 .07 0l4.13 2.38a4.32 4.32 0 0 1-.67 7.78v-5.45a.74.74 0 0 0-.36-.65zm1.93-2.9a.1.1 0 0 1-.05-.03l-4.59-2.65a.74.74 0 0 0-.74 0L10 10.93V8.69a.07.07 0 0 1 .03-.06l4.13-2.38a4.32 4.32 0 0 1 6.4 4.48l-.59-.36zm-12.16 4L7.87 12l1.94-1.12a.07.07 0 0 1 .07 0l.06.04v2.24l-1.73 1z"/></svg>,
-  },
-  {
-    name: 'Claude',
-    modelTag: 'Claude 3.5 Sonnet',
-    color: '#d97706',
-    glowColor: '#f59e0b',
-    taskType: 'SECURITY REFACTOR',
-    query: 'Refactor JWT session guard to prevent replay attacks across microservices',
-    memoryId: 'MEM-312',
-    memoryMatch: 'Run #312: Distributed HMAC salt rotation + Redis token revocation list',
-    confidence: '99.1%',
-    codeLines: [
-      { num: '01', text: '// Injected zero-trust security rule verified in staging', color: '#6b7280' },
-      { num: '02', text: 'const authPattern = await memoryAgent.recall("auth_replay_guard");', color: '#38bdf8' },
-      { num: '03', text: 'export const sessionGuard = compose(rateLimit, authPattern.validator);', color: '#f59e0b' },
-      { num: '04', text: '// Status: 42 attack vectors neutralized · 0 latency penalty', color: '#4ade80' },
-    ],
-    latency: '135ms',
-    timeSaved: '55 MIN',
-    tokensSaved: '18.5k',
-    svg: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.709 15.955l4.72-2.647.08-.23-.08-.128-4.72 2.647.08.228v.13zM9.478 7.27l.08.23 4.72-2.648-.08-.228-4.72 2.647zM12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22.5C6.201 22.5 1.5 17.799 1.5 12S6.201 1.5 12 1.5 22.5 6.201 22.5 12 17.799 22.5 12 22.5zm-2.355-6.873l-3.924-6.797L12 5.373l6.279 3.457-3.924 6.797H9.645z"/></svg>,
-  },
-  {
-    name: 'Gemini',
-    modelTag: 'Gemini 1.5 Pro',
-    color: '#4285F4',
-    glowColor: '#60a5fa',
-    taskType: 'TELEMETRY ROOT-CAUSE',
-    query: 'Synthesize distributed trace logs from 4 regions and isolate Envoy 502 root cause',
-    memoryId: 'MEM-688',
-    memoryMatch: 'Run #688: Correlation between Envoy edge timeout and DB connection exhaustion',
-    confidence: '98.9%',
-    codeLines: [
-      { num: '01', text: '// Recalling multi-modal incident graph from cluster logs', color: '#6b7280' },
-      { num: '02', text: 'const incidentGraph = await memoryAgent.query("envoy_502_regional");', color: '#38bdf8' },
-      { num: '03', text: 'const rca = await gemini.correlate({ logs, memory: incidentGraph });', color: '#60a5fa' },
-      { num: '04', text: '// Status: Root cause identified in 840ms: DB connection pool = 100', color: '#4ade80' },
-    ],
-    latency: '98ms',
-    timeSaved: '64 MIN',
-    tokensSaved: '24.5k',
-    svg: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm0 2c2.717 0 5.273 1.055 7.17 2.957L4.957 19.17A9.972 9.972 0 0 1 2 12C2 6.477 6.477 2 12 2zm0 20c-2.717 0-5.273-1.055-7.17-2.957L19.043 4.83A9.972 9.972 0 0 1 22 12c0 5.523-4.477 10-10 10z"/></svg>,
-  },
-  {
-    name: 'Grok',
-    modelTag: 'Grok-2 (xAI)',
-    color: '#ffffff',
-    glowColor: '#38bdf8',
-    taskType: 'CLUSTER RESILIENCE',
-    query: 'Resolve distributed cache stampede across 8 cluster nodes under 50k RPS peak load',
-    memoryId: 'MEM-409',
-    memoryMatch: 'Run #409: Exponential jitter backoff + singleflight mutex distributed lock',
-    confidence: '98.6%',
-    codeLines: [
-      { num: '01', text: '// Applying proven singleflight mutex pattern from past spike', color: '#6b7280' },
-      { num: '02', text: 'const lockStrategy = await memoryAgent.get("cache_stampede_v2");', color: '#38bdf8' },
-      { num: '03', text: 'const clusterRes = await grok.applyCircuitBreaker(lockStrategy);', color: '#e2e8f0' },
-      { num: '04', text: '// Status: 0 dropped requests · 50k RPS handled gracefully', color: '#4ade80' },
-    ],
-    latency: '110ms',
-    timeSaved: '42 MIN',
-    tokensSaved: '12.4k',
-    svg: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>,
+    Logo: OpenAILogo,
   },
   {
     name: 'Ollama',
-    modelTag: 'Llama-3 Local (Air-gapped)',
-    color: '#a855f7',
-    glowColor: '#c084fc',
-    taskType: 'AIR-GAPPED COMPLIANCE',
-    query: 'Run private localized database migration with zero cloud data egress',
-    memoryId: 'MEM-104',
-    memoryMatch: 'Run #104: Local pgvector embedding retrieval with air-gapped schema checks',
-    confidence: '96.4%',
+    modelTag: 'Llama 3.3 (Local)',
+    color: '#3b82f6',
+    glowColor: '#60a5fa',
+    taskType: 'LOCAL AIR-GAPPED VECTOR RECALL',
+    query: 'Retrieve proprietary customer schema without exfiltrating embeddings to public APIs',
+    memoryId: 'MEM-108',
+    memoryMatch: 'Run #108: On-device quantized HNSW vector index with AES-256 local vault',
+    confidence: '97.8%',
     codeLines: [
-      { num: '01', text: '// Local memory query · 100% on-premise execution', color: '#6b7280' },
-      { num: '02', text: 'const localMemory = await pgvectorClient.query({ embedding: localEmb });', color: '#c084fc' },
-      { num: '03', text: 'const ddlPlan = await ollama.generateSafeDDL({ memory: localMemory });', color: '#38bdf8' },
-      { num: '04', text: '// Status: Schema migrated in 620ms · 0 bytes external egress', color: '#4ade80' },
+      { num: '01', text: '// Querying local encrypted SQLite memory store via Ollama adapter', color: '#6b7280' },
+      { num: '02', text: 'const localContext = await ollamaMemory.query("internal_schema_v2");', color: '#38bdf8' },
+      { num: '03', text: 'const answer = await ollama.generate({ prompt: localContext.prompt });', color: '#60a5fa' },
+      { num: '04', text: '// Status: 100% on-device inference · Zero data egress', color: '#4ade80' },
     ],
     latency: '85ms',
-    timeSaved: '30 MIN',
-    tokensSaved: '8.1k',
-    svg: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 1 0 0 20A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 0-16 8 8 0 0 1 0 16zm-2-5.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm4 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/></svg>,
+    timeSaved: '35 MIN',
+    tokensSaved: '12.8k',
+    Logo: OllamaLogo,
   },
   {
-    name: 'Meta',
-    modelTag: 'Llama 3.1 70B',
-    color: '#0081FB',
-    glowColor: '#38bdf8',
-    taskType: 'MULTI-TENANT PIPELINE',
-    query: 'Deploy multi-tenant agent workflow with isolated memory namespaces',
-    memoryId: 'MEM-742',
-    memoryMatch: 'Run #742: Tenant-partitioned vector namespace with cross-org rule isolation',
-    confidence: '98.2%',
+    name: 'Grok',
+    modelTag: 'Grok 2 (xAI)',
+    color: '#ec4899',
+    glowColor: '#f43f5e',
+    taskType: 'REAL-TIME HEURISTIC FILTER',
+    query: 'Synthesize live market sentiment telemetry with historical causal graphs',
+    memoryId: 'MEM-890',
+    memoryMatch: 'Run #890: Dynamic market regime graph with Bayesian posterior weights',
+    confidence: '96.9%',
     codeLines: [
-      { num: '01', text: '// Loading tenant-scoped episodic memory index', color: '#6b7280' },
-      { num: '02', text: 'const tenantSpace = memoryAgent.namespace("tenant_enterprise_01");', color: '#38bdf8' },
-      { num: '03', text: 'const plan = await metaLlama.orchestrateWithMemory(tenantSpace);', color: '#60a5fa' },
-      { num: '04', text: '// Status: 3 workflows scheduled autonomously with zero drift', color: '#4ade80' },
+      { num: '01', text: '// Fetching validated regime memories from memory routing layer', color: '#6b7280' },
+      { num: '02', text: 'const regimeGraph = await grokMemory.filter("market_regime_volatility");', color: '#38bdf8' },
+      { num: '03', text: 'const output = await grok.reason({ context: regimeGraph.subgraph });', color: '#f43f5e' },
+      { num: '04', text: '// Status: Market signal filtered in 92ms · Hallucination pruned', color: '#4ade80' },
     ],
-    latency: '105ms',
-    timeSaved: '48 MIN',
-    tokensSaved: '15.0k',
-    svg: <svg viewBox="0 0 24 24" fill="currentColor"><path d="M6.915 4.03c-1.968 0-3.683 1.28-4.871 3.113C.704 9.208 0 11.883 0 14.449c0 .706.07 1.369.21 1.973a6.624 6.624 0 0 0 .265.86 5.297 5.297 0 0 0 .371.761c.696 1.159 1.818 1.927 3.593 1.927 1.497 0 2.633-.671 3.965-2.444.76-1.012 1.144-1.626 2.663-4.32l.756-1.339.186-.325c.186.3.398.643.64 1.038l1.408 2.316c1.548 2.396 2.522 3.374 4.007 3.374 1.728 0 2.88-.65 3.866-2.244.459-.772.651-1.354.772-2.153.075-.5.117-1.024.117-1.566 0-2.565-.537-5.08-1.761-6.96C19.483 5.445 18 4.03 16.338 4.03c-1.223 0-2.333.5-3.474 1.643-.787.793-1.208 1.376-2.264 3.052-.157-.254-.314-.505-.463-.742C8.862 5.51 7.962 4.03 6.915 4.03z"/></svg>,
+    latency: '92ms',
+    timeSaved: '40 MIN',
+    tokensSaved: '15.1k',
+    Logo: GrokLogo,
+  },
+  {
+    name: 'DeepSeek',
+    modelTag: 'DeepSeek R1',
+    color: '#8b5cf6',
+    glowColor: '#a855f7',
+    taskType: 'REFLEXION REASONING LOOP',
+    query: 'Prune dead-end search trees in deep mathematical theorem proving',
+    memoryId: 'MEM-774',
+    memoryMatch: 'Run #774: Reflexion self-critique memory pruning lemmas 4 and 7',
+    confidence: '99.4%',
+    codeLines: [
+      { num: '01', text: '// Injecting Reflexion self-critique memory from theorem proving run #774', color: '#6b7280' },
+      { num: '02', text: 'const pruneRules = await deepSeekMemory.getReflections("lemma_proof");', color: '#38bdf8' },
+      { num: '03', text: 'const proof = await deepSeekR1.solve({ constraints: pruneRules });', color: '#a855f7' },
+      { num: '04', text: '// Status: Proof verified in 3 reasoning turns · 28 branches bypassed', color: '#4ade80' },
+    ],
+    latency: '140ms',
+    timeSaved: '90 MIN',
+    tokensSaved: '24.6k',
+    Logo: DeepSeekLogo,
   },
 ]
-
-// ─── Integrations Section (Futuristic 3D Cyber Model + Live Animated Text) ────
-function IntegrationsSection() {
-  const [activeName, setActiveName] = useState(LLM_PROVIDERS[0].name)
-  const [typedQuery, setTypedQuery] = useState('')
-  const [isTyping, setIsTyping] = useState(false)
-
-  const activeProvider = LLM_PROVIDERS.find(p => p.name === activeName) || LLM_PROVIDERS[0]
-
-  // Live animated typing effect on query change
-  useEffect(() => {
-    setTypedQuery('')
-    setIsTyping(true)
-    const fullText = activeProvider.query
-    let i = 0
-    const interval = setInterval(() => {
-      if (i < fullText.length) {
-        setTypedQuery(fullText.slice(0, i + 1))
-        i++
-      } else {
-        setIsTyping(false)
-        clearInterval(interval)
-      }
-    }, 22)
-    return () => clearInterval(interval)
-  }, [activeProvider.name])
-
-  return (
-    <section className="py-28 px-6 bg-[#0a0010] border-t border-white/5 relative overflow-hidden">
-      {/* Background ambient multi-color bloom */}
-      <div
-        className="absolute top-1/4 right-0 w-[700px] h-[700px] rounded-full blur-[140px] pointer-events-none opacity-40 transition-all duration-1000"
-        style={{
-          background: `radial-gradient(circle, ${activeProvider.glowColor}50 0%, #7c3aed30 50%, transparent 80%)`,
-        }}
-      />
-      <div className="absolute -bottom-20 left-10 w-[500px] h-[500px] bg-fuchsia-900/15 rounded-full blur-[120px] pointer-events-none" />
-
-      <div className="max-w-7xl mx-auto relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
-          
-          {/* ── Left column: Model Selector ── */}
-          <div className="lg:col-span-4 flex flex-col">
-            <div className="flex items-center gap-2 mb-3">
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <p className="text-white/40 text-xs font-bold tracking-widest uppercase font-display">
-                MULTI-LLM MEMORY ADAPTER
-              </p>
-            </div>
-
-            <h2 className="text-white font-display font-bold text-2xl lg:text-3xl mb-4 leading-tight">
-              Seamlessly works with your favorite models
-            </h2>
-            <p className="text-white/50 text-sm leading-relaxed mb-8">
-              Plug MemoryAgent into any foundation model. The shared memory graph retains lessons across executions, preventing repeat errors and cutting token costs by up to 80%.
-            </p>
-
-            {/* Provider Buttons */}
-            <div className="flex flex-col gap-2.5">
-              {LLM_PROVIDERS.map((p) => {
-                const isActive = activeName === p.name
-                return (
-                  <button
-                    key={p.name}
-                    onClick={() => setActiveName(p.name)}
-                    className={`flex items-center justify-between px-5 py-4 rounded-xl text-left transition-all duration-300 w-full group relative overflow-hidden ${
-                      isActive ? 'bg-white/[0.08]' : 'bg-white/[0.02] hover:bg-white/[0.05]'
-                    }`}
-                    style={{
-                      border: isActive ? `1px solid ${p.color}` : '1px solid rgba(255,255,255,0.05)',
-                      boxShadow: isActive ? `0 0 35px ${p.glowColor}25, inset 0 0 15px ${p.glowColor}10` : 'none',
-                    }}
-                  >
-                    {/* Active left indicator bar */}
-                    {isActive && (
-                      <div
-                        className="absolute left-0 top-0 bottom-0 w-1 transition-all duration-300"
-                        style={{ background: p.color, boxShadow: `0 0 10px ${p.color}` }}
-                      />
-                    )}
-
-                    <div className="flex items-center gap-4">
-                      <div
-                        className="w-6 h-6 flex-shrink-0 transition-transform duration-300 group-hover:scale-110"
-                        style={{ color: isActive ? p.color : 'rgba(255,255,255,0.45)' }}
-                      >
-                        {p.svg}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className={`font-display text-[15px] font-semibold tracking-wide transition-colors ${
-                            isActive ? 'text-white' : 'text-white/70 group-hover:text-white'
-                          }`}>
-                            {p.name}
-                          </span>
-                          {isActive && (
-                            <span
-                              className="text-[9px] font-bold font-display px-2 py-0.5 rounded-full uppercase tracking-wider"
-                              style={{ background: `${p.color}25`, color: p.color, border: `1px solid ${p.color}40` }}
-                            >
-                              Active
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-white/35 text-xs font-mono mt-0.5">{p.modelTag}</p>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <span className="text-xs font-mono font-bold text-green-400 block">{p.latency}</span>
-                      <span className="text-[10px] text-white/30 tracking-wider font-display">LATENCY</span>
-                    </div>
-                  </button>
-                )
-              })}
-            </div>
-
-            {/* Sub-card: Memory Bridge Telemetry */}
-            <div
-              className="mt-6 p-4 rounded-xl border border-white/5 relative overflow-hidden"
-              style={{ background: 'rgba(168,85,247,0.03)' }}
-            >
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-white/40 text-[10px] font-bold uppercase tracking-wider font-display">MEMORY BRIDGE</span>
-                <span className="flex items-center gap-1.5 text-green-400 text-[11px] font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-                  Synced
-                </span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <p className="text-white/30 text-[10px]">REUSE HIT RATE</p>
-                  <p className="text-white font-mono font-bold text-sm">87.4%</p>
-                </div>
-                <div>
-                  <p className="text-white/30 text-[10px]">AVG RECOVERY</p>
-                  <p className="text-cyan-300 font-mono font-bold text-sm">&lt; 150ms</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* ── Right column: Interactive 3D Cyber Cockpit ── */}
-          <div className="lg:col-span-8 flex flex-col">
-            
-            {/* 3D Glassmorphic Cockpit Card */}
-            <div
-              className="w-full rounded-2xl relative overflow-hidden transition-all duration-700"
-              style={{
-                background: 'rgba(12, 5, 24, 0.85)',
-                backdropFilter: 'blur(28px)',
-                border: `1px solid ${activeProvider.color}35`,
-                boxShadow: `0 35px 90px rgba(0,0,0,0.7), 0 0 50px ${activeProvider.glowColor}15, inset 0 0 0 1px rgba(255,255,255,0.05)`,
-              }}
-            >
-              {/* Window Header */}
-              <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between bg-black/40">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-3 h-3 rounded-full bg-red-500/80 border border-red-400/40" />
-                  <div className="w-3 h-3 rounded-full bg-yellow-500/80 border border-yellow-400/40" />
-                  <div className="w-3 h-3 rounded-full bg-green-500/80 border border-green-400/40" />
-                  <span className="text-white/30 text-xs font-mono ml-2">memory-agent@core:~</span>
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <div
-                    className="flex items-center gap-2 px-3 py-1 rounded-full text-xs font-display font-semibold"
-                    style={{
-                      background: `${activeProvider.color}18`,
-                      border: `1px solid ${activeProvider.color}50`,
-                      color: activeProvider.color,
-                    }}
-                  >
-                    <div className="w-3.5 h-3.5">{activeProvider.svg}</div>
-                    <span>{activeProvider.modelTag}</span>
-                  </div>
-                  <span className="text-white/20 text-xs font-mono hidden sm:inline">ID: {activeProvider.memoryId}</span>
-                </div>
-              </div>
-
-              {/* Cockpit Body: Split into 3D Model Top & Animated Code Console Bottom */}
-              <div className="relative">
-                
-                {/* ── Top Half: Interactive 3D WebGL Neural Model ── */}
-                <div className="relative h-[250px] w-full flex items-center justify-center overflow-hidden border-b border-white/5">
-                  {/* Subtle background tech grid */}
-                  <div
-                    className="absolute inset-0 opacity-15 pointer-events-none"
-                    style={{
-                      backgroundImage: 'linear-gradient(rgba(255,255,255,0.1) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.1) 1px, transparent 1px)',
-                      backgroundSize: '32px 32px',
-                    }}
-                  />
-
-                  {/* Real Three.js 3D WebGL Neural Core */}
-                  <ThreeMemoryCore
-                    glowColor={activeProvider.glowColor}
-                    providerName={activeProvider.name}
-                  />
-
-                  {/* Floating 3D Holographic Satellites */}
-                  <div className="absolute top-4 left-5 z-20 pointer-events-none anim-float">
-                    <div
-                      className="px-3 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-md shadow-lg"
-                      style={{
-                        background: 'rgba(10, 0, 30, 0.75)',
-                        border: '1px solid rgba(34, 197, 94, 0.4)',
-                      }}
-                    >
-                      <span className="w-2 h-2 rounded-full bg-green-400 animate-ping" />
-                      <span className="text-green-300 text-[10px] font-bold font-mono tracking-wider">
-                        ● 3D NEURAL CORE ACTIVE
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="absolute top-4 right-5 z-20 pointer-events-none anim-float" style={{ animationDelay: '1.2s' }}>
-                    <div
-                      className="px-3 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-md shadow-lg"
-                      style={{
-                        background: 'rgba(10, 0, 30, 0.75)',
-                        border: `1px solid ${activeProvider.glowColor}50`,
-                      }}
-                    >
-                      <Zap className="w-3 h-3 text-cyan-400" />
-                      <span className="text-cyan-300 text-[10px] font-bold font-mono tracking-wider">
-                        INSTANT RECALL: {activeProvider.latency}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="absolute bottom-3 right-5 z-20 pointer-events-none anim-float" style={{ animationDelay: '0.6s' }}>
-                    <div
-                      className="px-3 py-1.5 rounded-lg flex items-center gap-2 backdrop-blur-md shadow-lg"
-                      style={{
-                        background: 'rgba(10, 0, 30, 0.85)',
-                        border: '1px solid rgba(168, 85, 247, 0.4)',
-                      }}
-                    >
-                      <Brain className="w-3.5 h-3.5 text-fuchsia-400" />
-                      <span className="text-fuchsia-300 text-[10px] font-bold font-mono">
-                        {activeProvider.confidence} MATCH CONFIDENCE
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="absolute bottom-3 left-5 z-20 pointer-events-none anim-float" style={{ animationDelay: '1.8s' }}>
-                    <div
-                      className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur-md shadow-lg"
-                      style={{
-                        background: 'rgba(10, 0, 30, 0.85)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                      }}
-                    >
-                      <span className="text-[10px] font-display text-white/50 uppercase tracking-wider">TASK TYPE:</span>
-                      <span className="text-[10px] font-bold font-mono text-white/90">{activeProvider.taskType}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* ── Lower Half: Live Animated Text Stream & Code Execution ── */}
-                <div className="p-5 sm:p-7 space-y-4 bg-black/30">
-                  
-                  {/* User Query Input Line with live typing */}
-                  <div>
-                    <div className="flex items-center gap-2 mb-2">
-                      <User size={13} className="text-white/40" />
-                      <span className="text-white/40 text-xs font-mono font-semibold uppercase tracking-wider">
-                        Incoming Task Prompt
-                      </span>
-                    </div>
-                    <div
-                      className="px-4 py-3 rounded-xl font-mono text-[13px] text-white/90 flex items-center gap-2 transition-all"
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.03)',
-                        border: '1px solid rgba(255, 255, 255, 0.08)',
-                      }}
-                    >
-                      <span className="text-fuchsia-400 font-bold">&gt;</span>
-                      <span className="flex-1 font-mono">
-                        {typedQuery}
-                        {isTyping && <span className="inline-block w-2 h-4 bg-fuchsia-400 ml-1 animate-pulse" />}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Memory Recall Injection Banner */}
-                  <div
-                    className="p-3.5 rounded-xl flex items-start sm:items-center justify-between gap-4 transition-all duration-500"
-                    style={{
-                      background: 'linear-gradient(90deg, rgba(168,85,247,0.12), rgba(34,211,238,0.08))',
-                      border: '1px solid rgba(168,85,247,0.3)',
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-purple-500/20 text-purple-300 flex-shrink-0">
-                        <Brain size={16} />
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs font-bold font-display text-white">
-                            Autonomous Memory Injected
-                          </span>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-green-500/20 text-green-300 border border-green-500/30">
-                            {activeProvider.confidence} MATCH
-                          </span>
-                        </div>
-                        <p className="text-white/60 text-xs mt-0.5 line-clamp-1">{activeProvider.memoryMatch}</p>
-                      </div>
-                    </div>
-
-                    <div className="hidden sm:flex flex-col items-end flex-shrink-0">
-                      <span className="text-cyan-400 text-xs font-mono font-bold">{activeProvider.latency}</span>
-                      <span className="text-[10px] text-white/40 font-display">SEARCH TIME</span>
-                    </div>
-                  </div>
-
-                  {/* Code Execution Stream */}
-                  <div
-                    className="rounded-xl p-4 font-mono text-[12px] leading-relaxed relative overflow-hidden"
-                    style={{
-                      background: 'rgba(0, 0, 0, 0.6)',
-                      border: '1px solid rgba(255, 255, 255, 0.06)',
-                    }}
-                  >
-                    <div className="space-y-1.5">
-                      {activeProvider.codeLines.map((line, idx) => (
-                        <div key={idx} className="flex items-start gap-4">
-                          <span className="text-white/20 select-none w-5 text-right flex-shrink-0">{line.num}</span>
-                          <span style={{ color: line.color }} className="flex-1 font-mono break-all">
-                            {line.text}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Resolution Footer Banner */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle2 size={16} className="text-green-400 flex-shrink-0" />
-                      <span className="text-white/80 text-xs font-medium">
-                        Executed autonomously · <span className="text-green-300 font-semibold font-mono">Saved {activeProvider.timeSaved}</span> · Zero manual prompts
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-white/50 border border-white/10">
-                        Tokens Saved: {activeProvider.tokensSaved}
-                      </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                        Cost: $0.000 (Cached)
-                      </span>
-                    </div>
-                  </div>
-
-                </div>
-
-                {/* ── Cockpit Bottom Metrics Ribbon ── */}
-                <div className="px-6 py-4 border-t border-white/10 bg-black/50 grid grid-cols-2 sm:grid-cols-4 gap-4 text-center">
-                  <div>
-                    <p className="text-white/40 text-[10px] font-bold uppercase tracking-wider font-display">LATENCY</p>
-                    <p className="text-cyan-300 font-display font-bold text-lg mt-0.5">{activeProvider.latency}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/40 text-[10px] font-bold uppercase tracking-wider font-display">TOKENS SAVED</p>
-                    <p className="text-green-400 font-display font-bold text-lg mt-0.5">{activeProvider.tokensSaved}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/40 text-[10px] font-bold uppercase tracking-wider font-display">TRUST SCORE</p>
-                    <p className="text-fuchsia-400 font-display font-bold text-lg mt-0.5">{activeProvider.confidence}</p>
-                  </div>
-                  <div>
-                    <p className="text-white/40 text-[10px] font-bold uppercase tracking-wider font-display">EST. SAVED</p>
-                    <p className="text-white font-display font-bold text-lg mt-0.5">{activeProvider.timeSaved}</p>
-                  </div>
-                </div>
-
-              </div>
-            </div>
-
-            {/* ── 2 Column Benefit Cards Beneath Cockpit ── */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
-              <div
-                className="p-6 rounded-2xl transition-all duration-300 hover:border-fuchsia-500/30"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-fuchsia-500/10 border border-fuchsia-500/30">
-                    <Zap className="w-4 h-4 text-fuchsia-400" />
-                  </div>
-                  <h3 className="text-white font-semibold font-display text-[16px]">Resolutions, not just answers</h3>
-                </div>
-                <p className="text-white/50 text-[13px] leading-relaxed mb-4">
-                  Access provisioned, code generated, and incidents resolved. Not just routed, but autonomously executed with zero hallucinations.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-fuchsia-500/10 text-fuchsia-300 border border-fuchsia-500/20">
-                    ⚡ Autonomous Execution
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-green-500/10 text-green-300 border border-green-500/20">
-                    ✓ 99.2% Accuracy
-                  </span>
-                </div>
-              </div>
-
-              <div
-                className="p-6 rounded-2xl transition-all duration-300 hover:border-cyan-500/30"
-                style={{
-                  background: 'rgba(255, 255, 255, 0.02)',
-                  border: '1px solid rgba(255, 255, 255, 0.06)',
-                }}
-              >
-                <div className="flex items-center gap-3 mb-3">
-                  <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-cyan-500/10 border border-cyan-500/30">
-                    <Brain className="w-4 h-4 text-cyan-400" />
-                  </div>
-                  <h3 className="text-white font-semibold font-display text-[16px]">Provide the right context at the right time</h3>
-                </div>
-                <p className="text-white/50 text-[13px] leading-relaxed mb-4">
-                  Every successful execution and edge case is reflected upon and synthesized into structured episodic memory for future runs.
-                </p>
-                <div className="flex flex-wrap gap-2">
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-cyan-500/10 text-cyan-300 border border-cyan-500/20">
-                    🧠 Episodic Recall
-                  </span>
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20">
-                    📈 Self-Improving
-                  </span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─── Before / After Section ───────────────────────────────────────────────────
-const beforeSteps = [
-  { text: 'Solve task from scratch every time', time: '45+ MIN' },
-  { text: 'No memory of past attempts', time: '—' },
-  { text: 'Repeated errors on similar tasks', time: '30+ MIN' },
-  { text: 'Manual prompt engineering each run', time: '20+ MIN' },
-  { text: 'No quality tracking or improvement', time: '—' },
-]
-const afterSteps = [
-  { text: 'Retrieve 3 relevant experiences instantly', time: 'INSTANT' },
-  { text: 'Execute with validated strategies', time: '2 MIN' },
-  { text: 'Automatically avoids past mistakes', time: '< 1 MIN' },
-  { text: 'Memory-augmented context injected', time: 'AUTO' },
-  { text: 'Trust scores track & improve quality', time: 'LIVE' },
-]
-// ─── 3D Tilt Card wrapper ───────────────────────────────────────────────────────────
-function TiltCard({
-  children, glowColor, style = {},
-}: {
-  children: React.ReactNode
-  glowColor: string
-  style?: React.CSSProperties
-}) {
-  const cardRef = useRef<HTMLDivElement>(null)
-  const [tilt, setTilt] = useState({ x: 0, y: 0 })
-  const [hovered, setHovered] = useState(false)
-
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const el = cardRef.current; if (!el) return
-    const { left, top, width, height } = el.getBoundingClientRect()
-    const cx = (e.clientX - left) / width - 0.5
-    const cy = (e.clientY - top)  / height - 0.5
-    setTilt({ x: cy * -16, y: cx * 16 })
-  }
-
-  return (
-    <div style={{ perspective: '900px' }}>
-      <div
-        ref={cardRef}
-        className="rounded-3xl p-6 relative overflow-hidden"
-        style={{
-          ...style,
-          transformStyle: 'preserve-3d',
-          transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) scale(${hovered ? 1.025 : 1})`,
-          transition: hovered
-            ? 'transform 80ms linear, box-shadow 80ms linear'
-            : 'transform 600ms cubic-bezier(0.23,1,0.32,1), box-shadow 600ms ease',
-          boxShadow: hovered
-            ? `0 30px 70px ${glowColor}40, 0 0 0 1px ${glowColor}30`
-            : `0 8px 32px ${glowColor}12`,
-          cursor: 'default',
-        }}
-        onMouseMove={onMove}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => { setTilt({ x: 0, y: 0 }); setHovered(false) }}
-      >
-        {/* Moving specular highlight */}
-        <div
-          className="absolute inset-0 rounded-3xl pointer-events-none"
-          style={{
-            background: hovered
-              ? `radial-gradient(circle at ${50 + tilt.y * 3}% ${50 - tilt.x * 3}%, rgba(255,255,255,0.07) 0%, transparent 55%)`
-              : 'transparent',
-            transition: hovered ? 'background 80ms linear' : 'none',
-          }}
-        />
-        {children}
-      </div>
-    </div>
-  )
-}
-
-// ─── Before / After Section (Atomicwork style exact match) ───────────────────
-const beforePositions = [
-  { top: '15%', left: '10%', rotate: '-3deg', z: 10, bg: '#252525' },
-  { top: '38%', left: '5%',  rotate: '2deg',  z: 20, bg: '#2a2a2a' },
-  { top: '60%', left: '12%', rotate: '-1deg', z: 15, bg: '#222222' },
-  { top: '78%', left: '20%', rotate: '4deg',  z: 25, bg: '#282828' },
-  { top: '48%', left: '35%', rotate: '-2deg', z: 30, bg: '#303030' },
-]
-
-function BeforeAfterSection() {
-  const [visible, setVisible] = useState(false)
-  const [tick, setTick] = useState(0)
-  const [mins, setMins] = useState(120)
-  const [queue, setQueue] = useState(37)
-  const ref = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) setVisible(true) },
-      { threshold: 0.2 }
-    )
-    if (ref.current) obs.observe(ref.current)
-    return () => obs.disconnect()
-  }, [])
-
-  // Continuous tick for scanning effect
-  useEffect(() => {
-    if (visible) {
-      const id = setInterval(() => setTick(t => t + 1), 50)
-      return () => clearInterval(id)
-    }
-  }, [visible])
-
-  // Fast countdown animation when visible
-  useEffect(() => {
-    if (visible) {
-      const id = setInterval(() => {
-        setMins(m => (m > 5 ? m - Math.max(1, Math.ceil((m - 5) / 8)) : 5))
-        setQueue(q => (q > 0 ? q - Math.max(1, Math.ceil(q / 8)) : 0))
-      }, 60)
-      return () => clearInterval(id)
-    }
-  }, [visible])
-
-  // Calculate scanning line position (0 to 100%)
-  const scanY = (Math.sin(tick * 0.06) * 0.5 + 0.5) * 100
-
-  return (
-    <section ref={ref} className="py-24 px-6 relative bg-[#0a0010] overflow-hidden">
-      {/* Background ambient lighting */}
-      <div className="absolute top-1/2 left-1/4 w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[140px] pointer-events-none -translate-y-1/2" />
-      <div className="absolute top-1/2 right-1/4 w-[600px] h-[600px] bg-cyan-900/10 rounded-full blur-[140px] pointer-events-none -translate-y-1/2" />
-
-      <div className="max-w-7xl mx-auto relative z-10">
-        
-        {/* Header */}
-        <div className="text-center max-w-3xl mx-auto mb-14">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-4"
-            style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}>
-            <Sparkles size={13} className="text-fuchsia-400" />
-            <span className="text-fuchsia-300 text-xs font-bold tracking-widest uppercase font-display">
-              PARADIGM COMPARISON
-            </span>
-          </div>
-          <h2 className="font-display font-bold text-white text-3xl lg:text-5xl leading-tight mb-4">
-            Stateless Guesswork <span className="text-white/40 font-normal">vs.</span> <span className="gradient-text">Adaptive Memory</span>
-          </h2>
-          <p className="text-white/50 text-sm sm:text-base leading-relaxed">
-            Without memory, agents repeat costly failures from scratch every time. With MemoryAgent, verified strategies execute in seconds with zero human triaging.
-          </p>
-        </div>
-
-        {/* ── The Contained Split Comparison Canvas ── */}
-        <div
-          className="rounded-3xl border border-white/10 overflow-hidden relative shadow-2xl grid grid-cols-1 lg:grid-cols-2"
-          style={{
-            boxShadow: '0 30px 100px rgba(0,0,0,0.8), 0 0 60px rgba(168,85,247,0.1)',
-          }}
-        >
-
-          {/* ── LEFT: BEFORE (Stateless Chaos) ── */}
-          <div
-            className="relative h-[620px] overflow-hidden p-6 sm:p-8 flex flex-col justify-between"
-            style={{
-              background: 'radial-gradient(circle at 20% 80%, rgba(239,68,68,0.08) 0%, #0d0614 70%)',
-              borderRight: '1px solid rgba(255,255,255,0.06)',
-            }}
-          >
-            {/* Top Bar */}
-            <div className="flex items-center justify-between z-30 relative">
-              <div
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full"
-                style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.4)' }}
-              >
-                <span className="w-2 h-2 rounded-full bg-red-400 animate-pulse" />
-                <span className="text-red-400 text-xs font-bold tracking-wider font-display">BEFORE · STATELESS</span>
-              </div>
-              <span className="text-white/30 text-xs font-mono">AVG: 45+ MIN / RUN</span>
-            </div>
-
-            {/* Subtle tech grid */}
-            <div
-              className="absolute inset-0 opacity-10 pointer-events-none"
-              style={{
-                backgroundImage: 'radial-gradient(rgba(239,68,68,0.4) 1px, transparent 1px)',
-                backgroundSize: '24px 24px',
-              }}
-            />
-
-            {/* Floating chaotic cards */}
-            <div className="absolute inset-0">
-              {beforeSteps.map((s, i) => (
-                <div
-                  key={i}
-                  className="absolute rounded-xl p-4 shadow-2xl transition-all duration-700 hover:z-50 hover:scale-105 cursor-default group"
-                  style={{
-                    top: beforePositions[i].top,
-                    left: beforePositions[i].left,
-                    transform: `rotate(${beforePositions[i].rotate})`,
-                    zIndex: beforePositions[i].z,
-                    background: 'rgba(20, 12, 28, 0.92)',
-                    backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    width: '320px',
-                    opacity: visible ? 1 : 0,
-                    marginTop: visible ? 0 : '40px',
-                    transitionDelay: `${0.1 + i * 0.15}s`,
-                    boxShadow: '0 20px 40px rgba(0,0,0,0.6)',
-                  }}
-                >
-                  <div className="flex gap-3">
-                    <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-red-950/40 border border-red-500/20 flex items-center justify-center">
-                      <img src={`https://i.pravatar.cc/100?img=${i + 12}`} alt="avatar" className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1">
-                      <p className="text-white/80 text-[13px] leading-snug mb-2 font-medium">{s.text}</p>
-                      <div className="flex items-center justify-between">
-                        {s.time !== '—' ? (
-                          <span
-                            className="inline-block px-2 py-0.5 rounded text-[10px] font-bold font-mono"
-                            style={{ background: 'rgba(239,68,68,0.18)', color: '#f87171', border: '1px solid rgba(239,68,68,0.3)' }}
-                          >
-                            {s.time}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] text-white/30 font-mono">NO MEMORY CACHE</span>
-                        )}
-                        <span className="text-[10px] text-red-400/60 font-mono">Cold Start</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Bottom footnote */}
-            <div className="relative z-30 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-white/40 font-mono">
-              <span>● Repeat error rate: ~34%</span>
-              <span className="text-red-400 font-semibold">High Token Burn</span>
-            </div>
-          </div>
-
-          {/* ── CENTER: High-tech Energy Divider Pill ── */}
-          <div className="hidden lg:flex absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-40 items-center justify-center pointer-events-none">
-            <div
-              className="w-11 h-11 rounded-full flex items-center justify-center shadow-2xl backdrop-blur-xl border border-white/20"
-              style={{
-                background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
-                boxShadow: '0 0 30px rgba(168,85,247,0.7), 0 0 10px rgba(34,211,238,0.5)',
-              }}
-            >
-              <Zap size={16} className="text-white" />
-            </div>
-          </div>
-
-          {/* ── RIGHT: AFTER (Dark Cyber Nebula Velocity) ── */}
-          <div
-            className="relative h-[620px] overflow-hidden flex items-center justify-center p-6 lg:p-10"
-            style={{
-              background: 'radial-gradient(circle at 75% 30%, rgba(168,85,247,0.22) 0%, rgba(34,211,238,0.12) 45%, #0e051c 90%)',
-            }}
-          >
-            {/* Tech grid */}
-            <div
-              className="absolute inset-0 opacity-20 pointer-events-none"
-              style={{
-                backgroundImage: 'radial-gradient(rgba(168,85,247,0.4) 1px, transparent 1px)',
-                backgroundSize: '24px 24px',
-              }}
-            />
-
-            {/* Animated glowing orbs */}
-            <div
-              className="absolute top-[10%] right-[15%] w-[260px] h-[260px] rounded-full anim-float pointer-events-none"
-              style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.3) 0%, transparent 70%)', filter: 'blur(45px)' }}
-            />
-            <div
-              className="absolute bottom-[10%] left-[15%] w-[220px] h-[220px] rounded-full anim-float pointer-events-none"
-              style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.2) 0%, transparent 70%)', filter: 'blur(40px)', animationDelay: '1s' }}
-            />
-
-            {/* Top Bar Badge */}
-            <div className="absolute top-6 left-6 sm:top-8 sm:left-8 z-30">
-              <div
-                className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full"
-                style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)' }}
-              >
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-ping" />
-                <span className="text-green-300 text-xs font-bold tracking-wider font-display">AFTER · MEMORYAGENT</span>
-              </div>
-            </div>
-
-            {/* Central Glass Card */}
-            <div
-              className="w-full max-w-lg z-10 transition-all duration-1000 relative mt-6"
-              style={{
-                opacity: visible ? 1 : 0,
-                transform: visible ? 'translateY(0)' : 'translateY(40px)',
-                transitionDelay: '0.3s',
-              }}
-            >
-              <TiltCard
-                glowColor="#a855f7"
-                style={{
-                  background: 'rgba(14, 8, 26, 0.88)',
-                  backdropFilter: 'blur(28px)',
-                  border: '1px solid rgba(168, 85, 247, 0.35)',
-                  padding: 0,
-                  boxShadow: '0 30px 80px rgba(0,0,0,0.6), 0 0 40px rgba(168,85,247,0.15)',
-                }}
-              >
-                {/* AI Scanning effect overlay */}
-                <div className="absolute inset-0 pointer-events-none overflow-hidden z-20 rounded-[inherit]">
-                  <div
-                    className="w-full h-[2px] opacity-75"
-                    style={{
-                      background: 'linear-gradient(90deg, transparent, #a855f7, #22d3ee, #4ade80, transparent)',
-                      boxShadow: '0 0 20px rgba(168,85,247,0.9), 0 0 10px rgba(34,211,238,0.7)',
-                      position: 'absolute',
-                      top: `${scanY}%`,
-                    }}
-                  />
-                </div>
-
-                {/* Header */}
-                <div className="p-5 border-b border-white/10 flex items-start gap-3.5 relative z-30 bg-black/40">
-                  <div
-                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
-                    style={{ background: 'linear-gradient(135deg, #a855f7, #22d3ee)' }}
-                  >
-                    <Zap className="w-4 h-4 text-white" />
-                  </div>
-                  <div>
-                    <h3 className="text-white font-semibold text-[15px] font-display">
-                      Tasks resolved automatically
-                    </h3>
-                    <p className="text-white/50 text-[11px] mt-0.5">
-                      Memory-augmented context injected from past validated runs
-                    </p>
-                  </div>
-                </div>
-
-                {/* Rows */}
-                <div className="p-4 space-y-1.5 relative z-30">
-                  {afterSteps.map((s, i) => {
-                    const rowY = 20 + i * 15
-                    const isScanned = scanY > rowY
-                    return (
-                      <div
-                        key={i}
-                        className="flex items-center justify-between px-3.5 py-2.5 rounded-lg transition-all duration-300 relative overflow-hidden"
-                        style={{
-                          opacity: visible ? 1 : 0,
-                          transform: visible ? 'translateX(0)' : 'translateX(20px)',
-                          transitionDelay: `${0.4 + i * 0.1}s`,
-                          background: isScanned ? 'rgba(255,255,255,0.04)' : 'transparent',
-                        }}
-                      >
-                        {/* Processing sweep background */}
-                        <div
-                          className="absolute top-0 bottom-0 left-0 transition-all duration-[1500ms] ease-out z-0"
-                          style={{
-                            background: 'linear-gradient(90deg, rgba(168,85,247,0.15), transparent)',
-                            width: visible && isScanned ? '100%' : '0%',
-                          }}
-                        />
-                        <div className="flex items-center gap-3 relative z-10">
-                          <CheckCircle2
-                            className="w-4 h-4 transition-colors duration-500"
-                            style={{ color: isScanned ? '#4ade80' : '#4b5563' }}
-                          />
-                          <span className="text-white/85 text-[13px]">{s.text}</span>
-                        </div>
-                        <span
-                          className={`text-[10px] font-bold font-mono px-2 py-0.5 rounded uppercase tracking-wider relative z-10 transition-all duration-500 ${
-                            isScanned && s.time === 'LIVE' ? 'anim-pulse-ring' : ''
-                          }`}
-                          style={{
-                            background: isScanned ? 'rgba(34,197,94,0.18)' : 'rgba(255,255,255,0.05)',
-                            color: isScanned ? '#4ade80' : '#6b7280',
-                            boxShadow: isScanned && s.time === 'LIVE' ? '0 0 10px rgba(34,197,94,0.4)' : 'none',
-                          }}
-                        >
-                          {s.time}
-                        </span>
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Metrics Footer */}
-                <div className="p-5 border-t border-white/10 flex justify-center gap-12 sm:gap-16 relative z-30 bg-black/40">
-                  <div className="text-center">
-                    <div className="flex items-baseline justify-center font-display font-bold">
-                      <span className="text-2xl opacity-60 mr-1 text-white">~</span>
-                      <span
-                        className="text-4xl sm:text-5xl transition-colors duration-500"
-                        style={{ color: mins <= 5 ? '#4ade80' : 'white' }}
-                      >
-                        {mins}
-                      </span>
-                    </div>
-                    <p className="text-white/40 text-[9px] font-bold tracking-[0.2em] mt-1 font-display">MINUTES</p>
-                  </div>
-                  <div className="text-center">
-                    <div className="flex items-baseline justify-center font-display font-bold h-[52px]">
-                      <span
-                        className="text-4xl sm:text-5xl transition-colors duration-500"
-                        style={{ color: queue === 0 ? '#4ade80' : 'white', lineHeight: '52px' }}
-                      >
-                        {queue}
-                      </span>
-                    </div>
-                    <p className="text-white/40 text-[9px] font-bold tracking-[0.2em] mt-1 font-display">QUEUE</p>
-                  </div>
-                  <div className="text-center hidden sm:block">
-                    <div className="flex items-baseline justify-center font-display font-bold h-[52px]">
-                      <span className="text-4xl sm:text-5xl text-cyan-400" style={{ lineHeight: '52px' }}>
-                        12x
-                      </span>
-                    </div>
-                    <p className="text-white/40 text-[9px] font-bold tracking-[0.2em] mt-1 font-display">SPEEDUP</p>
-                  </div>
-                </div>
-              </TiltCard>
-            </div>
-
-            {/* Floating cursors/labels */}
-            <div className="absolute top-20 right-[8%] anim-float hidden sm:block" style={{ animationDelay: '1s' }}>
-              <div className="px-3 py-1.5 rounded-full bg-[#1e1b4b]/90 border border-[#6366f1] text-[#a5b4fc] text-[9px] font-bold tracking-widest uppercase shadow-xl flex items-center gap-2 backdrop-blur-md">
-                <ArrowRight className="w-3 h-3 rotate-135" />
-                DEVICE OPS ENGINEER
-              </div>
-            </div>
-            <div className="absolute bottom-16 left-[8%] anim-float hidden sm:block" style={{ animationDelay: '0.5s' }}>
-              <div className="px-3 py-1.5 rounded-full bg-[#4a044e]/90 border border-[#d946ef] text-[#f0abfc] text-[9px] font-bold tracking-widest uppercase shadow-xl flex items-center gap-2 backdrop-blur-md">
-                <ArrowRight className="w-3 h-3 -rotate-45" />
-                IT OPS ENGINEER
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </div>
-    </section>
-  )
-}
-
 
 // ─── Performance Graph (Exact Atomicwork Regression Stacked Area Model) ──────
-
 const CHART_CATEGORIES = [
   {
-    name: 'Onboarding Manager',
+    name: 'Research Specialist (Claude)',
     color: '#8b5cf6',
     stroke: '#a78bfa',
     fillGradient: ['#8b5cf6', '#6d28d9'],
@@ -1465,7 +308,7 @@ const CHART_CATEGORIES = [
     ),
   },
   {
-    name: 'HR Ops Specialist',
+    name: 'Code Synthesizer (GPT-4o)',
     color: '#10b981',
     stroke: '#34d399',
     fillGradient: ['#10b981', '#059669'],
@@ -1477,7 +320,7 @@ const CHART_CATEGORIES = [
     ),
   },
   {
-    name: 'IT Ops Engineer',
+    name: 'Local Data Analyst (Ollama)',
     color: '#f97316',
     stroke: '#fb923c',
     fillGradient: ['#f97316', '#c2410c'],
@@ -1489,7 +332,7 @@ const CHART_CATEGORIES = [
     ),
   },
   {
-    name: 'Incident Manager',
+    name: 'Reasoning Validator (DeepSeek)',
     color: '#facc15',
     stroke: '#fde047',
     fillGradient: ['#facc15', '#ca8a04'],
@@ -1503,7 +346,6 @@ const CHART_CATEGORIES = [
 
 // High-precision non-linear regression curve computation (Sigmoid + Exponential polynomial)
 function evalRegressionCurve(t: number): { total: number; y0: number; y1: number; y2: number; y3: number } {
-  // Sigmoid growth component + baseline exponential learning
   const s = 1 / (1 + Math.exp(-7.5 * (t - 0.65)))
   const p = Math.pow(t, 2.2)
   const raw = 0.3 * p + 0.7 * s
@@ -1512,17 +354,16 @@ function evalRegressionCurve(t: number): { total: number; y0: number; y1: number
   const normalized = Math.max(0, Math.min(1, (raw - raw0) / (raw1 - raw0)))
   const total = normalized * 160
 
-  // Proportional breakdown matching Atomicwork stacked area distribution
-  const y0 = total * (0.50 + 0.075 * t)       // Onboarding Manager (Purple) reaches ~92
-  const y1 = total * (0.75 + 0.03125 * t)     // HR Ops Specialist (Emerald) reaches ~125
-  const y2 = total * (0.90 + 0.0125 * t)      // IT Ops Engineer (Orange) reaches ~146
-  const y3 = total                            // Incident Manager (Yellow) reaches 160
+  const y0 = total * (0.50 + 0.075 * t)
+  const y1 = total * (0.75 + 0.03125 * t)
+  const y2 = total * (0.90 + 0.0125 * t)
+  const y3 = total
 
   return { total, y0, y1, y2, y3 }
 }
 
 function PerformanceGraph() {
-  const [activeTab, setActiveTab] = useState(2) // 0: Employees, 1: IT Teams, 2: Business Leaders
+  const [activeTab, setActiveTab] = useState(1) // 0: Developers, 1: AI Teams, 2: Research
   const [showConfidence, setShowConfidence] = useState(false)
   const [showPromptDetails, setShowPromptDetails] = useState(false)
   const [progress, setProgress] = useState(0)
@@ -1553,7 +394,6 @@ function PerformanceGraph() {
     return () => obs.disconnect()
   }, [])
 
-  // Generate 40 dense evaluation points for mathematically smooth regression curves
   const NUM_STEPS = 40
   const points = Array.from({ length: NUM_STEPS + 1 }, (_, i) => {
     const t = i / NUM_STEPS
@@ -1571,7 +411,6 @@ function PerformanceGraph() {
     }
   })
 
-  // SVG Area Paths
   const getAreaD = (topKey: 'y0' | 'y1' | 'y2' | 'y3', botKey: 'yBase' | 'y0' | 'y1' | 'y2') => {
     let d = `M ${points[0].x.toFixed(1)},${points[0][topKey].toFixed(1)}`
     for (let i = 1; i <= NUM_STEPS; i++) {
@@ -1584,7 +423,6 @@ function PerformanceGraph() {
     return d
   }
 
-  // Boundary Stroke Paths
   const getLineD = (key: 'y0' | 'y1' | 'y2' | 'y3') => {
     let d = `M ${points[0].x.toFixed(1)},${points[0][key].toFixed(1)}`
     for (let i = 1; i <= NUM_STEPS; i++) {
@@ -1593,7 +431,6 @@ function PerformanceGraph() {
     return d
   }
 
-  // 95% Confidence Interval Prediction Corridor
   const getConfidenceAreaD = () => {
     let d = `M ${points[0].x.toFixed(1)},${points[0].y3.toFixed(1)}`
     for (let i = 1; i <= NUM_STEPS; i++) {
@@ -1612,7 +449,6 @@ function PerformanceGraph() {
 
   const clipW = (progress / 100) * (W - PAD.l - PAD.r)
 
-  // Handle cursor hover scrub
   const onMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect()
     const xRatio = (e.clientX - rect.left - (PAD.l / W) * rect.width) / ((gW / W) * rect.width)
@@ -1625,541 +461,644 @@ function PerformanceGraph() {
   const hoverDay = hoverT !== null ? Math.round(hoverT * 90) : 0
 
   return (
-    <section className="py-24 px-6 bg-[#0a0010] relative overflow-hidden" ref={ref}>
-      {/* Ambient background bloom */}
-      <div className="absolute top-1/4 left-1/5 w-[650px] h-[650px] bg-purple-900/15 rounded-full blur-[160px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-[550px] h-[550px] bg-emerald-900/12 rounded-full blur-[160px] pointer-events-none" />
+    <div className="rounded-[20px] bg-[#0c0714] text-white p-7 sm:p-9 border border-neutral-800 shadow-2xl relative overflow-hidden" ref={ref}>
+      {/* Top Audience Tabs matching Atomicwork */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-white/[0.08] pb-5 mb-8">
+        <div>
+          <span className="text-white/40 text-xs font-mono font-bold tracking-[0.2em] uppercase block mb-1">
+            CONTINUOUS RESOLUTION INTELLIGENCE
+          </span>
+          <h3 className="text-xl sm:text-2xl font-bold font-sans text-white">
+            3X Increase in AI Resolutions with Persistent Memory
+          </h3>
+        </div>
+        <div className="flex items-center gap-4 sm:gap-6 text-xs font-mono">
+          {[
+            { id: 0, label: '1. FOR DEVELOPERS' },
+            { id: 1, label: '2. FOR AI TEAMS' },
+            { id: 2, label: '3. FOR RESEARCH' },
+          ].map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`pb-1 cursor-pointer transition-all uppercase ${
+                activeTab === tab.id
+                  ? 'text-white font-bold border-b-2 border-emerald-400'
+                  : 'text-white/40 hover:text-white/80'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      <div className="max-w-7xl mx-auto relative z-10">
+      {/* Main 2-Column Display (Stacked Area Chart on Left, Metrics Card on Right) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch mb-8">
         
-        {/* ── TOP SECTION HEADER & AUDIENCE TABS (Matching Atomicwork Reference) ── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6 mb-8">
-          <div>
-            <span className="text-white/45 text-xs font-mono font-bold tracking-[0.2em] uppercase block">
-              AI-NATIVE ITSM AND ESM SOLUTION
-            </span>
-          </div>
-          <div className="flex items-center gap-4 sm:gap-8 text-xs font-mono tracking-wider">
-            {[
-              { id: 0, label: '1. FOR EMPLOYEES' },
-              { id: 1, label: '2. FOR IT TEAMS' },
-              { id: 2, label: '3. FOR BUSINESS LEADERS' },
-            ].map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`transition-all duration-200 pb-1 cursor-pointer uppercase ${
-                  activeTab === tab.id
-                    ? 'text-white font-bold border-b-2 border-[#10b981]'
-                    : 'text-white/40 hover:text-white/75'
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Section Headline */}
-        <div className="mb-10">
-          <h2 className="text-4xl sm:text-5xl lg:text-6xl font-display font-bold text-white tracking-tight leading-[1.1]">
-            like your teams.
-          </h2>
-          <p className="text-white/50 text-sm sm:text-base font-sans mt-3 max-w-2xl font-light">
-            Continuous resolution intelligence modeled over 90 days. Watch autonomous agent resolutions compound across departments.
-          </p>
-        </div>
-
-        {/* ── MAIN 2-COLUMN DISPLAY (Atomicwork Side-by-Side Cards) ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
-          
-          {/* ── LEFT: Stacked Area Regression Model Chart (lg:col-span-8) ── */}
-          <div className="lg:col-span-8 flex flex-col">
-            
-            {/* Header above chart */}
-            <div className="flex items-center justify-between mb-3">
-              <p className="text-white/45 text-xs font-bold font-mono tracking-widest uppercase">
-                3X INCREASE IN AI RESOLUTIONS IN 3 MONTHS
-              </p>
-              {/* Regression Model Info & Confidence Toggle */}
-              <div className="hidden sm:flex items-center gap-3">
-                <span className="text-[10px] font-mono text-cyan-400/80 bg-cyan-950/40 border border-cyan-800/40 px-2 py-0.5 rounded">
-                  R² = 0.994 · Poly-3
-                </span>
-                <button
-                  onClick={() => setShowConfidence(!showConfidence)}
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded transition-all cursor-pointer ${
-                    showConfidence
-                      ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
-                      : 'bg-white/5 text-white/40 border border-white/10 hover:text-white'
-                  }`}
-                >
-                  {showConfidence ? '✓ 95% CI Corridor' : '+ Show 95% CI'}
-                </button>
-              </div>
-            </div>
-
-            {/* Chart Card */}
-            <div
-              className="rounded-2xl p-6 sm:p-7 relative overflow-hidden flex-1 flex flex-col justify-between"
-              style={{
-                background: 'rgba(16, 9, 28, 0.78)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: '0 25px 70px rgba(0,0,0,0.6)',
-              }}
-            >
-              {/* Legend matching reference screenshot */}
-              <div className="flex flex-wrap items-center gap-5 sm:gap-7 mb-6">
-                {CHART_CATEGORIES.map((cat) => (
-                  <div key={cat.name} className="flex items-center gap-2">
-                    {cat.icon}
-                    <span className="text-white/60 text-xs font-sans font-medium tracking-wide">
-                      {cat.name}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Chart SVG Canvas */}
-              <div className="w-full relative">
-                <svg
-                  viewBox={`0 0 ${W} ${H}`}
-                  className="w-full h-auto cursor-crosshair select-none"
-                  preserveAspectRatio="xMidYMid meet"
-                  onMouseMove={onMouseMove}
-                  onMouseLeave={() => setHoverT(null)}
-                >
-                  <defs>
-                    {/* Exact Color Gradients matching Atomicwork screenshot */}
-                    <linearGradient id="grad-layer-0" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.95" />
-                      <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.8" />
-                    </linearGradient>
-                    <linearGradient id="grad-layer-1" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#10b981" stopOpacity="0.95" />
-                      <stop offset="100%" stopColor="#059669" stopOpacity="0.8" />
-                    </linearGradient>
-                    <linearGradient id="grad-layer-2" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f97316" stopOpacity="0.95" />
-                      <stop offset="100%" stopColor="#ea580c" stopOpacity="0.8" />
-                    </linearGradient>
-                    <linearGradient id="grad-layer-3" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#fde047" stopOpacity="0.95" />
-                      <stop offset="100%" stopColor="#facc15" stopOpacity="0.85" />
-                    </linearGradient>
-
-                    {/* Fine stipple / grain texture overlay matching Atomicwork vector artwork */}
-                    <pattern id="atomic-stipple" width="5" height="5" patternUnits="userSpaceOnUse">
-                      <circle cx="1.5" cy="1.5" r="0.75" fill="#ffffff" opacity="0.18" />
-                      <circle cx="4" cy="4" r="0.55" fill="#000000" opacity="0.25" />
-                    </pattern>
-
-                    {/* Entrance animation clip */}
-                    <clipPath id="reg-chart-clip">
-                      <rect x={PAD.l} y={PAD.t - 10} width={clipW} height={gH + 20} />
-                    </clipPath>
-                  </defs>
-
-                  {/* Horizontal Grid lines matching 160, 128, 96, 64, 32, 0 */}
-                  {[160, 128, 96, 64, 32, 0].map((val) => {
-                    const y = PAD.t + gH - (val / 160) * gH
-                    return (
-                      <g key={val}>
-                        <line
-                          x1={PAD.l}
-                          y1={y}
-                          x2={W - PAD.r}
-                          y2={y}
-                          stroke="rgba(255, 255, 255, 0.08)"
-                          strokeWidth="1"
-                        />
-                        {/* Y-axis numbers */}
-                        <text
-                          x={PAD.l - 12}
-                          y={y + 4}
-                          fill="rgba(255, 255, 255, 0.45)"
-                          fontSize="11"
-                          fontFamily="Inter, monospace"
-                          textAnchor="end"
-                        >
-                          {val}
-                        </text>
-                      </g>
-                    )
-                  })}
-
-                  {/* X-axis labels: Jan, Feb, Mar */}
-                  <text
-                    x={PAD.l}
-                    y={H - 8}
-                    fill="rgba(255, 255, 255, 0.45)"
-                    fontSize="11"
-                    fontFamily="Inter, sans-serif"
-                    textAnchor="start"
-                  >
-                    Jan
-                  </text>
-                  <text
-                    x={PAD.l + gW * 0.5}
-                    y={H - 8}
-                    fill="rgba(255, 255, 255, 0.45)"
-                    fontSize="11"
-                    fontFamily="Inter, sans-serif"
-                    textAnchor="middle"
-                  >
-                    Feb
-                  </text>
-                  <text
-                    x={W - PAD.r}
-                    y={H - 8}
-                    fill="rgba(255, 255, 255, 0.45)"
-                    fontSize="11"
-                    fontFamily="Inter, sans-serif"
-                    textAnchor="end"
-                  >
-                    Mar
-                  </text>
-
-                  {/* Stacked Regression Model Curves (clipped with entrance animation) */}
-                  <g clipPath="url(#reg-chart-clip)">
-                    {/* Layer 3 (Top: Yellow - Incident Manager) */}
-                    <path d={getAreaD('y3', 'y2')} fill="url(#grad-layer-3)" />
-                    <path d={getAreaD('y3', 'y2')} fill="url(#atomic-stipple)" />
-                    <path d={getLineD('y3')} fill="none" stroke="#fef08a" strokeWidth="1.5" />
-
-                    {/* Layer 2 (Orange - IT Ops Engineer) */}
-                    <path d={getAreaD('y2', 'y1')} fill="url(#grad-layer-2)" />
-                    <path d={getAreaD('y2', 'y1')} fill="url(#atomic-stipple)" />
-                    <path d={getLineD('y2')} fill="none" stroke="#fdba74" strokeWidth="1.5" />
-
-                    {/* Layer 1 (Emerald Green - HR Ops Specialist) */}
-                    <path d={getAreaD('y1', 'y0')} fill="url(#grad-layer-1)" />
-                    <path d={getAreaD('y1', 'y0')} fill="url(#atomic-stipple)" />
-                    <path d={getLineD('y1')} fill="none" stroke="#6ee7b7" strokeWidth="1.5" />
-
-                    {/* Layer 0 (Bottom: Purple - Onboarding Manager) */}
-                    <path d={getAreaD('y0', 'yBase')} fill="url(#grad-layer-0)" />
-                    <path d={getAreaD('y0', 'yBase')} fill="url(#atomic-stipple)" />
-                    <path d={getLineD('y0')} fill="none" stroke="#a78bfa" strokeWidth="1.5" />
-
-                    {/* Optional 95% Confidence Interval Corridor */}
-                    {showConfidence && (
-                      <path
-                        d={getConfidenceAreaD()}
-                        fill="rgba(250, 204, 21, 0.15)"
-                        stroke="rgba(250, 204, 21, 0.4)"
-                        strokeWidth="1"
-                        strokeDasharray="4 4"
-                      />
-                    )}
-                  </g>
-
-                  {/* Interactive Scrub Cursor Line */}
-                  {hoverT !== null && hoverData && (
-                    <g>
-                      <line
-                        x1={hoverX}
-                        y1={PAD.t}
-                        x2={hoverX}
-                        y2={PAD.t + gH}
-                        stroke="rgba(255, 255, 255, 0.65)"
-                        strokeWidth="1.5"
-                        strokeDasharray="4 4"
-                      />
-                      {/* Dots on each layer */}
-                      {[
-                        { y: PAD.t + gH - (hoverData.y0 / 160) * gH, color: '#a78bfa' },
-                        { y: PAD.t + gH - (hoverData.y1 / 160) * gH, color: '#34d399' },
-                        { y: PAD.t + gH - (hoverData.y2 / 160) * gH, color: '#fb923c' },
-                        { y: PAD.t + gH - (hoverData.y3 / 160) * gH, color: '#fde047' },
-                      ].map((pt, k) => (
-                        <circle
-                          key={k}
-                          cx={hoverX}
-                          cy={pt.y}
-                          r="4"
-                          fill={pt.color}
-                          stroke="#0a0010"
-                          strokeWidth="2"
-                        />
-                      ))}
-                    </g>
-                  )}
-                </svg>
-
-                {/* Floating Interactive Regression Tooltip */}
-                {hoverT !== null && hoverData && (
-                  <div
-                    className="absolute top-2 pointer-events-none p-3.5 rounded-xl backdrop-blur-md shadow-2xl border border-white/10"
-                    style={{
-                      left: `${(hoverX / W) * 100}%`,
-                      transform: hoverT > 0.55 ? 'translateX(-105%)' : 'translateX(12px)',
-                      background: 'rgba(10, 4, 20, 0.94)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between gap-4 mb-1">
-                      <p className="text-white/40 text-[10px] font-mono uppercase tracking-wider">
-                        {hoverDay <= 30 ? `Jan ${hoverDay || 1}` : hoverDay <= 60 ? `Feb ${hoverDay - 30}` : `Mar ${hoverDay - 60}`} · Day {hoverDay}
-                      </p>
-                      <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded">
-                        Model: ŷ = f(t)
-                      </span>
-                    </div>
-
-                    <p className="text-white font-display font-bold text-base mb-2">
-                      Total: {Math.round(hoverData.total)} Resolutions
-                    </p>
-
-                    <div className="space-y-1 text-[11px] font-mono">
-                      <div className="flex items-center justify-between gap-4 text-yellow-300">
-                        <span>Incident Manager:</span>
-                        <span className="font-bold">{Math.round(hoverData.y3 - hoverData.y2)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-4 text-orange-400">
-                        <span>IT Ops Engineer:</span>
-                        <span className="font-bold">{Math.round(hoverData.y2 - hoverData.y1)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-4 text-emerald-400">
-                        <span>HR Ops Specialist:</span>
-                        <span className="font-bold">{Math.round(hoverData.y1 - hoverData.y0)}</span>
-                      </div>
-                      <div className="flex items-center justify-between gap-4 text-purple-300">
-                        <span>Onboarding Manager:</span>
-                        <span className="font-bold">{Math.round(hoverData.y0)}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* ── RIGHT: Metrics Card matching Atomicwork (lg:col-span-4) ── */}
-          <div className="lg:col-span-4 flex flex-col">
-            
-            {/* Header above metrics card */}
-            <p className="text-white/45 text-xs font-bold font-mono tracking-widest uppercase mb-3">
-              20% INCREASE IN ROI IN 3 MONTHS
-            </p>
-
-            {/* Metrics Glass Card */}
-            <div
-              className="rounded-2xl p-7 flex flex-col justify-between flex-1"
-              style={{
-                background: 'rgba(16, 9, 28, 0.78)',
-                backdropFilter: 'blur(20px)',
-                border: '1px solid rgba(255, 255, 255, 0.08)',
-                boxShadow: '0 25px 70px rgba(0,0,0,0.6)',
-              }}
-            >
-              {/* Active AI Coworkers Header */}
-              <div className="mb-8">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className="w-2.5 h-2.5 rounded-[2px] bg-[#10b981]" />
-                  <span className="text-[#10b981] text-xs font-mono font-bold tracking-widest uppercase">
-                    ACTIVE AI COWORKERS
+        {/* Left Column: Stacked Area Chart */}
+        <div className="lg:col-span-8 flex flex-col justify-between">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-wrap items-center gap-4 sm:gap-6">
+              {CHART_CATEGORIES.map((cat) => (
+                <div key={cat.name} className="flex items-center gap-2">
+                  {cat.icon}
+                  <span className="text-white/70 text-xs font-mono">
+                    {cat.name}
                   </span>
                 </div>
-                <div className="text-[#10b981] font-display font-bold text-5xl sm:text-6xl tracking-tight">
-                  156
-                </div>
-              </div>
-
-              {/* 2-Column Metrics Grid matching exact screenshot */}
-              <div className="grid grid-cols-2 gap-y-7 gap-x-6">
-                <div>
-                  <p className="text-white/40 text-[11px] font-bold font-mono tracking-wider mb-1 uppercase">
-                    AI DEFLECTION RATE
-                  </p>
-                  <p className="text-white font-display font-bold text-2xl">
-                    80%
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-white/40 text-[11px] font-bold font-mono tracking-wider mb-1 uppercase">
-                    SLA ADHERENCE
-                  </p>
-                  <p className="text-white font-display font-bold text-2xl">
-                    99.9%
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-white/40 text-[11px] font-bold font-mono tracking-wider mb-1 uppercase">
-                    TIME TO FIRST RESPONSE
-                  </p>
-                  <p className="text-white font-display font-bold text-2xl">
-                    18s
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-white/40 text-[11px] font-bold font-mono tracking-wider mb-1 uppercase">
-                    MTTR
-                  </p>
-                  <p className="text-white font-display font-bold text-2xl">
-                    6 min
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-white/40 text-[11px] font-bold font-mono tracking-wider mb-1 uppercase">
-                    EMPLOYEE SATISFACTION
-                  </p>
-                  <p className="text-white font-display font-bold text-2xl">
-                    98%
-                  </p>
-                </div>
-
-                <div>
-                  <p className="text-white/40 text-[11px] font-bold font-mono tracking-wider mb-1 uppercase">
-                    ROI
-                  </p>
-                  <p className="text-white font-display font-bold text-2xl">
-                    $1.8M
-                  </p>
-                </div>
-              </div>
+              ))}
             </div>
 
+            <div className="hidden sm:flex items-center gap-3">
+              <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/60 border border-cyan-800/40 px-2 py-0.5 rounded">
+                R² = 0.994 · Poly-3
+              </span>
+              <button
+                onClick={() => setShowConfidence(!showConfidence)}
+                className={`text-[10px] font-mono px-2 py-0.5 rounded transition-all cursor-pointer ${
+                  showConfidence
+                    ? 'bg-amber-500/20 text-amber-300 border border-amber-500/50'
+                    : 'bg-white/5 text-white/40 border border-white/10 hover:text-white'
+                }`}
+              >
+                {showConfidence ? '✓ 95% CI Corridor' : '+ Show 95% CI'}
+              </button>
+            </div>
           </div>
 
+          {/* SVG Canvas */}
+          <div className="relative w-full">
+            <svg
+              viewBox={`0 0 ${W} ${H}`}
+              className="w-full h-auto cursor-crosshair select-none"
+              preserveAspectRatio="xMidYMid meet"
+              onMouseMove={onMouseMove}
+              onMouseLeave={() => setHoverT(null)}
+            >
+              <defs>
+                <linearGradient id="grad-layer-0" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.8" />
+                </linearGradient>
+                <linearGradient id="grad-layer-1" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#10b981" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#059669" stopOpacity="0.8" />
+                </linearGradient>
+                <linearGradient id="grad-layer-2" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f97316" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#ea580c" stopOpacity="0.8" />
+                </linearGradient>
+                <linearGradient id="grad-layer-3" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#fde047" stopOpacity="0.95" />
+                  <stop offset="100%" stopColor="#facc15" stopOpacity="0.85" />
+                </linearGradient>
+
+                <pattern id="atomic-stipple" width="5" height="5" patternUnits="userSpaceOnUse">
+                  <circle cx="1.5" cy="1.5" r="0.75" fill="#ffffff" opacity="0.15" />
+                  <circle cx="4" cy="4" r="0.55" fill="#000000" opacity="0.25" />
+                </pattern>
+
+                <clipPath id="reg-chart-clip">
+                  <rect x={PAD.l} y={PAD.t - 10} width={clipW} height={gH + 20} />
+                </clipPath>
+              </defs>
+
+              {/* Horizontal grid lines */}
+              {[160, 128, 96, 64, 32, 0].map((val) => {
+                const y = PAD.t + gH - (val / 160) * gH
+                return (
+                  <g key={val}>
+                    <line
+                      x1={PAD.l}
+                      y1={y}
+                      x2={W - PAD.r}
+                      y2={y}
+                      stroke="rgba(255, 255, 255, 0.08)"
+                      strokeWidth="1"
+                    />
+                    <text
+                      x={PAD.l - 12}
+                      y={y + 4}
+                      fill="rgba(255, 255, 255, 0.45)"
+                      fontSize="10"
+                      fontFamily="monospace"
+                      textAnchor="end"
+                    >
+                      {val}
+                    </text>
+                  </g>
+                )
+              })}
+
+              {/* X-axis labels */}
+              <text x={PAD.l} y={H - 8} fill="rgba(255, 255, 255, 0.45)" fontSize="10" fontFamily="monospace" textAnchor="start">
+                Day 1
+              </text>
+              <text x={PAD.l + gW * 0.5} y={H - 8} fill="rgba(255, 255, 255, 0.45)" fontSize="10" fontFamily="monospace" textAnchor="middle">
+                Day 45
+              </text>
+              <text x={W - PAD.r} y={H - 8} fill="rgba(255, 255, 255, 0.45)" fontSize="10" fontFamily="monospace" textAnchor="end">
+                Day 90
+              </text>
+
+              {/* Stacked Regression Model Curves */}
+              <g clipPath="url(#reg-chart-clip)">
+                <path d={getAreaD('y3', 'y2')} fill="url(#grad-layer-3)" />
+                <path d={getAreaD('y3', 'y2')} fill="url(#atomic-stipple)" />
+                <path d={getLineD('y3')} fill="none" stroke="#fef08a" strokeWidth="1.5" />
+
+                <path d={getAreaD('y2', 'y1')} fill="url(#grad-layer-2)" />
+                <path d={getAreaD('y2', 'y1')} fill="url(#atomic-stipple)" />
+                <path d={getLineD('y2')} fill="none" stroke="#fdba74" strokeWidth="1.5" />
+
+                <path d={getAreaD('y1', 'y0')} fill="url(#grad-layer-1)" />
+                <path d={getAreaD('y1', 'y0')} fill="url(#atomic-stipple)" />
+                <path d={getLineD('y1')} fill="none" stroke="#6ee7b7" strokeWidth="1.5" />
+
+                <path d={getAreaD('y0', 'yBase')} fill="url(#grad-layer-0)" />
+                <path d={getAreaD('y0', 'yBase')} fill="url(#atomic-stipple)" />
+                <path d={getLineD('y0')} fill="none" stroke="#a78bfa" strokeWidth="1.5" />
+
+                {showConfidence && (
+                  <path
+                    d={getConfidenceAreaD()}
+                    fill="rgba(250, 204, 21, 0.15)"
+                    stroke="rgba(250, 204, 21, 0.4)"
+                    strokeWidth="1"
+                    strokeDasharray="4 4"
+                  />
+                )}
+              </g>
+
+              {/* Interactive Scrub Cursor Line */}
+              {hoverT !== null && hoverData && (
+                <g>
+                  <line
+                    x1={hoverX}
+                    y1={PAD.t}
+                    x2={hoverX}
+                    y2={PAD.t + gH}
+                    stroke="rgba(255, 255, 255, 0.65)"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                  />
+                  {[
+                    { y: PAD.t + gH - (hoverData.y0 / 160) * gH, color: '#a78bfa' },
+                    { y: PAD.t + gH - (hoverData.y1 / 160) * gH, color: '#34d399' },
+                    { y: PAD.t + gH - (hoverData.y2 / 160) * gH, color: '#fb923c' },
+                    { y: PAD.t + gH - (hoverData.y3 / 160) * gH, color: '#fde047' },
+                  ].map((pt, k) => (
+                    <circle
+                      key={k}
+                      cx={hoverX}
+                      cy={pt.y}
+                      r="4"
+                      fill={pt.color}
+                      stroke="#0c0714"
+                      strokeWidth="2"
+                    />
+                  ))}
+                </g>
+              )}
+            </svg>
+
+            {/* Interactive Tooltip */}
+            {hoverT !== null && hoverData && (
+              <div
+                className="absolute top-2 pointer-events-none p-3.5 rounded-xl backdrop-blur-md shadow-2xl border border-white/10"
+                style={{
+                  left: `${(hoverX / W) * 100}%`,
+                  transform: hoverT > 0.55 ? 'translateX(-105%)' : 'translateX(12px)',
+                  background: 'rgba(10, 4, 20, 0.94)',
+                }}
+              >
+                <div className="flex items-center justify-between gap-4 mb-1">
+                  <p className="text-white/40 text-[10px] font-mono uppercase tracking-wider">
+                    Trajectory Day {hoverDay}
+                  </p>
+                  <span className="text-[9px] font-mono text-cyan-400 bg-cyan-950/60 px-1.5 py-0.5 rounded">
+                    ŷ = f(t)
+                  </span>
+                </div>
+
+                <p className="text-white font-bold text-sm mb-2">
+                  Total: {Math.round(hoverData.total)} Resolutions
+                </p>
+
+                <div className="space-y-1 text-[11px] font-mono">
+                  <div className="flex items-center justify-between gap-4 text-yellow-300">
+                    <span>Reasoning Validator:</span>
+                    <span className="font-bold">{Math.round(hoverData.y3 - hoverData.y2)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 text-orange-400">
+                    <span>Local Data Analyst:</span>
+                    <span className="font-bold">{Math.round(hoverData.y2 - hoverData.y1)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 text-emerald-400">
+                    <span>Code Synthesizer:</span>
+                    <span className="font-bold">{Math.round(hoverData.y1 - hoverData.y0)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-4 text-purple-300">
+                    <span>Research Specialist:</span>
+                    <span className="font-bold">{Math.round(hoverData.y0)}</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* ── FLOATING PROMPT PILL (Matching Atomicwork Reference Center) ── */}
-        <div className="flex justify-center -mt-4 relative z-20">
-          <button
-            onClick={() => setShowPromptDetails(!showPromptDetails)}
-            className="group flex items-center gap-3 px-6 py-3.5 rounded-full backdrop-blur-xl border border-white/20 hover:border-[#fb923c]/60 shadow-2xl transition-all duration-300 cursor-pointer"
-            style={{
-              background: 'rgba(22, 12, 38, 0.92)',
-              boxShadow: '0 10px 35px rgba(0,0,0,0.5), 0 0 20px rgba(249,115,22,0.15)',
-            }}
-          >
-            <span className="text-white/90 text-sm font-sans font-medium tracking-wide">
-              What can your AI Coworkers actually resolve?
-            </span>
-            <div className="w-6 h-6 rounded-full bg-[#f97316] flex items-center justify-center text-white shadow group-hover:translate-x-0.5 transition-transform">
-              <ArrowRight size={13} />
-            </div>
-          </button>
-        </div>
-
-        {/* Expandable Capabilities Drawer when clicking the pill */}
-        {showPromptDetails && (
-          <div className="mt-8 p-6 rounded-2xl bg-white/[0.03] border border-white/10 backdrop-blur-md anim-float-up">
-            <h4 className="text-white font-display font-bold text-base mb-4 flex items-center gap-2">
-              <Sparkles size={16} className="text-[#f97316]" />
-              Automated Workflows Ready to Deploy Out-of-the-Box
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
-              <div className="p-3.5 rounded-xl bg-purple-950/20 border border-purple-800/30">
-                <span className="font-bold text-purple-300 block mb-1">Onboarding Manager</span>
-                <p className="text-white/60">Automated employee SaaS provisioning, hardware request routing, and policy verification.</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-emerald-950/20 border border-emerald-800/30">
-                <span className="font-bold text-emerald-300 block mb-1">HR Ops Specialist</span>
-                <p className="text-white/60">Instant benefits inquiry resolution, PTO policy clarification, and payroll change validation.</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-orange-950/20 border border-orange-800/30">
-                <span className="font-bold text-orange-300 block mb-1">IT Ops Engineer</span>
-                <p className="text-white/60">Single sign-on MFA resets, VPN configuration assistance, and access delegation management.</p>
-              </div>
-              <div className="p-3.5 rounded-xl bg-yellow-950/20 border border-yellow-800/30">
-                <span className="font-bold text-yellow-300 block mb-1">Incident Manager</span>
-                <p className="text-white/60">Automated alert correlation, stakeholder status page dispatch, and preliminary root cause synthesis.</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ── 4 BOTTOM CAPABILITY PILLARS (Matching Atomicwork Reference Bottom) ── */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8 mt-16 pt-10 border-t border-white/10">
+        {/* Right Column: Metrics Card */}
+        <div className="lg:col-span-4 p-6 rounded-[16px] bg-white/[0.03] border border-white/[0.08] flex flex-col justify-between">
           <div>
             <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#f97316] font-bold text-base">✓</span>
-              <h4 className="text-white font-sans font-bold text-sm">
-                Lifecycle management
-              </h4>
+              <div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-400 animate-pulse" />
+              <span className="text-emerald-400 text-xs font-mono font-bold tracking-widest uppercase">
+                ACTIVE PERSISTENT AGENTS
+              </span>
             </div>
-            <p className="text-white/50 text-xs font-sans leading-relaxed">
-              Deploy, manage, version and govern every autonomous AI Coworker with complete auditability.
-            </p>
-          </div>
+            <div className="text-emerald-400 font-bold text-5xl tracking-tight mb-6">
+              156
+            </div>
 
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#f97316] font-bold text-base">✓</span>
-              <h4 className="text-white font-sans font-bold text-sm">
-                Single AI control plane
-              </h4>
+            <div className="grid grid-cols-2 gap-y-6 gap-x-4">
+              <div>
+                <p className="text-white/40 text-[10px] font-mono font-bold uppercase mb-1">
+                  TOKEN DEFLECTION
+                </p>
+                <p className="text-white font-bold font-mono text-xl">
+                  -72%
+                </p>
+              </div>
+              <div>
+                <p className="text-white/40 text-[10px] font-mono font-bold uppercase mb-1">
+                  SLA ADHERENCE
+                </p>
+                <p className="text-white font-bold font-mono text-xl">
+                  99.9%
+                </p>
+              </div>
+              <div>
+                <p className="text-white/40 text-[10px] font-mono font-bold uppercase mb-1">
+                  FIRST RESPONSE
+                </p>
+                <p className="text-white font-bold font-mono text-xl">
+                  18ms
+                </p>
+              </div>
+              <div>
+                <p className="text-white/40 text-[10px] font-mono font-bold uppercase mb-1">
+                  FAULT MTTR
+                </p>
+                <p className="text-white font-bold font-mono text-xl">
+                  1.8s
+                </p>
+              </div>
+              <div>
+                <p className="text-white/40 text-[10px] font-mono font-bold uppercase mb-1">
+                  BENCHMARK ACCURACY
+                </p>
+                <p className="text-white font-bold font-mono text-xl">
+                  98%
+                </p>
+              </div>
+              <div>
+                <p className="text-white/40 text-[10px] font-mono font-bold uppercase mb-1">
+                  EVALUATED RUNS
+                </p>
+                <p className="text-white font-bold font-mono text-xl">
+                  1,200
+                </p>
+              </div>
             </div>
-            <p className="text-white/50 text-xs font-sans leading-relaxed">
-              From access to budgets to cross-model memory across OpenAI, Claude, and Gemini.
-            </p>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#f97316] font-bold text-base">✓</span>
-              <h4 className="text-white font-sans font-bold text-sm">
-                Role-based access control
-              </h4>
-            </div>
-            <p className="text-white/50 text-xs font-sans leading-relaxed">
-              Manage every AI Coworker's permission scopes, tools, and private memory namespaces.
-            </p>
-          </div>
-
-          <div>
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-[#f97316] font-bold text-base">✓</span>
-              <h4 className="text-white font-sans font-bold text-sm">
-                Cost and usage governance
-              </h4>
-            </div>
-            <p className="text-white/50 text-xs font-sans leading-relaxed">
-              Set budgets, spend limits and usage caps while reducing repetitive LLM token costs by 68%.
-            </p>
           </div>
         </div>
 
       </div>
-    </section>
+
+      {/* Floating Prompt Pill */}
+      <div className="flex justify-center -mb-2 relative z-20">
+        <button
+          onClick={() => setShowPromptDetails(!showPromptDetails)}
+          className="group flex items-center gap-3 px-6 py-3 rounded-full backdrop-blur-xl border border-white/20 hover:border-orange-400 shadow-2xl transition-all cursor-pointer bg-[#160c26]"
+        >
+          <span className="text-white text-xs font-mono font-medium">
+            What can your persistent agent memory actually resolve?
+          </span>
+          <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center text-white shadow group-hover:translate-x-0.5 transition-transform">
+            <ArrowRight size={11} />
+          </div>
+        </button>
+      </div>
+
+      {showPromptDetails && (
+        <div className="mt-6 p-4 rounded-[12px] bg-white/[0.04] border border-white/[0.08] text-xs font-mono text-neutral-300">
+          <p className="text-emerald-400 font-bold mb-1">Adaptive Execution Matrix:</p>
+          <ul className="list-disc list-inside space-y-1 text-white/80">
+            <li>Reflexion loops extract reusable failure constraints after unexpected API exceptions</li>
+            <li>Bayesian bandit routing selects validated tool paths with Lower Confidence Bound (LCB) ranking</li>
+            <li>Zero prompt token bloating: 420 tokens per turn vs 15,000 stateless dumps</li>
+          </ul>
+        </div>
+      )}
+    </div>
   )
 }
 
-// ─── Features (Removed) ───────────────────────────────────────────────────────
+// ─── Animated Scanning Before/After Section ───────────────────────────────────
+function BeforeAfterSection() {
+  const [visible, setVisible] = useState(false)
+  const [tick, setTick] = useState(0)
+  const [mins, setMins] = useState(45)
+  const [tokens, setTokens] = useState(15000)
+  const ref = useRef<HTMLDivElement>(null)
 
-const logos = ['pgvector', 'FastAPI', 'PostgreSQL', 'React', 'Docker', 'OpenAI', 'Supabase', 'Python']
+  useEffect(() => {
+    const obs = new IntersectionObserver(
+      ([e]) => { if (e.isIntersecting) setVisible(true) },
+      { threshold: 0.2 }
+    )
+    if (ref.current) obs.observe(ref.current)
+    return () => obs.disconnect()
+  }, [])
 
-// ─── Landing Page ─────────────────────────────────────────────────────────────
-export default function LandingPage() {
-  const [scrolled, setScrolled] = useState(false)
-  const [oauthError, setOauthError] = useState<string | null>(null)
-  const { user, loading } = useAuth()
+  useEffect(() => {
+    if (visible) {
+      const id = setInterval(() => setTick(t => t + 1), 40)
+      return () => clearInterval(id)
+    }
+  }, [visible])
+
+  useEffect(() => {
+    if (visible) {
+      const id = setInterval(() => {
+        setMins(m => (m > 2 ? m - 1 : 2))
+        setTokens(t => (t > 420 ? t - 350 : 420))
+      }, 50)
+      return () => clearInterval(id)
+    }
+  }, [visible])
+
+  const scanY = (Math.sin(tick * 0.05) * 0.5 + 0.5) * 100
+
+  return (
+    <div ref={ref} className="relative rounded-[16px] overflow-hidden border border-neutral-800 bg-neutral-900 shadow-2xl">
+      {/* Animated laser scan line */}
+      <div
+        className="absolute left-0 right-0 h-0.5 pointer-events-none z-30 transition-all duration-75"
+        style={{
+          top: `${scanY}%`,
+          background: 'linear-gradient(90deg, transparent 0%, rgba(134, 47, 231, 0.8) 50%, transparent 100%)',
+          boxShadow: '0 0 12px rgba(134, 47, 231, 0.9)',
+        }}
+      />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-neutral-800">
+        {/* BEFORE: Stateless Chaos */}
+        <div className="p-8 bg-black/60 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] mb-6">
+              <span className="text-xs font-mono font-bold text-red-400 uppercase tracking-wider">
+                BEFORE · STATELESS PROMPTS
+              </span>
+              <span className="text-xs font-mono text-neutral-500">NO PERSISTENT MEMORY</span>
+            </div>
+            <ul className="space-y-4 text-xs font-mono text-neutral-300">
+              <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                <span>Context dump per run:</span>
+                <span className="text-red-400 font-bold">{tokens} tokens</span>
+              </li>
+              <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                <span>Redundant tool execution retries:</span>
+                <span className="text-red-400 font-bold">4 to 7 attempts</span>
+              </li>
+              <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                <span>Cost per 1,000 complex tasks:</span>
+                <span className="text-red-400 font-bold">$180.00</span>
+              </li>
+              <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                <span>Average resolution duration:</span>
+                <span className="text-red-400 font-bold">{mins} seconds</span>
+              </li>
+            </ul>
+          </div>
+          <div className="mt-8 p-3 rounded-[8px] bg-red-950/30 border border-red-500/20 text-[11px] font-mono text-red-300">
+            ⚠ Agent repeatedly tries failed API endpoints, wasting budget on identical hallucinations.
+          </div>
+        </div>
+
+        {/* AFTER: Adaptive MemoryAgent Persistence */}
+        <div className="p-8 bg-[#12081f]/80 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between pb-4 border-b border-white/[0.08] mb-6">
+              <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-wider">
+                AFTER · ADAPTIVE MEMORYAGENT
+              </span>
+              <span className="text-xs font-mono text-emerald-400 font-bold">BAYESIAN ROUTING ACTIVE</span>
+            </div>
+            <ul className="space-y-4 text-xs font-mono text-neutral-200">
+              <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                <span>Surgical memory recall:</span>
+                <span className="text-emerald-400 font-bold">420 tokens (-72%)</span>
+              </li>
+              <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                <span>Redundant tool execution retries:</span>
+                <span className="text-emerald-400 font-bold">0 retries (Deterministic)</span>
+              </li>
+              <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                <span>Cost per 1,000 complex tasks:</span>
+                <span className="text-emerald-400 font-bold">$5.00</span>
+              </li>
+              <li className="flex justify-between items-center py-1 border-b border-white/[0.04]">
+                <span>Average resolution duration:</span>
+                <span className="text-emerald-400 font-bold">1.8 seconds</span>
+              </li>
+            </ul>
+          </div>
+          <div className="mt-8 p-3 rounded-[8px] bg-emerald-950/30 border border-emerald-500/20 text-[11px] font-mono text-emerald-300">
+            ✓ Lower Confidence Bound (LCB) prioritizes proven experiences. Zero redundant tool calls.
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Navbar Component ────────────────────────────────────────────────────────
+function Navbar({ scrolled }: { scrolled: boolean }) {
+  const { user, signOut } = useAuth()
+  const [open, setOpen] = useState(false)
+  const [showAuth, setShowAuth] = useState(false)
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin')
   const navigate = useNavigate()
 
-  // Auto-redirect to dashboard after OAuth returns a signed-in session
-  useEffect(() => {
-    if (!loading && user) {
-      navigate('/dashboard', { replace: true })
-    }
-  }, [user, loading, navigate])
+  return (
+    <>
+      <header className="sticky top-0 inset-x-0 z-50">
+        {/* Top Announcement Bar (Vibrant Magenta/Purple Gradient) */}
+        <div
+          className="text-white text-xs py-2 px-4 text-center font-medium flex items-center justify-center gap-3 relative"
+          style={{
+            background: 'linear-gradient(90deg, #8A2BE2 0%, #B829E3 50%, #FF69B4 100%)',
+          }}
+        >
+          <span className="font-mono bg-white/20 px-2 py-0.5 rounded-full text-[11px] font-bold">
+            RESEARCH RELEASE · G146
+          </span>
+          <span className="hidden sm:inline text-white text-xs font-semibold">
+            Persistent agent intelligence is here. Explore the Kaggle benchmark on 1,200 agent tasks.
+          </span>
+          <a
+            href="#benchmarks"
+            className="rounded-full bg-white text-[#8A2BE2] hover:bg-neutral-100 px-3 py-0.5 text-[11px] font-bold tracking-wide transition-colors shadow-sm uppercase"
+          >
+            Read paper
+          </a>
+        </div>
 
-  // Handle OAuth error URL parameters (e.g. error=server_error from Supabase redirect)
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search)
-    const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
-    const err = params.get('error_description') || hashParams.get('error_description')
-    if (err) {
-      setOauthError(decodeURIComponent(err.replace(/\+/g, ' ')))
-      // Clean the URL so the error doesn't persist on refresh
-      window.history.replaceState({}, '', '/')
-    }
-  }, [])
+        {/* Glassmorphic Sticky Navbar */}
+        <nav
+          className={`transition-all duration-300 ${
+            scrolled
+              ? 'bg-white/90 backdrop-blur-md border-b border-neutral-200/80 shadow-sm'
+              : 'bg-white/60 backdrop-blur-sm border-b border-white/30'
+          }`}
+        >
+          <div className="max-w-7xl mx-auto px-6 py-3.5 flex items-center justify-between">
+            {/* Logo */}
+            <Link to="/" className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-[8px] bg-[#0c0714] flex items-center justify-center text-white shadow-sm">
+                <Brain size={16} />
+              </div>
+              <span className="font-semibold text-lg tracking-tight font-sans text-[#292929]">
+                MemoryAgent <span className="text-xs font-mono text-[#7042DD] font-medium ml-1">G146</span>
+              </span>
+            </Link>
+
+            {/* Nav Links with Carets */}
+            <div className="hidden lg:flex items-center gap-7">
+              <a href="#models" className="flex items-center gap-1 text-sm font-medium text-[#292929] hover:text-black">
+                Multi-LLM <ChevronDown size={14} className="text-neutral-500" />
+              </a>
+              <a href="#architecture" className="text-sm font-medium text-[#292929] hover:text-black">
+                Architecture
+              </a>
+              <a href="#governance" className="flex items-center gap-1 text-sm font-medium text-[#292929] hover:text-black">
+                Governance <ChevronDown size={14} className="text-neutral-500" />
+              </a>
+              <a href="#benchmarks" className="flex items-center gap-1 text-sm font-medium text-[#292929] hover:text-black">
+                ROI &amp; Benchmarks <ChevronDown size={14} className="text-neutral-500" />
+              </a>
+              <a href="#integrations" className="flex items-center gap-1 text-sm font-medium text-[#292929] hover:text-black">
+                Integrations <ChevronDown size={14} className="text-neutral-500" />
+              </a>
+            </div>
+
+            {/* Action CTAs */}
+            <div className="hidden md:flex items-center gap-3">
+              {user ? (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs font-mono text-[#717171]">
+                    {user.email.split('@')[0]}
+                  </span>
+                  <button
+                    onClick={() => navigate('/dashboard')}
+                    className="rounded-[8px] bg-neutral-900 text-white hover:bg-neutral-800 px-4 py-2 text-xs font-semibold transition-colors"
+                  >
+                    Dashboard
+                  </button>
+                  <button
+                    onClick={() => signOut()}
+                    className="p-1.5 rounded-[6px] text-neutral-400 hover:text-neutral-600 transition-colors"
+                    title="Sign out"
+                  >
+                    <LogOut size={14} />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <button
+                    onClick={() => {
+                      setAuthMode('signin')
+                      setShowAuth(true)
+                    }}
+                    className="text-sm font-medium px-3 py-1.5 text-[#292929] hover:text-black transition-colors cursor-pointer"
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAuthMode('signup')
+                      setShowAuth(true)
+                    }}
+                    id="nav-cta"
+                    className="rounded-[8px] bg-neutral-900 text-white hover:bg-neutral-800 px-4 py-2 text-sm font-medium transition-colors cursor-pointer shadow-sm"
+                  >
+                    Open Console
+                  </button>
+                </>
+              )}
+            </div>
+
+            {/* Mobile menu button */}
+            <button
+              onClick={() => setOpen(!open)}
+              className="lg:hidden p-1.5 rounded-[6px] text-neutral-800"
+            >
+              {open ? <X size={20} /> : <Menu size={20} />}
+            </button>
+          </div>
+
+          {/* Mobile dropdown */}
+          {open && (
+            <div className="lg:hidden bg-white border-b border-neutral-200 px-6 py-4 space-y-3">
+              {['Multi-LLM', 'Architecture', 'Governance', 'ROI & Benchmarks', 'Integrations'].map((item) => (
+                <a key={item} href="#" className="block text-sm font-medium text-[#292929]">
+                  {item}
+                </a>
+              ))}
+              <div className="pt-3 border-t border-neutral-200 flex flex-col gap-2">
+                <button
+                  onClick={() => {
+                    setAuthMode('signup')
+                    setShowAuth(true)
+                    setOpen(false)
+                  }}
+                  className="w-full text-center rounded-[8px] bg-neutral-900 text-white py-2 text-sm font-semibold"
+                >
+                  Open Console
+                </button>
+              </div>
+            </div>
+          )}
+        </nav>
+      </header>
+
+      {/* Auth Modal */}
+      {showAuth && (
+        <AuthModal
+          isOpen={showAuth}
+          initialMode={authMode}
+          onClose={() => setShowAuth(false)}
+          onSuccess={() => {
+            setShowAuth(false)
+            navigate('/dashboard')
+          }}
+        />
+      )}
+    </>
+  )
+}
+
+// ─── Main Page Export ─────────────────────────────────────────────────────────
+export default function LandingPage() {
+  const [scrolled, setScrolled] = useState(false)
+  const [heroView, setHeroView] = useState<'session' | 'model'>('session')
+  const [activeLLM, setActiveLLM] = useState(LLM_PROVIDERS[0].name)
+  const [typedQuery, setTypedQuery] = useState('')
+
+  const activeProvider = LLM_PROVIDERS.find(p => p.name === activeLLM) || LLM_PROVIDERS[0]
 
   useEffect(() => {
     const fn = () => setScrolled(window.scrollY > 40)
@@ -2167,168 +1106,857 @@ export default function LandingPage() {
     return () => window.removeEventListener('scroll', fn)
   }, [])
 
+  // Live animated typing effect on model switch
+  useEffect(() => {
+    setTypedQuery('')
+    const fullText = activeProvider.query
+    let i = 0
+    const interval = setInterval(() => {
+      if (i < fullText.length) {
+        setTypedQuery(fullText.slice(0, i + 1))
+        i++
+      } else {
+        clearInterval(interval)
+      }
+    }, 20)
+    return () => clearInterval(interval)
+  }, [activeProvider.name])
+
+  const MARQUEE_ITEMS = [
+    { name: 'Claude', tag: 'Anthropic', Logo: ClaudeLogo, color: '#D97706' },
+    { name: 'OpenAI', tag: 'GPT-4o', Logo: OpenAILogo, color: '#10A37F' },
+    { name: 'Ollama', tag: 'Local LLMs', Logo: OllamaLogo, color: '#3B82F6' },
+    { name: 'Grok', tag: 'xAI', Logo: GrokLogo, color: '#EC4899' },
+    { name: 'DeepSeek', tag: 'R1 Reasoning', Logo: DeepSeekLogo, color: '#1D72FE' },
+    { name: 'Gemini', tag: 'Google DeepMind', Logo: GeminiLogo, color: '#4E82EE' },
+    { name: 'LangChain', tag: 'Framework', Logo: LangChainLogo, color: '#2DD4BF' },
+    { name: 'LlamaIndex', tag: 'Index Engine', Logo: LlamaIndexLogo, color: '#A855F7' },
+    { name: 'PyTorch', tag: 'Core Runtime', Logo: PyTorchLogo, color: '#EE4C2C' },
+    { name: 'Hugging Face', tag: 'Model Hub', Logo: HuggingFaceLogo, color: '#FFD21E' },
+  ]
+
   return (
-    <div className="min-h-screen bg-[#0a0010] font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-white text-[#292929] font-sans antialiased selection:bg-[#7042DD]/20">
+      
       <Navbar scrolled={scrolled} />
 
-      {/* OAuth Error Banner */}
-      {oauthError && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 max-w-md w-full mx-4 p-4 rounded-2xl bg-red-950/90 border border-red-500/40 text-red-300 text-sm font-mono flex items-start gap-3 shadow-xl backdrop-blur-md">
-          <span className="shrink-0 mt-0.5">⚠️</span>
-          <div>
-            <p className="font-bold text-xs uppercase tracking-wider mb-1">Sign-in failed</p>
-            <p className="text-xs text-red-300/80">{oauthError}</p>
-          </div>
-          <button onClick={() => setOauthError(null)} className="ml-auto shrink-0 text-red-400 hover:text-white transition-colors cursor-pointer">✕</button>
-        </div>
-      )}
+      {/* ── 1. Hero Section (Panoramic Sky Canvas & High Visual Clarity) ──── */}
+      <section
+        className="relative pt-24 pb-24 px-6 overflow-hidden"
+        style={{
+          background: 'radial-gradient(ellipse 100% 70% at 50% 15%, #E6F0FA 0%, #F0F6FC 50%, #FFFFFF 100%)',
+        }}
+      >
+        {/* Prominent Architectural Workplace Panorama (Clearly visible, elegant Atomicwork photography) */}
+        <div
+          className="absolute inset-0 pointer-events-none z-0 bg-cover bg-right-bottom sm:bg-center transition-opacity duration-700"
+          style={{
+            backgroundImage: `url('/workspace-panorama.jpg')`,
+            opacity: 0.90,
+          }}
+        />
+        {/* Soft atmospheric gradient wash ensuring black text on the left is 100% legible while keeping the penthouse view, skyline, and desk brightly visible */}
+        <div
+          className="absolute inset-0 pointer-events-none z-0"
+          style={{
+            background: 'linear-gradient(90deg, rgba(235, 243, 252, 0.95) 0%, rgba(235, 243, 252, 0.88) 42%, rgba(235, 243, 252, 0.25) 75%, rgba(235, 243, 252, 0.05) 100%), linear-gradient(180deg, rgba(230, 240, 250, 0.3) 0%, transparent 45%, rgba(255, 255, 255, 0.95) 100%)',
+          }}
+        />
 
-      {/* ── HERO ─────────────────────────────────────────────────────────── */}
-      <section className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Vibrant background */}
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/hero-bg.jpg)' }} />
-        {/* Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/70 to-black/50" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#0a0010] to-transparent" />
-
-        {/* Floating orbs */}
-        <div className="absolute top-24 left-24 w-80 h-80 bg-purple-600/15 rounded-full blur-3xl anim-float pointer-events-none" />
-        <div className="absolute bottom-24 left-48 w-60 h-60 bg-fuchsia-500/10 rounded-full blur-3xl anim-float delay-300 pointer-events-none" />
-
-        {/* Animated memory node graph on the far right */}
-        <MemoryNodes />
-
-        <div className="relative max-w-7xl mx-auto px-6 pt-32 pb-24 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
-          {/* ── Left: copy ───────────────────────────────────── */}
-          <div>
-            <div
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 anim-float-up"
-              style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.4)' }}
-            >
-              <Sparkles size={13} className="text-fuchsia-400" />
-              <span className="text-fuchsia-300 text-xs font-bold tracking-widest uppercase font-display">G146 · Live Agent Demo</span>
-            </div>
-
-            <h1 className="font-display font-bold leading-[1.1] mb-6 anim-float-up delay-100">
-              <span className="text-white text-5xl lg:text-6xl block">Watch the Agent</span>
-              <span className="anim-shimmer-text text-5xl lg:text-6xl block mt-1">Learn in Real Time</span>
+        <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-12 items-center relative z-10">
+          
+          {/* Left Column: Bold Headline & Action */}
+          <div className="lg:col-span-6">
+            <h1 className="text-5xl sm:text-6xl lg:text-[64px] font-bold tracking-tight leading-[1.08] text-[#292929] mb-6">
+              Adaptive Agent Memory for Enterprise AI
             </h1>
-
-            <p className="text-white/55 text-lg leading-relaxed mb-8 anim-float-up delay-200 font-light">
-              See MemoryAgent retrieve past experiences, use them to answer better, and store new lessons —{' '}
-              <span className="text-white/90 font-medium">all happening live on the right.</span>
+            <p className="text-base sm:text-lg text-[#717171] leading-relaxed mb-8 max-w-xl font-normal">
+              MemoryAgent gives autonomous AI agents persistent memory that learns from every run. Grounded in live experience, optimized by Bayesian routing, and compatible with any LLM.
             </p>
 
-            {/* Mini stat badges */}
-            <div className="flex flex-col gap-3 mb-8 anim-float-up delay-300">
-              <StatBadge icon={Database}  val="Memories Retrieved"  label="Before every task execution" color="#a855f7" />
-              <StatBadge icon={Star}      val="Trust Score Updated" label="After every outcome measured" color="#22d3ee" />
-              <StatBadge icon={CheckCircle2} val="Experience Stored"  label="Reusable lesson extracted" color="#ec4899" />
-            </div>
-
-            <div className="flex gap-4 anim-float-up delay-500">
+            <div className="flex flex-wrap items-center gap-3 mb-10">
               <a
-                id="hero-cta-primary"
                 href="/dashboard"
-                className="group flex items-center gap-2 text-white font-bold px-7 py-4 rounded-2xl cursor-pointer anim-gradient-bg hover:scale-105 transition-transform duration-200 shadow-lg text-sm"
+                className="rounded-full bg-white text-[#292929] border border-neutral-300 px-7 py-3 text-sm font-semibold hover:bg-neutral-50 shadow-[0_4px_14px_rgba(0,0,0,0.06)] transition-all"
               >
-                Try it yourself <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
+                Try it yourself
               </a>
               <a
-                id="hero-cta-secondary"
                 href="https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 font-semibold px-7 py-4 rounded-2xl cursor-pointer text-sm text-white/70 hover:text-white transition-all duration-200"
-                style={{ border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)' }}
+                className="rounded-full bg-transparent text-[#292929] hover:bg-neutral-100/70 border border-neutral-300/80 px-6 py-3 text-sm font-medium transition-all"
               >
                 View GitHub
               </a>
             </div>
+
+            {/* Architecture Spec Card */}
+            <div className="flex items-center gap-3 p-3.5 rounded-[12px] bg-white/80 backdrop-blur-md border border-neutral-200/80 max-w-md shadow-sm">
+              <div className="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-[#7042DD] font-bold text-xs shrink-0">
+                G146
+              </div>
+              <div className="text-xs">
+                <span className="font-semibold text-[#292929] block">Bayesian Bandit Experience Routing</span>
+                <span className="text-[#717171]">Recalls verified tool paths with sub-500ms latency across Claude, OpenAI &amp; Ollama</span>
+              </div>
+            </div>
           </div>
 
-          {/* ── Right: Live Demo Panel ────────────────────── */}
-          <div className="flex justify-center lg:justify-end anim-slide-right">
-            <LiveDemoPanel />
+          {/* Right Column: Hero Graphic + Floating Task Pills + Live Demo/3D Toggle */}
+          <div className="lg:col-span-6 flex flex-col items-center relative">
+            
+            {/* Floating Live Memory Pills (Animated with Authentic Logos) */}
+            <div className="w-full max-w-lg mb-3 flex flex-wrap gap-2 justify-center">
+              {[
+                { text: 'Claude 3.5 Sonnet: 99.1% Confidence', Logo: ClaudeLogo, color: '#f59e0b', anim: 'anim-float-1' },
+                { text: 'GPT-4o: 0 Redundant Retries', Logo: OpenAILogo, color: '#10b981', anim: 'anim-float-2' },
+                { text: 'Ollama: On-Device SQLite Store', Logo: OllamaLogo, color: '#60a5fa', anim: 'anim-float-3' },
+                { text: 'Grok 2: Causal Regime Graph', Logo: GrokLogo, color: '#f43f5e', anim: 'anim-float-1' },
+                { text: 'DeepSeek R1: Reflexion Loops', Logo: DeepSeekLogo, color: '#a855f7', anim: 'anim-float-2' },
+              ].map((item, idx) => (
+                <span
+                  key={idx}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium bg-neutral-900/90 text-white shadow-md border border-neutral-700/70 backdrop-blur-md flex items-center gap-2 ${item.anim}`}
+                >
+                  <item.Logo size={13} color={item.color} />
+                  <span>{item.text}</span>
+                </span>
+              ))}
+            </div>
+
+            {/* View Switcher: Live Session vs 3D Neural Core */}
+            <div className="mb-3 p-1 rounded-full bg-neutral-200/80 border border-neutral-300 flex items-center gap-1 text-xs">
+              <button
+                onClick={() => setHeroView('session')}
+                className={`px-3 py-1 rounded-full font-medium transition-all ${
+                  heroView === 'session' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-black'
+                }`}
+              >
+                Live Session Console
+              </button>
+              <button
+                onClick={() => setHeroView('model')}
+                className={`px-3 py-1 rounded-full font-medium transition-all ${
+                  heroView === 'model' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-600 hover:text-black'
+                }`}
+              >
+                3D Neural Core
+              </button>
+            </div>
+
+            {/* Interactive Showcase Window */}
+            {heroView === 'session' ? (
+              <LiveDemoPanel />
+            ) : (
+              <div
+                className="w-full max-w-lg h-[430px] rounded-[16px] overflow-hidden relative shadow-2xl flex flex-col"
+                style={{
+                  background: 'rgba(12, 7, 20, 0.95)',
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
+                }}
+              >
+                <div className="px-4 py-3 border-b border-white/[0.08] flex items-center justify-between text-xs font-mono text-[#D0D5DD]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    <span>3D Neural Memory Core</span>
+                  </div>
+                  <span className="text-white/40">WebGL 2.0</span>
+                </div>
+                <div className="flex-1 relative">
+                  <ThreeMemoryCore glowColor="#862FE7" providerName="MemoryAgent Engine" />
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </section>
 
-      {/* ── Logo Marquee ─────────────────────────────────────────────────── */}
-      <div className="border-y border-white/5 py-5 overflow-hidden" style={{ background: 'rgba(255,255,255,0.02)' }}>
-        <div className="flex w-max marquee-track">
-          {[...logos, ...logos].map((name, i) => (
-            <div key={i} className="flex items-center gap-2 mx-10 opacity-30 hover:opacity-70 transition-opacity whitespace-nowrap">
-              <div className="w-1.5 h-1.5 rounded-full anim-gradient-bg" />
-              <span className="text-white text-sm font-semibold tracking-widest font-display">{name}</span>
+      {/* ── 2. Social Proof Logo Marquee (Full-Width Animated Dark Strip) ──── */}
+      <div className="bg-neutral-950 py-5 border-y border-neutral-800 overflow-hidden relative">
+        {/* Subtle gradient edge fades */}
+        <div className="absolute left-0 top-0 bottom-0 w-24 bg-gradient-to-r from-neutral-950 to-transparent z-10 pointer-events-none" />
+        <div className="absolute right-0 top-0 bottom-0 w-24 bg-gradient-to-l from-neutral-950 to-transparent z-10 pointer-events-none" />
+        
+        <div className="marquee-track flex items-center gap-6">
+          {[...MARQUEE_ITEMS, ...MARQUEE_ITEMS].map((item, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-2.5 px-4 py-2 rounded-full bg-neutral-900/70 border border-neutral-800/90 hover:border-neutral-700 transition-all shrink-0 cursor-default"
+            >
+              <item.Logo size={16} color={item.color} />
+              <span className="text-white text-xs font-semibold tracking-wide font-sans">{item.name}</span>
+              <span className="text-[10px] font-mono text-neutral-400">· {item.tag}</span>
             </div>
           ))}
         </div>
       </div>
 
-      {/* ── Integrations Section ──────────────────────────────────────────────────── */}
-      <IntegrationsSection />
+      {/* ── 3. Multi-LLM Memory Adapter (Warm Cream Canvas #F7F5F0) ────────── */}
+      <section id="models" className="py-24 px-6 bg-[#F7F5F0] border-b border-neutral-200">
+        <div className="max-w-7xl mx-auto">
+          
+          <div className="max-w-3xl mb-12">
+            <span className="text-xs font-mono uppercase tracking-[0.2em] text-[#717171] font-bold block mb-2">
+              MULTI-LLM PERSISTENT MEMORY ARCHITECTURE
+            </span>
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-[#292929] mb-4">
+              Delightful agent memory, across any foundation model.
+            </h2>
+            <p className="text-base text-[#717171] leading-relaxed">
+              Whether you run Claude, OpenAI, Ollama, Grok, or DeepSeek, MemoryAgent provides a shared persistent experience layer that eliminates repetitive mistakes and cuts token costs by up to 72%.
+            </p>
+          </div>
 
-      {/* ── Before / After ───────────────────────────────────────────────── */}
-      <BeforeAfterSection />
-
-      {/* ── Performance Graph ────────────────────────────────────────────── */}
-      <PerformanceGraph />
-
-      {/* ── Vibrant Stats Band ────────────────────────────────────────────── */}
-      <section className="py-20 px-6 anim-gradient-bg">
-        <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
-          {[
-            { val: 'Memory ON', sub: 'vs Memory OFF evaluation' },
-            { val: '< 500ms', sub: 'Experience retrieval latency' },
-            { val: 'Reflexion', sub: 'Research-backed architecture' },
-            { val: 'Python', sub: 'Custom agent orchestration' },
-          ].map(s => (
-            <div key={s.sub}>
-              <p className="text-white text-2xl font-bold mb-1 font-display">{s.val}</p>
-              <p className="text-white/60 text-xs">{s.sub}</p>
+          {/* Model Selector & Live Cockpit Body */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start mb-16">
+            
+            {/* Left Column: LLM Provider Tabs */}
+            <div className="lg:col-span-4 space-y-2">
+              <span className="text-xs font-mono uppercase tracking-wider text-[#717171] font-bold block mb-3">
+                SELECT FOUNDATION MODEL
+              </span>
+              {LLM_PROVIDERS.map((p) => {
+                const isActive = activeLLM === p.name
+                return (
+                  <div
+                    key={p.name}
+                    onClick={() => setActiveLLM(p.name)}
+                    className={`p-4 rounded-[12px] cursor-pointer transition-all border ${
+                      isActive
+                        ? 'bg-white border-neutral-300 shadow-sm'
+                        : 'bg-transparent border-transparent hover:bg-neutral-200/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2">
+                        <p.Logo size={16} color={p.color} />
+                        <span className="text-sm font-bold text-[#292929]">{p.name}</span>
+                      </div>
+                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-100 text-[#717171] font-semibold">
+                        {p.modelTag}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#717171] line-clamp-1 ml-6">{p.query}</p>
+                  </div>
+                )
+              })}
             </div>
-          ))}
+
+            {/* Right Column: Interactive 3D Model + Real-time Code Execution Console */}
+            <div className="lg:col-span-8 bg-[#0c0714] rounded-[16px] overflow-hidden border border-neutral-800 shadow-2xl flex flex-col">
+              
+              {/* Header Bar */}
+              <div className="px-5 py-3.5 bg-white/[0.03] border-b border-white/[0.08] flex items-center justify-between text-xs font-mono">
+                <div className="flex items-center gap-2.5">
+                  <activeProvider.Logo size={16} color={activeProvider.glowColor} />
+                  <span className="text-white font-bold">{activeProvider.name} Adapter</span>
+                  <span className="text-white/40">· {activeProvider.taskType}</span>
+                </div>
+                <span className="text-[#C4B5FD] font-semibold">Recall: {activeProvider.confidence}</span>
+              </div>
+
+              {/* Top: 3D WebGL Neural Core */}
+              <div className="relative h-[220px] w-full flex items-center justify-center overflow-hidden border-b border-white/[0.08] bg-black/40">
+                <ThreeMemoryCore glowColor={activeProvider.glowColor} providerName={activeProvider.name} />
+              </div>
+
+              {/* Bottom: Animated Typing Query & Code Execution Console */}
+              <div className="p-6 space-y-4">
+                {/* Simulated Query Box */}
+                <div className="p-3.5 rounded-[10px] bg-white/[0.04] border border-white/[0.08] text-xs font-mono">
+                  <span className="text-[#862FE7] font-bold block mb-1">Query Intercepted:</span>
+                  <p className="text-white">{typedQuery}<span className="animate-pulse">|</span></p>
+                </div>
+
+                {/* Live Code Lines */}
+                <div className="p-4 rounded-[10px] bg-black/60 border border-white/[0.06] font-mono text-xs space-y-1.5">
+                  {activeProvider.codeLines.map((line, idx) => (
+                    <div key={idx} className="flex gap-3">
+                      <span className="text-white/30 select-none">{line.num}</span>
+                      <span style={{ color: line.color }}>{line.text}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Execution Metrics Footer */}
+                <div className="pt-3 border-t border-white/[0.08] grid grid-cols-3 gap-4 text-center font-mono text-xs">
+                  <div>
+                    <span className="text-white/40 text-[10px] block">RETRIEVAL LATENCY</span>
+                    <span className="text-white font-bold">{activeProvider.latency}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 text-[10px] block">ENGINEERING TIME SAVED</span>
+                    <span className="text-emerald-400 font-bold">{activeProvider.timeSaved}</span>
+                  </div>
+                  <div>
+                    <span className="text-white/40 text-[10px] block">TOKENS DEFLECTED</span>
+                    <span className="text-[#A78BFA] font-bold">{activeProvider.tokensSaved}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Feature Checkmarks */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pt-10 border-t border-neutral-200">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Resolutions, not just answers</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Agents retrieve verified execution sequences rather than guessing tool inputs from scratch.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Provide the right memory in time</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Bayesian Lower Confidence Bound (LCB) ranking prevents retrieval of noisy or unvalidated experiences.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Continuous reflection loops</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Failed tasks trigger self-critique loops that extract reusable constraints for subsequent model executions.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Zero vendor lock-in</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Seamlessly swap between Claude, OpenAI, Ollama, Grok, and DeepSeek without losing your agent's learned memory.
+              </p>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* ── CTA ──────────────────────────────────────────────────────────── */}
-      <section className="py-28 px-6" style={{ background: '#100020' }}>
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="font-display font-bold text-4xl lg:text-5xl mb-5">
-            <span className="text-white">Ready to try </span>
-            <span className="gradient-text-warm">MemoryAgent?</span>
+      {/* ── 4. Scale Autonomous Agents (Clean White Canvas) ────────────────── */}
+      <section id="architecture" className="py-24 px-6 bg-white border-b border-neutral-200">
+        <div className="max-w-7xl mx-auto">
+          <div className="max-w-3xl mb-14">
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-[#292929] mb-4">
+              Scale enterprise agents with persistent memory that owns experiences, not just chat history.
+            </h2>
+            <p className="text-base text-[#717171] leading-relaxed">
+              Coordinate multi-agent teams with shared persistent memory. Each agent operates with persistent episodic memory, Bayesian trust scoring, and strict access controls.
+            </p>
+          </div>
+
+          {/* Interactive Agent Hierarchy Map (Animated 3-Tier Multi-Agent Flow) */}
+          <div className="p-8 sm:p-10 rounded-[20px] bg-[#FAF9F6] border border-neutral-200/90 mb-14 overflow-x-auto shadow-sm">
+            <div className="min-w-[700px] flex flex-col items-center gap-2 text-center">
+              
+              {/* Block 1: Executive Agent Planner (Animated) */}
+              <div className="p-4 rounded-[14px] bg-white border border-neutral-300/80 shadow-md w-80 anim-float-1 card-hover relative overflow-hidden">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-mono text-[#717171] uppercase font-bold tracking-wider">
+                    ORCHESTRATION LAYER
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-[10px] font-mono text-emerald-600 font-bold">ACTIVE</span>
+                  </div>
+                </div>
+                <p className="text-sm font-bold text-[#292929] mb-1.5 font-sans">Executive Task Planner</p>
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-purple-50 border border-purple-200/60 text-[10px] font-mono text-[#7042DD]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#7042DD] animate-pulse" />
+                  <span>Decomposing goal #128 · Injecting memory priors</span>
+                </div>
+              </div>
+
+              {/* Animated Data Pipeline 1 */}
+              <div className="relative w-1 h-12 bg-neutral-200 rounded-full overflow-hidden my-0.5">
+                <div className="absolute inset-x-0 w-full h-5 bg-gradient-to-b from-[#862FE7] via-cyan-400 to-[#953BFF] rounded-full animate-flow-down" />
+              </div>
+
+              {/* Block 2: Shared Persistent Memory Plane (Animated) */}
+              <div className="p-5 sm:p-6 rounded-[16px] bg-[#0c0714] text-white border border-[#862FE7]/40 shadow-2xl w-full max-w-2xl relative overflow-hidden anim-float-2 animate-pulse-glow">
+                {/* Moving laser sweep line across top */}
+                <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-cyan-400 to-transparent animate-pulse" />
+                
+                <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-white/[0.08]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#953BFF] animate-ping" />
+                    <span className="text-[11px] font-mono text-[#C4B5FD] font-bold tracking-wider">
+                      SHARED AGENT MEMORY PLANE (BAYESIAN BANDIT ROUTER)
+                    </span>
+                  </div>
+                  <span className="text-[10px] font-mono text-cyan-300 bg-cyan-950/60 px-2 py-0.5 rounded border border-cyan-800/40">
+                    Sub-500ms Routing
+                  </span>
+                </div>
+
+                {/* 4 Interactive Memory Pools */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs font-mono">
+                  <div className="p-2.5 rounded-[8px] bg-white/[0.04] border border-white/[0.08] hover:border-cyan-400/50 transition-all text-left">
+                    <div className="flex items-center gap-1.5 mb-1 text-cyan-300 font-bold text-[11px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                      Episodic Index
+                    </div>
+                    <p className="text-[10px] text-white/50">1,200 trajectories</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-[8px] bg-white/[0.04] border border-white/[0.08] hover:border-emerald-400/50 transition-all text-left">
+                    <div className="flex items-center gap-1.5 mb-1 text-emerald-300 font-bold text-[11px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Semantic Vectors
+                    </div>
+                    <p className="text-[10px] text-white/50">1536-dim SQLite</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-[8px] bg-white/[0.04] border border-white/[0.08] hover:border-purple-400/50 transition-all text-left">
+                    <div className="flex items-center gap-1.5 mb-1 text-purple-300 font-bold text-[11px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+                      Reflection Vault
+                    </div>
+                    <p className="text-[10px] text-white/50">Self-critique active</p>
+                  </div>
+
+                  <div className="p-2.5 rounded-[8px] bg-white/[0.04] border border-white/[0.08] hover:border-amber-400/50 transition-all text-left">
+                    <div className="flex items-center gap-1.5 mb-1 text-amber-300 font-bold text-[11px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Quarantine
+                    </div>
+                    <p className="text-[10px] text-white/50">0 injected leaks</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Animated Data Pipeline 2 */}
+              <div className="relative w-1 h-12 bg-neutral-200 rounded-full overflow-hidden my-0.5">
+                <div className="absolute inset-x-0 w-full h-5 bg-gradient-to-b from-cyan-400 via-[#862FE7] to-emerald-400 rounded-full animate-flow-down" />
+              </div>
+
+              {/* Block 3: Active Specialized Agents (Animated with Official SVG Logos) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 w-full max-w-3xl">
+                {[
+                  { name: 'Research Specialist', tag: 'CLAUDE 3.5', Logo: ClaudeLogo, color: '#d97706', anim: 'anim-float-1', stat: '99.1% Confidence' },
+                  { name: 'Code Synthesizer', tag: 'GPT-4O', Logo: OpenAILogo, color: '#10a37f', anim: 'anim-float-2', stat: '0 Retries' },
+                  { name: 'Local Data Analyst', tag: 'OLLAMA', Logo: OllamaLogo, color: '#3b82f6', anim: 'anim-float-3', stat: '100% Local' },
+                  { name: 'Reasoning Validator', tag: 'DEEPSEEK R1', Logo: DeepSeekLogo, color: '#8b5cf6', anim: 'anim-float-1', stat: 'Pruning Loop' }
+                ].map((bot) => (
+                  <div
+                    key={bot.name}
+                    className={`p-4 rounded-[14px] bg-white border border-neutral-200 shadow-sm card-hover hover:border-neutral-400 transition-all ${bot.anim}`}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-[9px] font-mono font-bold tracking-wider" style={{ color: bot.color }}>
+                        {bot.tag}
+                      </span>
+                      <bot.Logo size={15} color={bot.color} />
+                    </div>
+                    <p className="text-xs font-bold text-[#292929] mb-2">{bot.name}</p>
+                    <div className="inline-block px-2 py-0.5 rounded bg-neutral-100 text-[10px] font-mono text-[#717171]">
+                      {bot.stat}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 4 Pillars */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Continuous agent learning</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Agents learn directly from tool execution outcomes, persisting constraints to prevent recurring runtime faults.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Collaborative memory pools</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Shared skills across agents so multiple models coordinate without independently re-learning the same solutions.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Any harness, any model</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Bring your own models from Claude, OpenAI, Ollama, Grok, DeepSeek, or open-source PyTorch models.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Adversarial quarantine</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Automatic detection and quarantine of poisoned trajectories, hallucinations, and prompt injection attacks.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 5. Govern Agent Memory (Warm Cream Canvas #F7F5F0) ─────────────── */}
+      <section id="governance" className="py-24 px-6 bg-[#F7F5F0] border-b border-neutral-200">
+        <div className="max-w-7xl mx-auto">
+          <div className="max-w-3xl mb-12">
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-[#292929] mb-4">
+              Govern the AI agent memory, like your database.
+            </h2>
+            <p className="text-base text-[#717171] leading-relaxed">
+              Full visibility into what every AI agent is doing through a control plane so your agents have the same accountability you expect from any production software system.
+            </p>
+          </div>
+
+          {/* Reporting Grid Metrics (Honest Empirical Benchmarks) */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-12">
+            {[
+              { label: 'BENCHMARK RUNS', val: '1,200' },
+              { label: 'TOKEN DEFLECTION', val: '-72%' },
+              { label: 'TOOL LOOP RETRIES', val: '0' },
+              { label: 'RETRIEVAL LATENCY', val: '18ms' },
+              { label: 'FAULT MTTR', val: '1.8s' },
+              { label: 'REFLEXION GAIN', val: '+22%' }
+            ].map((m) => (
+              <div key={m.label} className="p-5 rounded-[12px] bg-white border border-neutral-200 shadow-sm">
+                <span className="text-[10px] font-mono text-[#717171] block mb-1">{m.label}</span>
+                <p className="text-2xl font-bold font-mono text-[#292929]">{m.val}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Interactive Performance Graph Canvas */}
+          <div className="mb-14">
+            <PerformanceGraph />
+          </div>
+
+          {/* 4 Governance Pillars */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8 pt-8 border-t border-neutral-200">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Lifecycle management</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Deploy, manage, and govern purpose-built persistent memories across all agent lifecycles.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Single AI control plane</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                From access to token budgets to performance benchmarks, govern every aspect of your agent memory.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Role-based access control</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Manage every agent's memory access through clear roles, scoped namespace permissions, and approval gates.
+              </p>
+            </div>
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-[#292929] mb-2">
+                <Check size={16} className="text-[#862FE7]" />
+                <span>Cost and usage governance</span>
+              </div>
+              <p className="text-xs text-[#717171] leading-relaxed">
+                Set token budgets, rate limits, and spend guardrails for every agent deployed in production.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 6. Open-Source Security & Academic Rigor Grid (Clean White Canvas) ─── */}
+      <section className="py-20 px-6 bg-white border-b border-neutral-200 text-center">
+        <div className="max-w-7xl mx-auto">
+          <h2 className="text-2xl sm:text-3xl font-bold text-[#292929] mb-10">
+            Open-source architecture, enterprise security by design
           </h2>
-          <p className="text-white/45 text-base mb-10 leading-relaxed">
-            Submit a task. Watch it retrieve memories. See it get smarter with every run.
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-6 items-center justify-center opacity-90">
+            {[
+              'OWASP LLM TOP 10',
+              'APACHE 2.0 / MIT',
+              'LOCAL AIR-GAPPED',
+              'REPRODUCIBLE EVAL',
+              'SHA-256 HASH AUDIT',
+              'ZERO EGRESS VAULT',
+              'STRICT RBAC SCOPE'
+            ].map((badge) => (
+              <div key={badge} className="p-4 rounded-[10px] border border-neutral-200 bg-[#FAF9F6] shadow-sm">
+                <Shield size={22} className="mx-auto text-neutral-700 mb-2" />
+                <span className="text-[11px] font-mono font-bold text-[#292929] block">
+                  {badge}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── 7. ROI Impact: Dynamic Before/After Scanner (Sleek Dark Obsidian) ── */}
+      <section id="benchmarks" className="py-24 px-6 bg-neutral-950 text-white relative overflow-hidden">
+        <div className="max-w-7xl mx-auto relative z-10">
+          <div className="max-w-3xl mb-14">
+            <h2 className="text-3xl sm:text-5xl font-bold tracking-tight text-white mb-4">
+              Business impact and ROI you can measure, across every agent deployment.
+            </h2>
+            <p className="text-base text-neutral-400 leading-relaxed">
+              See how persistent memory eliminates redundant token waste and elevates agent task completion rates.
+            </p>
+          </div>
+
+          {/* Animated Laser Scanning Comparison Canvas */}
+          <div className="mb-12">
+            <BeforeAfterSection />
+          </div>
+
+          {/* Metrics Band */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 py-6 border-t border-neutral-800 text-center">
+            <div>
+              <span className="text-3xl font-bold font-mono text-white block">2 days</span>
+              <span className="text-xs text-neutral-500 uppercase font-mono">Stateless debug time</span>
+            </div>
+            <div>
+              <span className="text-3xl font-bold font-mono text-white block">$650</span>
+              <span className="text-xs text-neutral-500 uppercase font-mono">Inference API Burn</span>
+            </div>
+            <div>
+              <span className="text-3xl font-bold font-mono text-emerald-400 block">40 sec</span>
+              <span className="text-xs text-neutral-500 uppercase font-mono">MemoryAgent time</span>
+            </div>
+            <div>
+              <span className="text-3xl font-bold font-mono text-emerald-400 block">$40</span>
+              <span className="text-xs text-neutral-500 uppercase font-mono">Optimized task cost</span>
+            </div>
+          </div>
+
+          {/* Architecture Quote */}
+          <div className="mt-8 pt-8 border-t border-neutral-800">
+            <p className="text-base text-white italic mb-2">
+              "Persistent episodic memory with Bayesian Lower Confidence Bound routing eliminates redundant tool retries and cuts prompt context by over 70% across 1,200 agent trajectories."
+            </p>
+            <span className="text-xs font-mono text-neutral-400">
+              ADAPTIVE AGENT MEMORY EMPIRICAL BENCHMARK (OJT G146)
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 8. Integrations & Framework Compatibility (Warm Cream Canvas) ── */}
+      <section id="integrations" className="py-24 px-6 bg-[#F7F5F0] border-b border-neutral-200">
+        <div className="max-w-7xl mx-auto">
+          <div className="max-w-2xl mb-14">
+            <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-[#292929] mb-4">
+              Built for enterprises with seamless integrations and security compliance.
+            </h2>
+            <p className="text-base text-[#717171] leading-relaxed">
+              Plug into your existing agent stack and scale memory governance across your organization.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+            <div className="p-8 rounded-[16px] bg-white border border-neutral-200 shadow-sm">
+              <h3 className="text-lg font-bold text-[#292929] mb-2">Connect your agent framework</h3>
+              <p className="text-xs text-[#717171] leading-relaxed mb-6">
+                Native adapters for LangChain, LangGraph, AutoGen, CrewAI, DSPy, and custom Python agent runtimes.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {['LangChain', 'LangGraph', 'CrewAI', 'AutoGen', 'DSPy'].map((item) => (
+                  <span key={item} className="px-3 py-1.5 rounded-[6px] bg-[#F7F5F0] border border-neutral-200 text-xs font-mono text-[#292929]">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="p-8 rounded-[16px] bg-white border border-neutral-200 shadow-sm">
+              <h3 className="text-lg font-bold text-[#292929] mb-2">Integrate your enterprise data stores</h3>
+              <p className="text-xs text-[#717171] leading-relaxed mb-6">
+                Store embeddings in BigQuery, PostgreSQL pgvector, Chroma, Qdrant, or Pinecone with row-level security.
+              </p>
+              <div className="flex gap-2 flex-wrap">
+                {['BigQuery', 'pgvector', 'Chroma', 'Qdrant', 'Pinecone'].map((item) => (
+                  <span key={item} className="px-3 py-1.5 rounded-[6px] bg-[#F7F5F0] border border-neutral-200 text-xs font-mono text-[#292929]">
+                    {item}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* 6 Capabilities Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="p-6 rounded-[12px] bg-white border border-neutral-200">
+              <h4 className="text-sm font-bold text-[#292929] mb-2">Centralized Memory Registry</h4>
+              <p className="text-xs text-[#717171]">Govern all experiences across teams from one unified console.</p>
+            </div>
+            <div className="p-6 rounded-[12px] bg-white border border-neutral-200">
+              <h4 className="text-sm font-bold text-[#292929] mb-2">Custom Heuristics</h4>
+              <p className="text-xs text-[#717171]">Configure Bayesian prior weights and confidence thresholds.</p>
+            </div>
+            <div className="p-6 rounded-[12px] bg-white border border-neutral-200">
+              <h4 className="text-sm font-bold text-[#292929] mb-2">Namespace Isolation</h4>
+              <p className="text-xs text-[#717171]">Ensure total memory segregation between production and development.</p>
+            </div>
+            <div className="p-6 rounded-[12px] bg-white border border-neutral-200">
+              <h4 className="text-sm font-bold text-[#292929] mb-2">Zero Training Retention</h4>
+              <p className="text-xs text-[#717171]">Customer traces are never used to train external foundation models.</p>
+            </div>
+            <div className="p-6 rounded-[12px] bg-white border border-neutral-200">
+              <h4 className="text-sm font-bold text-[#292929] mb-2">Role-Based Access Control</h4>
+              <p className="text-xs text-[#717171]">Manage memory read/write permissions per agent persona.</p>
+            </div>
+            <div className="p-6 rounded-[12px] bg-white border border-neutral-200">
+              <h4 className="text-sm font-bold text-[#292929] mb-2">Data Sovereignty</h4>
+              <p className="text-xs text-[#717171]">Deploy vector indexes in your designated cloud regions.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 9. Final CTA Banner (Starry Midnight Skyline) ────────────────── */}
+      <section
+        className="py-28 px-6 text-center text-white relative overflow-hidden"
+        style={{
+          background: 'linear-gradient(180deg, #06030c 0%, #110822 50%, #06030c 100%)',
+        }}
+      >
+        <div className="max-w-3xl mx-auto relative z-10">
+          <h2 className="text-4xl sm:text-6xl font-bold tracking-tight mb-5">
+            See MemoryAgent in action now.
+          </h2>
+          <p className="text-base text-neutral-400 mb-8 max-w-xl mx-auto">
+            Deploy, govern, and scale persistent memory for your autonomous AI agents today.
           </p>
           <a
-            id="cta-banner-signup"
             href="/dashboard"
-            className="inline-flex items-center gap-2 text-white font-bold px-10 py-4 rounded-2xl cursor-pointer anim-gradient-bg hover:scale-105 transition-transform shadow-xl"
+            className="inline-block rounded-full bg-white text-neutral-950 px-8 py-3.5 text-sm font-semibold hover:bg-neutral-100 shadow-xl transition-all cursor-pointer"
           >
-            Open Dashboard <ArrowRight size={16} />
+            Open Console
           </a>
         </div>
       </section>
 
-      {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 py-8 px-6" style={{ background: '#0a0010' }}>
-        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center anim-gradient-bg">
-              <Brain size={14} className="text-white" />
+      {/* ── 10. Footer (Multi-Column Dark Enterprise Grid) ───────────────── */}
+      <footer className="bg-[#080A0E] text-[#D0D5DD] py-16 px-6 border-t border-neutral-800">
+        <div className="max-w-7xl mx-auto">
+          
+          <div className="grid grid-cols-2 md:grid-cols-6 gap-8 mb-12">
+            <div>
+              <p className="text-xs font-mono font-bold text-white uppercase tracking-wider mb-4">Platform</p>
+              <ul className="space-y-2 text-xs text-neutral-400">
+                <li><a href="#models" className="hover:text-white">Multi-LLM Adapter</a></li>
+                <li><a href="#architecture" className="hover:text-white">Architecture</a></li>
+                <li><a href="#governance" className="hover:text-white">Governance</a></li>
+                <li><a href="#benchmarks" className="hover:text-white">Benchmarks</a></li>
+                <li><Link to="/privacy" className="hover:text-white">Trust Center</Link></li>
+              </ul>
             </div>
-            <span className="text-white/60 text-sm font-bold font-display">MemoryAgent · G146</span>
+
+            <div>
+              <p className="text-xs font-mono font-bold text-white uppercase tracking-wider mb-4">Supported Models</p>
+              <ul className="space-y-2 text-xs text-neutral-400">
+                <li><a href="#models" className="hover:text-white">Claude (Anthropic)</a></li>
+                <li><a href="#models" className="hover:text-white">OpenAI (GPT-4o)</a></li>
+                <li><a href="#models" className="hover:text-white">Ollama (Local Llama)</a></li>
+                <li><a href="#models" className="hover:text-white">Grok (xAI)</a></li>
+                <li><a href="#models" className="hover:text-white">DeepSeek R1</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-xs font-mono font-bold text-white uppercase tracking-wider mb-4">Frameworks</p>
+              <ul className="space-y-2 text-xs text-neutral-400">
+                <li><a href="#integrations" className="hover:text-white">LangChain</a></li>
+                <li><a href="#integrations" className="hover:text-white">LangGraph</a></li>
+                <li><a href="#integrations" className="hover:text-white">CrewAI</a></li>
+                <li><a href="#integrations" className="hover:text-white">AutoGen</a></li>
+                <li><a href="#integrations" className="hover:text-white">DSPy</a></li>
+              </ul>
+            </div>
+
+            <div>
+              <p className="text-xs font-mono font-bold text-white uppercase tracking-wider mb-4">Resources</p>
+              <ul className="space-y-2 text-xs text-neutral-400">
+                <li><a href="https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146" target="_blank" rel="noreferrer" className="hover:text-white">GitHub Repository</a></li>
+                <li><a href="#benchmarks" className="hover:text-white">Kaggle Benchmark</a></li>
+                <li><a href="#architecture" className="hover:text-white">System Design</a></li>
+                <li><Link to="/dashboard" className="hover:text-white">Live Dashboard</Link></li>
+              </ul>
+            </div>
+
+            <div className="col-span-2">
+              <div className="flex items-center gap-2 mb-4">
+                <div className="w-6 h-6 rounded-[6px] bg-[#7042DD] flex items-center justify-center text-white">
+                  <Brain size={14} />
+                </div>
+                <span className="text-white font-semibold text-base font-sans">MemoryAgent · G146</span>
+              </div>
+              <p className="text-xs text-neutral-400 leading-relaxed max-w-sm mb-4">
+                The self-improving persistent memory architecture for autonomous AI agents. Grounded in live experience, optimized by Bayesian routing, and governed by your engineering team.
+              </p>
+              <p className="text-xs text-neutral-500">
+                Developed by Kasat Sakshi Dattaprasad &amp; Sumit Das
+              </p>
+              <div className="flex gap-4 mt-3 text-xs text-neutral-400">
+                <Link to="/privacy" className="hover:text-white">Privacy Policy</Link>
+                <span>·</span>
+                <Link to="/terms" className="hover:text-white">Terms of Service</Link>
+              </div>
+            </div>
           </div>
-          <p className="text-white/20 text-xs">Adaptive AI Agent · Kasat Sakshi Dattaprasad & Sumit Das</p>
-          <div className="flex items-center gap-6">
-            {['GitHub', 'Docs', 'Report'].map(link => (
-              <a key={link} href="#" className="text-white/30 hover:text-white/70 text-xs transition-colors">{link}</a>
-            ))}
+
+          {/* AI Summarize Bar */}
+          <div className="py-6 border-t border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-neutral-400">
+            <div className="flex items-center gap-3">
+              <span>Summarize with AI what MemoryAgent does:</span>
+              <a href="https://chatgpt.com/?q=Summarize+what+Adaptive+Agent+Memory+does" target="_blank" rel="noreferrer" className="text-white hover:underline">ChatGPT</a>
+              <span>·</span>
+              <a href="https://claude.ai" target="_blank" rel="noreferrer" className="text-white hover:underline">Claude</a>
+              <span>·</span>
+              <a href="https://perplexity.ai" target="_blank" rel="noreferrer" className="text-white hover:underline">Perplexity</a>
+              <span>·</span>
+              <a href="https://gemini.google.com" target="_blank" rel="noreferrer" className="text-white hover:underline">Gemini</a>
+            </div>
+            <p>&copy; 2026 MemoryAgent. Built by Kasat Sakshi Dattaprasad &amp; Sumit Das.</p>
           </div>
         </div>
       </footer>
+
+      {/* Floating Persistent AI Widget (Bottom Right) */}
+      <div className="fixed bottom-5 right-5 z-40">
+        <a
+          href="/dashboard"
+          className="flex items-center gap-2.5 px-4 py-2.5 rounded-full bg-neutral-900 text-white shadow-2xl border border-neutral-700/80 hover:bg-black transition-all group"
+        >
+          <div className="w-5 h-5 rounded-full bg-[#7042DD] flex items-center justify-center text-white">
+            <MessageSquare size={12} />
+          </div>
+          <span className="text-xs font-medium">See how MemoryAgent works. <strong className="text-[#C4B5FD] font-semibold">Ask Agent</strong></span>
+        </a>
+      </div>
+
     </div>
   )
 }

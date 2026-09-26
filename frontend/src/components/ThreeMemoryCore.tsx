@@ -28,7 +28,7 @@ export default function ThreeMemoryCore({ glowColor, providerName }: ThreeMemory
     container.appendChild(renderer.domElement)
 
     // 3. Colors
-    const primaryColor = new THREE.Color(glowColor || '#a855f7')
+    const primaryColor = new THREE.Color(glowColor || '#862FE7')
     const accentColor = new THREE.Color('#22d3ee')
 
     // 4. Central Group

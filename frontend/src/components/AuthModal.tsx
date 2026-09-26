@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, Sparkles, Lock, Mail, User as UserIcon, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { X, Lock, Mail, User as UserIcon, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 interface AuthModalProps {
@@ -91,16 +91,16 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md anim-float-up">
       <div
-        className="w-full max-w-md p-7 rounded-3xl relative overflow-hidden text-white"
+        className="w-full max-w-md p-7 rounded-2xl relative overflow-hidden text-white"
         style={{
-          background: 'rgba(18, 10, 32, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 25px 80px rgba(0, 0, 0, 0.8), 0 0 50px rgba(168, 85, 247, 0.15)',
+          background: 'rgba(21, 13, 36, 0.96)',
+          border: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '0 25px 80px rgba(0, 0, 0, 0.85), 0 0 35px rgba(112, 66, 221, 0.15)',
         }}
       >
-        {/* Background glow */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-600/15 rounded-full blur-3xl pointer-events-none" />
+        {/* Background ambient lighting */}
+        <div className="absolute top-0 right-0 w-48 h-48 bg-[#7042DD]/10 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
 
         {/* Close button */}
         <button
@@ -112,16 +112,16 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
 
         {/* Modal Header */}
         <div className="mb-5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 bg-purple-500/15 border border-purple-500/30">
-            <Sparkles size={13} className="text-purple-300" />
-            <span className="text-purple-300 text-xs font-mono font-bold tracking-wider uppercase">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 bg-[#7042DD]/15 border border-[#862FE7]/30">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#862FE7] animate-pulse" />
+            <span className="text-[#D0D5DD] text-xs font-mono font-medium tracking-wider uppercase">
               MemoryAgent Auth
             </span>
           </div>
-          <h3 className="text-2xl font-display font-bold text-white tracking-tight">
+          <h3 className="text-2xl font-sans font-bold text-white tracking-tight">
             {isSignUp ? 'Create your account' : 'Welcome back to MemoryAgent'}
           </h3>
-          <p className="text-white/50 text-xs font-sans mt-1">
+          <p className="text-[#D0D5DD] text-xs font-sans mt-1">
             Access your persistent experience store, live task runner, and telemetry.
           </p>
         </div>
@@ -234,7 +234,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-purple-400 transition-colors"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/[0.04] border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-[#862FE7] focus:ring-1 focus:ring-[#862FE7]/40 transition-colors"
               />
             </div>
           </div>
@@ -242,7 +242,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 rounded-xl font-display font-bold text-sm text-white anim-gradient-bg shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50"
+            className="w-full py-3 px-4 rounded-xl font-sans font-semibold text-sm text-white bg-[#7042DD] hover:bg-[#862FE7] shadow-[0_0_20px_rgba(112,66,221,0.3)] transition-all duration-300 flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50"
           >
             {loading ? (
               <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
@@ -256,7 +256,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
         </form>
 
         {/* Mode switcher toggle */}
-        <div className="mt-6 pt-4 border-t border-white/10 text-center">
+        <div className="mt-6 pt-4 border-t border-white/[0.08] text-center">
           <p className="text-white/40 text-xs font-sans">
             {isSignUp ? 'Already have an account?' : "Don't have an account yet?"}{' '}
             <button
@@ -265,7 +265,7 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
                 setError(null)
                 setSuccessMsg(null)
               }}
-              className="text-purple-300 font-semibold hover:text-white transition-colors cursor-pointer ml-1"
+              className="text-[#C4B5FD] font-semibold hover:text-white transition-colors cursor-pointer ml-1"
             >
               {isSignUp ? 'Sign in instead' : 'Create an account'}
             </button>
