@@ -60,16 +60,16 @@ function LiveDemoPanel() {
         style={{
           transform: 'rotateY(-8deg) rotateX(4deg)',
           transformStyle: 'preserve-3d',
-          background: 'rgba(10,0,30,0.75)',
+          background: 'rgba(21, 13, 36, 0.85)',
           backdropFilter: 'blur(24px)',
-          border: '1px solid rgba(168,85,247,0.3)',
-          boxShadow: '0 30px 80px rgba(100,0,200,0.4), 0 0 0 1px rgba(168,85,247,0.15), inset 0 1px 0 rgba(255,255,255,0.08)',
+          border: '1px solid rgba(134, 47, 231, 0.28)',
+          boxShadow: '0 30px 80px rgba(12, 7, 20, 0.85), 0 0 35px rgba(112, 66, 221, 0.12), inset 0 1px 0 rgba(255,255,255,0.08)',
         }}
       >
         {/* Window chrome */}
         <div
           className="flex items-center gap-2 px-5 py-3.5 border-b"
-          style={{ borderColor: 'rgba(168,85,247,0.2)', background: 'rgba(168,85,247,0.08)' }}
+          style={{ borderColor: 'rgba(255, 255, 255, 0.08)', background: 'rgba(255, 255, 255, 0.02)' }}
         >
           <div className="flex gap-1.5">
             <div className="w-3 h-3 rounded-full bg-red-500/70" />
@@ -77,12 +77,12 @@ function LiveDemoPanel() {
             <div className="w-3 h-3 rounded-full bg-green-500/70" />
           </div>
           <div className="flex-1 flex items-center justify-center gap-2">
-            <Brain size={13} className="text-fuchsia-400" />
-            <span className="text-white/50 text-xs font-mono">MemoryAgent · Live Session</span>
+            <Brain size={13} className="text-[#C4B5FD]" />
+            <span className="text-[#D0D5DD] text-xs font-mono">MemoryAgent · Live Session</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <div className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-green-400 text-xs">Active</span>
+            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-emerald-400 text-xs font-medium">Active</span>
           </div>
         </div>
 
@@ -100,20 +100,20 @@ function LiveDemoPanel() {
                   <div className="flex items-start gap-2.5 justify-end">
                     <div
                       className="rounded-2xl rounded-tr-sm px-4 py-2.5 max-w-[80%]"
-                      style={{ background: 'linear-gradient(135deg,#7c3aed,#a855f7)' }}
+                      style={{ background: 'linear-gradient(135deg, #7042DD, #862FE7)' }}
                     >
                       <p className="text-white text-sm font-medium">{step.text}</p>
                     </div>
-                    <div className="w-7 h-7 rounded-xl bg-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
-                      <User size={13} className="text-fuchsia-300" />
+                    <div className="w-7 h-7 rounded-xl bg-[#7042DD]/20 flex items-center justify-center flex-shrink-0">
+                      <User size={13} className="text-[#E9D5FF]" />
                     </div>
                   </div>
                 )}
 
                 {step.type === 'system' && (
                   <div className="flex items-center gap-2">
-                    <div className="w-1 h-1 rounded-full bg-purple-400" />
-                    <p className="text-purple-300 text-xs font-mono">{step.text}</p>
+                    <div className="w-1 h-1 rounded-full bg-[#862FE7]" />
+                    <p className="text-[#C4B5FD] text-xs font-mono">{step.text}</p>
                   </div>
                 )}
 
@@ -127,7 +127,7 @@ function LiveDemoPanel() {
                       className="rounded-xl px-3 py-2 flex-1 flex items-center justify-between gap-3"
                       style={{
                         background: 'rgba(34,211,238,0.08)',
-                        border: '1px solid rgba(34,211,238,0.2)',
+                        border: '1px solid rgba(34,211,238,0.22)',
                       }}
                     >
                       <p className="text-cyan-200 text-xs">{step.text}</p>
@@ -145,14 +145,14 @@ function LiveDemoPanel() {
                   <div className="flex items-center gap-2.5">
                     <div
                       className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg,#a855f7,#ec4899)' }}
+                      style={{ background: 'linear-gradient(135deg, #7042DD, #862FE7)' }}
                     >
                       <Brain size={13} className="text-white" />
                     </div>
                     <div className="flex items-center gap-1.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-bounce" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-bounce delay-100" />
-                      <div className="w-1.5 h-1.5 rounded-full bg-fuchsia-400 animate-bounce delay-200" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#C4B5FD] animate-bounce" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#C4B5FD] animate-bounce delay-100" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#C4B5FD] animate-bounce delay-200" />
                       <span className="text-white/40 text-xs ml-1">{step.text}</span>
                     </div>
                   </div>
@@ -162,18 +162,18 @@ function LiveDemoPanel() {
                   <div className="flex items-start gap-2.5">
                     <div
                       className="w-7 h-7 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{ background: 'linear-gradient(135deg,#a855f7,#ec4899)' }}
+                      style={{ background: 'linear-gradient(135deg, #7042DD, #862FE7)' }}
                     >
                       <Brain size={13} className="text-white" />
                     </div>
                     <div
                       className="rounded-2xl rounded-tl-sm px-4 py-3 max-w-[85%]"
                       style={{
-                        background: 'rgba(168,85,247,0.12)',
-                        border: '1px solid rgba(168,85,247,0.25)',
+                        background: 'rgba(134, 47, 231, 0.09)',
+                        border: '1px solid rgba(134, 47, 231, 0.22)',
                       }}
                     >
-                      <p className="text-white/85 text-sm leading-relaxed">{step.text}</p>
+                      <p className="text-[#F1F1F1] text-sm leading-relaxed">{step.text}</p>
                     </div>
                   </div>
                 )}
@@ -182,15 +182,15 @@ function LiveDemoPanel() {
                   <div
                     className="flex items-center gap-2.5 rounded-xl px-4 py-2.5"
                     style={{
-                      background: 'linear-gradient(135deg, rgba(34,197,94,0.12), rgba(168,85,247,0.12))',
-                      border: '1px solid rgba(34,197,94,0.3)',
+                      background: 'linear-gradient(135deg, rgba(16,185,129,0.12), rgba(134,47,231,0.12))',
+                      border: '1px solid rgba(16,185,129,0.3)',
                     }}
                   >
-                    <Star size={13} className="text-green-400 flex-shrink-0" />
-                    <p className="text-green-300 text-xs font-semibold">{step.text}</p>
+                    <Star size={13} className="text-emerald-400 flex-shrink-0" />
+                    <p className="text-emerald-300 text-xs font-semibold">{step.text}</p>
                     <div
                       className="ml-auto text-xs px-2 py-0.5 rounded-full font-bold"
-                      style={{ background: 'rgba(34,197,94,0.2)', color: '#4ade80' }}
+                      style={{ background: 'rgba(16,185,129,0.2)', color: '#34d399' }}
                     >
                       +1 memory
                     </div>
@@ -205,7 +205,7 @@ function LiveDemoPanel() {
             <div className="flex items-start gap-2.5 justify-end anim-float-up">
               <div
                 className="rounded-2xl rounded-tr-sm px-4 py-3"
-                style={{ background: 'rgba(168,85,247,0.3)' }}
+                style={{ background: 'rgba(134, 47, 231, 0.25)' }}
               >
                 <div className="flex items-center gap-1">
                   <div className="w-2 h-2 rounded-full bg-white/60 animate-bounce" />
@@ -213,8 +213,8 @@ function LiveDemoPanel() {
                   <div className="w-2 h-2 rounded-full bg-white/60 animate-bounce delay-200" />
                 </div>
               </div>
-              <div className="w-7 h-7 rounded-xl bg-fuchsia-500/30 flex items-center justify-center flex-shrink-0">
-                <User size={13} className="text-fuchsia-300" />
+              <div className="w-7 h-7 rounded-xl bg-[#7042DD]/20 flex items-center justify-center flex-shrink-0">
+                <User size={13} className="text-[#E9D5FF]" />
               </div>
             </div>
           )}
@@ -223,13 +223,13 @@ function LiveDemoPanel() {
         {/* Input bar */}
         <div
           className="px-4 py-3 border-t flex items-center gap-3"
-          style={{ borderColor: 'rgba(168,85,247,0.15)', background: 'rgba(0,0,0,0.3)' }}
+          style={{ borderColor: 'rgba(255, 255, 255, 0.08)', background: 'rgba(12, 7, 20, 0.65)' }}
         >
           <MessageSquare size={15} className="text-white/30" />
-          <span className="text-white/25 text-sm flex-1 font-mono">Ask the agent anything...</span>
+          <span className="text-white/35 text-sm flex-1 font-mono">Ask the agent anything...</span>
           <div
             className="w-7 h-7 rounded-lg flex items-center justify-center"
-            style={{ background: 'linear-gradient(135deg,#7c3aed,#ec4899)' }}
+            style={{ background: 'linear-gradient(135deg, #7042DD, #862FE7)' }}
           >
             <ArrowRight size={13} className="text-white" />
           </div>
@@ -239,7 +239,7 @@ function LiveDemoPanel() {
       {/* Glow under the panel */}
       <div
         className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-3/4 h-16 blur-2xl rounded-full pointer-events-none"
-        style={{ background: 'linear-gradient(90deg,#7c3aed,#ec4899,#22d3ee)' }}
+        style={{ background: 'radial-gradient(ellipse at center, rgba(112, 66, 221, 0.35), transparent 70%)' }}
       />
     </div>
   )
@@ -249,20 +249,20 @@ function LiveDemoPanel() {
 function StatBadge({ icon: Icon, val, label, color }: { icon: React.ElementType; val: string; label: string; color: string }) {
   return (
     <div
-      className="rounded-2xl px-4 py-3 flex items-center gap-3 anim-float"
+      className="rounded-xl px-4 py-3 flex items-center gap-3 anim-float transition-all duration-300"
       style={{
-        background: 'rgba(10,0,30,0.7)',
+        background: 'rgba(21, 13, 36, 0.75)',
         backdropFilter: 'blur(16px)',
-        border: `1px solid ${color}30`,
-        boxShadow: `0 0 24px ${color}20`,
+        border: '1px solid rgba(255, 255, 255, 0.08)',
+        boxShadow: `0 8px 24px -6px ${color}18`,
       }}
     >
-      <div className="w-8 h-8 rounded-xl flex items-center justify-center" style={{ background: `${color}20` }}>
+      <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: `${color}18` }}>
         <Icon size={15} style={{ color }} />
       </div>
       <div>
-        <p className="text-white font-bold text-sm font-display">{val}</p>
-        <p className="text-white/40 text-xs">{label}</p>
+        <p className="text-white font-semibold text-sm font-sans">{val}</p>
+        <p className="text-[#D0D5DD] text-xs font-mono">{label}</p>
       </div>
     </div>
   )
@@ -305,36 +305,36 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
 
   return (
     <>
-      <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'glass shadow-lg' : ''}`}>
+      <nav className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${scrolled ? 'backdrop-blur-xl bg-[#0c0714]/85 border-b border-white/[0.08] shadow-lg' : 'bg-transparent'}`}>
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center anim-gradient-bg">
-              <Brain size={18} className="text-white" />
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#7042DD] to-[#862FE7] shadow-lg">
+              <Brain size={17} className="text-white" />
             </div>
-            <span className="text-white font-bold text-lg font-display tracking-tight">MemoryAgent</span>
+            <span className="text-white font-semibold text-lg font-sans tracking-tight">MemoryAgent</span>
           </div>
           <div className="hidden md:flex items-center gap-8">
             {['Features', 'How it works', 'Docs'].map(item => (
-              <a key={item} href="#" className="text-white/60 hover:text-white text-sm font-medium transition-colors duration-150">{item}</a>
+              <a key={item} href="#" className="text-[#D0D5DD] hover:text-white text-sm font-medium transition-colors duration-200">{item}</a>
             ))}
           </div>
 
           <div className="hidden md:flex items-center gap-3">
             {user ? (
               <div className="flex items-center gap-2.5">
-                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-purple-500/15 border border-purple-500/30 text-purple-200 text-xs font-mono">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#7042DD]/15 border border-[#862FE7]/30 text-[#D0D5DD] text-xs font-mono">
                   <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                   <span className="max-w-[140px] truncate">{user.name || user.email.split('@')[0]}</span>
                 </div>
                 <a
                   href="/dashboard"
-                  className="text-xs font-bold px-3.5 py-2 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity"
+                  className="text-xs font-semibold px-3.5 py-2 rounded-lg text-white cursor-pointer bg-[#7042DD] hover:bg-[#862FE7] transition-all duration-300"
                 >
                   Dashboard
                 </a>
                 <button
                   onClick={() => signOut()}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 border border-red-500/25 text-xs font-mono transition-all cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-300 hover:text-red-200 border border-red-500/25 text-xs font-mono transition-all cursor-pointer"
                   title="Sign out of account"
                 >
                   <LogOut size={13} />
@@ -348,7 +348,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
                     setAuthMode('signin')
                     setShowAuth(true)
                   }}
-                  className="text-white/70 hover:text-white text-sm font-medium transition-colors cursor-pointer bg-transparent border-0"
+                  className="text-[#D0D5DD] hover:text-white text-sm font-medium transition-colors cursor-pointer bg-transparent border-0"
                 >
                   Sign in
                 </button>
@@ -358,7 +358,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
                     setShowAuth(true)
                   }}
                   id="nav-cta"
-                  className="text-sm font-bold px-5 py-2.5 rounded-xl text-white cursor-pointer anim-gradient-bg hover:opacity-90 transition-opacity border-0"
+                  className="text-sm font-semibold px-5 py-2.5 rounded-lg text-white cursor-pointer bg-[#7042DD] hover:bg-[#862FE7] shadow-[0_0_20px_rgba(112,66,221,0.3)] transition-all duration-300 border-0"
                 >
                   Get started →
                 </button>
@@ -372,19 +372,19 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
         </div>
 
         {open && (
-          <div className="md:hidden glass px-6 pb-5 space-y-4 border-t border-white/10">
+          <div className="md:hidden glass px-6 pb-5 space-y-4 border-t border-white/[0.08]">
             {['Features', 'How it works', 'Docs'].map(item => (
-              <a key={item} href="#" className="block text-white/80 text-sm font-medium py-1">{item}</a>
+              <a key={item} href="#" className="block text-[#D0D5DD] hover:text-white text-sm font-medium py-1">{item}</a>
             ))}
             {user ? (
-              <div className="space-y-2 pt-2 border-t border-white/10">
-                <p className="text-white/60 text-xs font-mono">{user.email}</p>
-                <a href="/dashboard" className="block text-center text-sm font-bold py-2.5 rounded-xl text-white anim-gradient-bg">
+              <div className="space-y-2 pt-2 border-t border-white/[0.08]">
+                <p className="text-[#D0D5DD]/70 text-xs font-mono">{user.email}</p>
+                <a href="/dashboard" className="block text-center text-sm font-semibold py-2.5 rounded-lg text-white bg-[#7042DD] hover:bg-[#862FE7] transition-colors">
                   Go to Dashboard
                 </a>
                 <button
                   onClick={() => signOut()}
-                  className="w-full flex items-center justify-center gap-1.5 text-center text-red-300 bg-red-500/10 border border-red-500/20 rounded-xl text-xs py-2 cursor-pointer"
+                  className="w-full flex items-center justify-center gap-1.5 text-center text-red-300 bg-red-500/10 border border-red-500/20 rounded-lg text-xs py-2 cursor-pointer"
                 >
                   <LogOut size={13} />
                   <span>Sign out</span>
@@ -397,7 +397,7 @@ function Navbar({ scrolled }: { scrolled: boolean }) {
                   setShowAuth(true)
                   setOpen(false)
                 }}
-                className="w-full text-center text-sm font-bold py-2.5 rounded-xl text-white anim-gradient-bg cursor-pointer border-0"
+                className="w-full text-center text-sm font-semibold py-2.5 rounded-lg text-white bg-[#7042DD] hover:bg-[#862FE7] cursor-pointer border-0"
               >
                 Get started →
               </button>
@@ -593,15 +593,14 @@ function IntegrationsSection() {
   }, [activeProvider.name])
 
   return (
-    <section className="py-28 px-6 bg-[#0a0010] border-t border-white/5 relative overflow-hidden">
-      {/* Background ambient multi-color bloom */}
+    <section className="py-28 px-6 bg-[#0c0714] border-t border-white/[0.08] relative overflow-hidden">
+      {/* Background ambient lighting */}
       <div
-        className="absolute top-1/4 right-0 w-[700px] h-[700px] rounded-full blur-[140px] pointer-events-none opacity-40 transition-all duration-1000"
+        className="absolute top-1/4 right-0 w-[700px] h-[700px] rounded-full blur-[140px] pointer-events-none opacity-30 transition-all duration-1000"
         style={{
-          background: `radial-gradient(circle, ${activeProvider.glowColor}50 0%, #7c3aed30 50%, transparent 80%)`,
+          background: `radial-gradient(circle, ${activeProvider.glowColor}40 0%, #7042DD20 50%, transparent 80%)`,
         }}
       />
-      <div className="absolute -bottom-20 left-10 w-[500px] h-[500px] bg-fuchsia-900/15 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto relative z-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
@@ -610,15 +609,15 @@ function IntegrationsSection() {
           <div className="lg:col-span-4 flex flex-col">
             <div className="flex items-center gap-2 mb-3">
               <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-              <p className="text-white/40 text-xs font-bold tracking-widest uppercase font-display">
+              <p className="text-[#D0D5DD] text-xs font-mono font-medium tracking-wider uppercase">
                 MULTI-LLM MEMORY ADAPTER
               </p>
             </div>
 
-            <h2 className="text-white font-display font-bold text-2xl lg:text-3xl mb-4 leading-tight">
+            <h2 className="text-white font-sans font-bold text-2xl lg:text-3xl mb-4 leading-tight tracking-tight">
               Seamlessly works with your favorite models
             </h2>
-            <p className="text-white/50 text-sm leading-relaxed mb-8">
+            <p className="text-[#D0D5DD] text-sm leading-relaxed mb-8 font-normal">
               Plug MemoryAgent into any foundation model. The shared memory graph retains lessons across executions, preventing repeat errors and cutting token costs by up to 80%.
             </p>
 
@@ -634,8 +633,8 @@ function IntegrationsSection() {
                       isActive ? 'bg-white/[0.08]' : 'bg-white/[0.02] hover:bg-white/[0.05]'
                     }`}
                     style={{
-                      border: isActive ? `1px solid ${p.color}` : '1px solid rgba(255,255,255,0.05)',
-                      boxShadow: isActive ? `0 0 35px ${p.glowColor}25, inset 0 0 15px ${p.glowColor}10` : 'none',
+                      border: isActive ? `1px solid ${p.color}` : '1px solid rgba(255,255,255,0.06)',
+                      boxShadow: isActive ? `0 0 30px ${p.glowColor}20, inset 0 0 15px ${p.glowColor}08` : 'none',
                     }}
                   >
                     {/* Active left indicator bar */}
@@ -770,12 +769,12 @@ function IntegrationsSection() {
                     <div
                       className="px-3 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-md shadow-lg"
                       style={{
-                        background: 'rgba(10, 0, 30, 0.75)',
-                        border: '1px solid rgba(34, 197, 94, 0.4)',
+                        background: 'rgba(21, 13, 36, 0.85)',
+                        border: '1px solid rgba(16, 185, 129, 0.35)',
                       }}
                     >
-                      <span className="w-2 h-2 rounded-full bg-green-400 animate-ping" />
-                      <span className="text-green-300 text-[10px] font-bold font-mono tracking-wider">
+                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                      <span className="text-emerald-300 text-[10px] font-bold font-mono tracking-wider">
                         ● 3D NEURAL CORE ACTIVE
                       </span>
                     </div>
@@ -785,8 +784,8 @@ function IntegrationsSection() {
                     <div
                       className="px-3 py-1.5 rounded-full flex items-center gap-2 backdrop-blur-md shadow-lg"
                       style={{
-                        background: 'rgba(10, 0, 30, 0.75)',
-                        border: `1px solid ${activeProvider.glowColor}50`,
+                        background: 'rgba(21, 13, 36, 0.85)',
+                        border: `1px solid ${activeProvider.glowColor}40`,
                       }}
                     >
                       <Zap className="w-3 h-3 text-cyan-400" />
@@ -800,12 +799,12 @@ function IntegrationsSection() {
                     <div
                       className="px-3 py-1.5 rounded-lg flex items-center gap-2 backdrop-blur-md shadow-lg"
                       style={{
-                        background: 'rgba(10, 0, 30, 0.85)',
-                        border: '1px solid rgba(168, 85, 247, 0.4)',
+                        background: 'rgba(21, 13, 36, 0.85)',
+                        border: '1px solid rgba(134, 47, 231, 0.35)',
                       }}
                     >
-                      <Brain className="w-3.5 h-3.5 text-fuchsia-400" />
-                      <span className="text-fuchsia-300 text-[10px] font-bold font-mono">
+                      <Brain className="w-3.5 h-3.5 text-[#C4B5FD]" />
+                      <span className="text-[#D0D5DD] text-[10px] font-bold font-mono">
                         {activeProvider.confidence} MATCH CONFIDENCE
                       </span>
                     </div>
@@ -815,11 +814,11 @@ function IntegrationsSection() {
                     <div
                       className="px-3 py-1.5 rounded-lg flex items-center gap-1.5 backdrop-blur-md shadow-lg"
                       style={{
-                        background: 'rgba(10, 0, 30, 0.85)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
+                        background: 'rgba(21, 13, 36, 0.85)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
                       }}
                     >
-                      <span className="text-[10px] font-display text-white/50 uppercase tracking-wider">TASK TYPE:</span>
+                      <span className="text-[10px] font-mono text-white/50 uppercase tracking-wider">TASK TYPE:</span>
                       <span className="text-[10px] font-bold font-mono text-white/90">{activeProvider.taskType}</span>
                     </div>
                   </div>
@@ -1128,35 +1127,35 @@ function BeforeAfterSection() {
   const scanY = (Math.sin(tick * 0.06) * 0.5 + 0.5) * 100
 
   return (
-    <section ref={ref} className="py-24 px-6 relative bg-[#0a0010] overflow-hidden">
+    <section ref={ref} className="py-24 px-6 relative bg-[#0c0714] overflow-hidden">
       {/* Background ambient lighting */}
-      <div className="absolute top-1/2 left-1/4 w-[600px] h-[600px] bg-purple-900/10 rounded-full blur-[140px] pointer-events-none -translate-y-1/2" />
-      <div className="absolute top-1/2 right-1/4 w-[600px] h-[600px] bg-cyan-900/10 rounded-full blur-[140px] pointer-events-none -translate-y-1/2" />
+      <div className="absolute top-1/2 left-1/4 w-[600px] h-[600px] bg-[#7042DD]/08 rounded-full blur-[140px] pointer-events-none -translate-y-1/2" />
+      <div className="absolute top-1/2 right-1/4 w-[600px] h-[600px] bg-cyan-900/08 rounded-full blur-[140px] pointer-events-none -translate-y-1/2" />
 
       <div className="max-w-7xl mx-auto relative z-10">
         
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-14">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-4"
-            style={{ background: 'rgba(168,85,247,0.12)', border: '1px solid rgba(168,85,247,0.3)' }}>
-            <Sparkles size={13} className="text-fuchsia-400" />
-            <span className="text-fuchsia-300 text-xs font-bold tracking-widest uppercase font-display">
+            style={{ background: 'rgba(112, 66, 221, 0.15)', border: '1px solid rgba(134, 47, 231, 0.35)' }}>
+            <span className="w-1.5 h-1.5 rounded-full bg-[#862FE7] animate-pulse" />
+            <span className="text-[#D0D5DD] text-xs font-mono font-medium tracking-wider uppercase">
               PARADIGM COMPARISON
             </span>
           </div>
-          <h2 className="font-display font-bold text-white text-3xl lg:text-5xl leading-tight mb-4">
+          <h2 className="font-sans font-bold text-white text-3xl lg:text-5xl leading-tight mb-4 tracking-tight">
             Stateless Guesswork <span className="text-white/40 font-normal">vs.</span> <span className="gradient-text">Adaptive Memory</span>
           </h2>
-          <p className="text-white/50 text-sm sm:text-base leading-relaxed">
+          <p className="text-[#D0D5DD] text-sm sm:text-base leading-relaxed font-normal">
             Without memory, agents repeat costly failures from scratch every time. With MemoryAgent, verified strategies execute in seconds with zero human triaging.
           </p>
         </div>
 
         {/* ── The Contained Split Comparison Canvas ── */}
         <div
-          className="rounded-3xl border border-white/10 overflow-hidden relative shadow-2xl grid grid-cols-1 lg:grid-cols-2"
+          className="rounded-2xl border border-white/[0.08] overflow-hidden relative shadow-2xl grid grid-cols-1 lg:grid-cols-2"
           style={{
-            boxShadow: '0 30px 100px rgba(0,0,0,0.8), 0 0 60px rgba(168,85,247,0.1)',
+            boxShadow: '0 30px 100px rgba(0,0,0,0.85), 0 0 40px rgba(112,66,221,0.1)',
           }}
         >
 
@@ -1625,17 +1624,17 @@ function PerformanceGraph() {
   const hoverDay = hoverT !== null ? Math.round(hoverT * 90) : 0
 
   return (
-    <section className="py-24 px-6 bg-[#0a0010] relative overflow-hidden" ref={ref}>
+    <section className="py-24 px-6 bg-[#0c0714] relative overflow-hidden" ref={ref}>
       {/* Ambient background bloom */}
-      <div className="absolute top-1/4 left-1/5 w-[650px] h-[650px] bg-purple-900/15 rounded-full blur-[160px] pointer-events-none" />
-      <div className="absolute bottom-1/4 right-1/4 w-[550px] h-[550px] bg-emerald-900/12 rounded-full blur-[160px] pointer-events-none" />
+      <div className="absolute top-1/4 left-1/5 w-[650px] h-[650px] bg-[#7042DD]/08 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-1/4 right-1/4 w-[550px] h-[550px] bg-emerald-900/08 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto relative z-10">
         
         {/* ── TOP SECTION HEADER & AUDIENCE TABS (Matching Atomicwork Reference) ── */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/10 pb-6 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-white/[0.08] pb-6 mb-8">
           <div>
-            <span className="text-white/45 text-xs font-mono font-bold tracking-[0.2em] uppercase block">
+            <span className="text-[#D0D5DD] text-xs font-mono font-medium tracking-[0.2em] uppercase block">
               AI-NATIVE ITSM AND ESM SOLUTION
             </span>
           </div>
@@ -1650,8 +1649,8 @@ function PerformanceGraph() {
                 onClick={() => setActiveTab(tab.id)}
                 className={`transition-all duration-200 pb-1 cursor-pointer uppercase ${
                   activeTab === tab.id
-                    ? 'text-white font-bold border-b-2 border-[#10b981]'
-                    : 'text-white/40 hover:text-white/75'
+                    ? 'text-white font-bold border-b-2 border-[#862FE7]'
+                    : 'text-[#D0D5DD]/50 hover:text-white'
                 }`}
               >
                 {tab.label}
@@ -2188,12 +2187,8 @@ export default function LandingPage() {
         {/* Vibrant background */}
         <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/hero-bg.jpg)' }} />
         {/* Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/70 to-black/50" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#0a0010] to-transparent" />
-
-        {/* Floating orbs */}
-        <div className="absolute top-24 left-24 w-80 h-80 bg-purple-600/15 rounded-full blur-3xl anim-float pointer-events-none" />
-        <div className="absolute bottom-24 left-48 w-60 h-60 bg-fuchsia-500/10 rounded-full blur-3xl anim-float delay-300 pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/75 to-black/60" />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#0c0714] to-transparent" />
 
         {/* Animated memory node graph on the far right */}
         <MemoryNodes />
@@ -2203,34 +2198,34 @@ export default function LandingPage() {
           <div>
             <div
               className="inline-flex items-center gap-2 px-4 py-2 rounded-full mb-8 anim-float-up"
-              style={{ background: 'rgba(168,85,247,0.15)', border: '1px solid rgba(168,85,247,0.4)' }}
+              style={{ background: 'rgba(112, 66, 221, 0.15)', border: '1px solid rgba(134, 47, 231, 0.35)' }}
             >
-              <Sparkles size={13} className="text-fuchsia-400" />
-              <span className="text-fuchsia-300 text-xs font-bold tracking-widest uppercase font-display">G146 · Live Agent Demo</span>
+              <span className="w-1.5 h-1.5 rounded-full bg-[#862FE7] animate-pulse" />
+              <span className="text-[#D0D5DD] text-xs font-mono font-medium tracking-wider uppercase">G146 · Persistent Memory Intelligence</span>
             </div>
 
-            <h1 className="font-display font-bold leading-[1.1] mb-6 anim-float-up delay-100">
+            <h1 className="font-sans font-bold leading-[1.1] mb-6 anim-float-up delay-100 tracking-tight">
               <span className="text-white text-5xl lg:text-6xl block">Watch the Agent</span>
-              <span className="anim-shimmer-text text-5xl lg:text-6xl block mt-1">Learn in Real Time</span>
+              <span className="gradient-text text-5xl lg:text-6xl block mt-1">Learn in Real Time</span>
             </h1>
 
-            <p className="text-white/55 text-lg leading-relaxed mb-8 anim-float-up delay-200 font-light">
+            <p className="text-[#D0D5DD] text-lg leading-relaxed mb-8 anim-float-up delay-200 font-normal">
               See MemoryAgent retrieve past experiences, use them to answer better, and store new lessons —{' '}
-              <span className="text-white/90 font-medium">all happening live on the right.</span>
+              <span className="text-white font-medium">all happening live on the right.</span>
             </p>
 
             {/* Mini stat badges */}
             <div className="flex flex-col gap-3 mb-8 anim-float-up delay-300">
-              <StatBadge icon={Database}  val="Memories Retrieved"  label="Before every task execution" color="#a855f7" />
+              <StatBadge icon={Database}  val="Memories Retrieved"  label="Before every task execution" color="#862FE7" />
               <StatBadge icon={Star}      val="Trust Score Updated" label="After every outcome measured" color="#22d3ee" />
-              <StatBadge icon={CheckCircle2} val="Experience Stored"  label="Reusable lesson extracted" color="#ec4899" />
+              <StatBadge icon={CheckCircle2} val="Experience Stored"  label="Reusable lesson extracted" color="#10b981" />
             </div>
 
             <div className="flex gap-4 anim-float-up delay-500">
               <a
                 id="hero-cta-primary"
                 href="/dashboard"
-                className="group flex items-center gap-2 text-white font-bold px-7 py-4 rounded-2xl cursor-pointer anim-gradient-bg hover:scale-105 transition-transform duration-200 shadow-lg text-sm"
+                className="group flex items-center gap-2 text-white font-semibold px-7 py-3.5 rounded-xl cursor-pointer bg-[#7042DD] hover:bg-[#862FE7] shadow-[0_0_20px_rgba(112,66,221,0.35)] transition-all duration-300 text-sm"
               >
                 Try it yourself <ArrowRight size={15} className="group-hover:translate-x-1 transition-transform" />
               </a>
@@ -2239,8 +2234,7 @@ export default function LandingPage() {
                 href="https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-2 font-semibold px-7 py-4 rounded-2xl cursor-pointer text-sm text-white/70 hover:text-white transition-all duration-200"
-                style={{ border: '1px solid rgba(255,255,255,0.12)', background: 'rgba(255,255,255,0.04)' }}
+                className="flex items-center gap-2 font-medium px-7 py-3.5 rounded-xl cursor-pointer text-sm text-[#D0D5DD] hover:text-white transition-all duration-300 border border-white/10 hover:border-white/20 bg-white/[0.03]"
               >
                 View GitHub
               </a>
@@ -2259,8 +2253,8 @@ export default function LandingPage() {
         <div className="flex w-max marquee-track">
           {[...logos, ...logos].map((name, i) => (
             <div key={i} className="flex items-center gap-2 mx-10 opacity-30 hover:opacity-70 transition-opacity whitespace-nowrap">
-              <div className="w-1.5 h-1.5 rounded-full anim-gradient-bg" />
-              <span className="text-white text-sm font-semibold tracking-widest font-display">{name}</span>
+              <div className="w-1.5 h-1.5 rounded-full bg-[#862FE7]" />
+              <span className="text-white text-sm font-semibold tracking-widest font-sans">{name}</span>
             </div>
           ))}
         </div>
@@ -2275,8 +2269,8 @@ export default function LandingPage() {
       {/* ── Performance Graph ────────────────────────────────────────────── */}
       <PerformanceGraph />
 
-      {/* ── Vibrant Stats Band ────────────────────────────────────────────── */}
-      <section className="py-20 px-6 anim-gradient-bg">
+      {/* ── Stats Band (Atomicwork Refined) ──────────────────────────────────────── */}
+      <section className="py-20 px-6 border-y border-white/[0.08]" style={{ background: 'linear-gradient(180deg, rgba(21, 13, 36, 0.8) 0%, rgba(12, 7, 20, 0.95) 100%)' }}>
         <div className="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
           {[
             { val: 'Memory ON', sub: 'vs Memory OFF evaluation' },
@@ -2285,27 +2279,27 @@ export default function LandingPage() {
             { val: 'Python', sub: 'Custom agent orchestration' },
           ].map(s => (
             <div key={s.sub}>
-              <p className="text-white text-2xl font-bold mb-1 font-display">{s.val}</p>
-              <p className="text-white/60 text-xs">{s.sub}</p>
+              <p className="text-white text-2xl font-bold mb-1 font-sans">{s.val}</p>
+              <p className="text-[#D0D5DD] text-xs font-mono">{s.sub}</p>
             </div>
           ))}
         </div>
       </section>
 
       {/* ── CTA ──────────────────────────────────────────────────────────── */}
-      <section className="py-28 px-6" style={{ background: '#100020' }}>
+      <section className="py-28 px-6 relative overflow-hidden" style={{ background: 'radial-gradient(ellipse at 50% 50%, rgba(112, 66, 221, 0.18), transparent 70%), #0c0714' }}>
         <div className="max-w-3xl mx-auto text-center">
-          <h2 className="font-display font-bold text-4xl lg:text-5xl mb-5">
+          <h2 className="font-sans font-bold text-4xl lg:text-5xl mb-5 tracking-tight">
             <span className="text-white">Ready to try </span>
-            <span className="gradient-text-warm">MemoryAgent?</span>
+            <span className="gradient-text">MemoryAgent?</span>
           </h2>
-          <p className="text-white/45 text-base mb-10 leading-relaxed">
+          <p className="text-[#D0D5DD] text-base mb-10 leading-relaxed font-normal">
             Submit a task. Watch it retrieve memories. See it get smarter with every run.
           </p>
           <a
             id="cta-banner-signup"
             href="/dashboard"
-            className="inline-flex items-center gap-2 text-white font-bold px-10 py-4 rounded-2xl cursor-pointer anim-gradient-bg hover:scale-105 transition-transform shadow-xl"
+            className="inline-flex items-center gap-2 text-white font-semibold px-9 py-3.5 rounded-xl cursor-pointer bg-[#7042DD] hover:bg-[#862FE7] shadow-[0_0_25px_rgba(112,66,221,0.35)] transition-all duration-300 text-sm"
           >
             Open Dashboard <ArrowRight size={16} />
           </a>
@@ -2313,18 +2307,18 @@ export default function LandingPage() {
       </section>
 
       {/* ── Footer ───────────────────────────────────────────────────────── */}
-      <footer className="border-t border-white/5 py-8 px-6" style={{ background: '#0a0010' }}>
+      <footer className="border-t border-white/[0.08] py-8 px-6" style={{ background: '#0c0714' }}>
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center anim-gradient-bg">
+            <div className="w-7 h-7 rounded-lg flex items-center justify-center bg-gradient-to-br from-[#7042DD] to-[#862FE7]">
               <Brain size={14} className="text-white" />
             </div>
-            <span className="text-white/60 text-sm font-bold font-display">MemoryAgent · G146</span>
+            <span className="text-[#D0D5DD] text-sm font-semibold font-sans">MemoryAgent · G146</span>
           </div>
-          <p className="text-white/20 text-xs">Adaptive AI Agent · Kasat Sakshi Dattaprasad & Sumit Das</p>
+          <p className="text-white/30 text-xs font-sans">Adaptive AI Agent · Kasat Sakshi Dattaprasad & Sumit Das</p>
           <div className="flex items-center gap-6">
             {['GitHub', 'Docs', 'Report'].map(link => (
-              <a key={link} href="#" className="text-white/30 hover:text-white/70 text-xs transition-colors">{link}</a>
+              <a key={link} href="#" className="text-[#D0D5DD]/70 hover:text-white text-xs transition-colors">{link}</a>
             ))}
           </div>
         </div>
