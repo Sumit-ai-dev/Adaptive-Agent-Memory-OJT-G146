@@ -272,11 +272,11 @@ function StatBadge({ icon: Icon, val, label, color }: { icon: React.ElementType;
 function MemoryNodes() {
   return (
     <div className="absolute right-0 top-0 bottom-0 w-72 hidden xl:block pointer-events-none overflow-hidden">
-      <svg width="288" height="100%" viewBox="0 0 288 600" className="opacity-30">
+      <svg width="288" height="100%" viewBox="0 0 288 600" className="opacity-20">
         <defs>
           <radialGradient id="node-glow" cx="50%" cy="50%" r="50%">
-            <stop offset="0%" stopColor="#a855f7" stopOpacity="0.8" />
-            <stop offset="100%" stopColor="#a855f7" stopOpacity="0" />
+            <stop offset="0%" stopColor="#862FE7" stopOpacity="0.7" />
+            <stop offset="100%" stopColor="#862FE7" stopOpacity="0" />
           </radialGradient>
         </defs>
         {/* Lines */}
@@ -286,9 +286,9 @@ function MemoryNodes() {
           </line>
         ))}
         {/* Nodes */}
-        {[[144,100,8,'#a855f7'],[80,200,6,'#22d3ee'],[200,220,6,'#ec4899'],[60,340,5,'#fb923c'],[160,360,5,'#a855f7'],[220,380,5,'#22d3ee'],[100,500,4,'#ec4899'],[180,480,4,'#a855f7'],[150,520,4,'#22d3ee']].map(([cx,cy,r,color],i) => (
-          <circle key={i} cx={cx} cy={cy} r={r} fill={color as string} opacity="0.8">
-            <animate attributeName="r" values={`${r};${Number(r)+3};${r}`} dur={`${2+i*0.3}s`} repeatCount="indefinite" />
+        {[[144,100,7,'#862FE7'],[80,200,5,'#7042DD'],[200,220,5,'#A78BFA'],[60,340,4,'#862FE7'],[160,360,5,'#7042DD'],[220,380,4,'#38bdf8'],[100,500,4,'#862FE7'],[180,480,4,'#A78BFA'],[150,520,4,'#7042DD']].map(([cx,cy,r,color],i) => (
+          <circle key={i} cx={cx} cy={cy} r={r} fill={color as string} opacity="0.75">
+            <animate attributeName="r" values={`${r};${Number(r)+2};${r}`} dur={`${2.5+i*0.3}s`} repeatCount="indefinite" />
           </circle>
         ))}
       </svg>
@@ -1246,48 +1246,44 @@ function BeforeAfterSection() {
             <div
               className="w-11 h-11 rounded-full flex items-center justify-center shadow-2xl backdrop-blur-xl border border-white/20"
               style={{
-                background: 'linear-gradient(135deg, #7c3aed, #06b6d4)',
-                boxShadow: '0 0 30px rgba(168,85,247,0.7), 0 0 10px rgba(34,211,238,0.5)',
+                background: 'linear-gradient(135deg, #7042DD, #862FE7)',
+                boxShadow: '0 0 25px rgba(112,66,221,0.6)',
               }}
             >
               <Zap size={16} className="text-white" />
             </div>
           </div>
 
-          {/* ── RIGHT: AFTER (Dark Cyber Nebula Velocity) ── */}
+          {/* ── RIGHT: AFTER (Atomicwork Velocity) ── */}
           <div
             className="relative h-[620px] overflow-hidden flex items-center justify-center p-6 lg:p-10"
             style={{
-              background: 'radial-gradient(circle at 75% 30%, rgba(168,85,247,0.22) 0%, rgba(34,211,238,0.12) 45%, #0e051c 90%)',
+              background: 'linear-gradient(135deg, rgba(21, 13, 36, 0.95) 0%, rgba(12, 7, 20, 0.98) 100%)',
             }}
           >
             {/* Tech grid */}
             <div
-              className="absolute inset-0 opacity-20 pointer-events-none"
+              className="absolute inset-0 opacity-15 pointer-events-none"
               style={{
-                backgroundImage: 'radial-gradient(rgba(168,85,247,0.4) 1px, transparent 1px)',
+                backgroundImage: 'radial-gradient(rgba(134,47,231,0.3) 1px, transparent 1px)',
                 backgroundSize: '24px 24px',
               }}
             />
 
-            {/* Animated glowing orbs */}
+            {/* Subtle atmospheric ambient bloom */}
             <div
               className="absolute top-[10%] right-[15%] w-[260px] h-[260px] rounded-full anim-float pointer-events-none"
-              style={{ background: 'radial-gradient(circle, rgba(168,85,247,0.3) 0%, transparent 70%)', filter: 'blur(45px)' }}
-            />
-            <div
-              className="absolute bottom-[10%] left-[15%] w-[220px] h-[220px] rounded-full anim-float pointer-events-none"
-              style={{ background: 'radial-gradient(circle, rgba(34,211,238,0.2) 0%, transparent 70%)', filter: 'blur(40px)', animationDelay: '1s' }}
+              style={{ background: 'radial-gradient(circle, rgba(112,66,221,0.18) 0%, transparent 70%)', filter: 'blur(50px)' }}
             />
 
             {/* Top Bar Badge */}
             <div className="absolute top-6 left-6 sm:top-8 sm:left-8 z-30">
               <div
                 className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full"
-                style={{ background: 'rgba(34,197,94,0.12)', border: '1px solid rgba(34,197,94,0.4)' }}
+                style={{ background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.35)' }}
               >
-                <span className="w-2 h-2 rounded-full bg-green-400 animate-ping" />
-                <span className="text-green-300 text-xs font-bold tracking-wider font-display">AFTER · MEMORYAGENT</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+                <span className="text-emerald-300 text-xs font-bold tracking-wider font-sans">AFTER · MEMORYAGENT</span>
               </div>
             </div>
 
@@ -1301,13 +1297,13 @@ function BeforeAfterSection() {
               }}
             >
               <TiltCard
-                glowColor="#a855f7"
+                glowColor="#862FE7"
                 style={{
-                  background: 'rgba(14, 8, 26, 0.88)',
+                  background: 'rgba(21, 13, 36, 0.92)',
                   backdropFilter: 'blur(28px)',
-                  border: '1px solid rgba(168, 85, 247, 0.35)',
+                  border: '1px solid rgba(134, 47, 231, 0.28)',
                   padding: 0,
-                  boxShadow: '0 30px 80px rgba(0,0,0,0.6), 0 0 40px rgba(168,85,247,0.15)',
+                  boxShadow: '0 30px 80px rgba(0,0,0,0.7), 0 0 35px rgba(112,66,221,0.12)',
                 }}
               >
                 {/* AI Scanning effect overlay */}
@@ -1315,8 +1311,8 @@ function BeforeAfterSection() {
                   <div
                     className="w-full h-[2px] opacity-75"
                     style={{
-                      background: 'linear-gradient(90deg, transparent, #a855f7, #22d3ee, #4ade80, transparent)',
-                      boxShadow: '0 0 20px rgba(168,85,247,0.9), 0 0 10px rgba(34,211,238,0.7)',
+                      background: 'linear-gradient(90deg, transparent, #862FE7, #7042DD, transparent)',
+                      boxShadow: '0 0 16px rgba(134,47,231,0.8)',
                       position: 'absolute',
                       top: `${scanY}%`,
                     }}
@@ -1324,18 +1320,18 @@ function BeforeAfterSection() {
                 </div>
 
                 {/* Header */}
-                <div className="p-5 border-b border-white/10 flex items-start gap-3.5 relative z-30 bg-black/40">
+                <div className="p-5 border-b border-white/[0.08] flex items-start gap-3.5 relative z-30 bg-black/40">
                   <div
                     className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 shadow-lg"
-                    style={{ background: 'linear-gradient(135deg, #a855f7, #22d3ee)' }}
+                    style={{ background: 'linear-gradient(135deg, #7042DD, #862FE7)' }}
                   >
                     <Zap className="w-4 h-4 text-white" />
                   </div>
                   <div>
-                    <h3 className="text-white font-semibold text-[15px] font-display">
+                    <h3 className="text-white font-semibold text-[15px] font-sans">
                       Tasks resolved automatically
                     </h3>
-                    <p className="text-white/50 text-[11px] mt-0.5">
+                    <p className="text-[#D0D5DD] text-[11px] mt-0.5">
                       Memory-augmented context injected from past validated runs
                     </p>
                   </div>
@@ -2167,7 +2163,7 @@ export default function LandingPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-[#0a0010] font-sans overflow-x-hidden">
+    <div className="min-h-screen bg-[#0c0714] font-sans overflow-x-hidden selection:bg-[#7042DD]/30">
       <Navbar scrolled={scrolled} />
 
       {/* OAuth Error Banner */}
@@ -2184,11 +2180,21 @@ export default function LandingPage() {
 
       {/* ── HERO ─────────────────────────────────────────────────────────── */}
       <section className="relative min-h-screen flex items-center overflow-hidden">
-        {/* Vibrant background */}
-        <div className="absolute inset-0 bg-cover bg-center" style={{ backgroundImage: 'url(/hero-bg.jpg)' }} />
-        {/* Overlay */}
-        <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/75 to-black/60" />
-        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#0c0714] to-transparent" />
+        {/* Top atmospheric ambient lighting & engineering grid (Atomicwork style) */}
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            background: 'radial-gradient(ellipse 90% 60% at 50% -10%, rgba(134, 47, 231, 0.22) 0%, rgba(112, 66, 221, 0.08) 45%, transparent 75%)',
+          }}
+        />
+        <div
+          className="absolute inset-0 opacity-[0.035] pointer-events-none"
+          style={{
+            backgroundImage: 'radial-gradient(circle, rgba(255, 255, 255, 0.9) 1px, transparent 1px)',
+            backgroundSize: '24px 24px',
+          }}
+        />
+        <div className="absolute bottom-0 left-0 right-0 h-40 bg-gradient-to-t from-[#0c0714] to-transparent pointer-events-none" />
 
         {/* Animated memory node graph on the far right */}
         <MemoryNodes />

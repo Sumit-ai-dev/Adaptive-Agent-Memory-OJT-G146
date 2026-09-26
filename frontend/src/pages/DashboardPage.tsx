@@ -31,8 +31,8 @@ export default function DashboardPage() {
   // Show spinner while auth session is being determined
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0010] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen bg-[#0c0714] flex items-center justify-center">
+        <div className="w-8 h-8 border-2 border-[#862FE7] border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
