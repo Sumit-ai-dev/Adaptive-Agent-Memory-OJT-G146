@@ -48,4 +48,16 @@ paper/
 paper.zip
 scripts/generate_paper_plots.py
 scripts/verify_paper_compliance.py
+research_papers/
+chat_transcript*.md
 
+
+# Database & SQLite files
+data/test_*.db
+*.db-journal
+benchmarks/data/hotpotqa/hotpotqa_validation_full.json
+
+# Video generation artifacts
+brag-output/
+*.mp4
+*.webm
