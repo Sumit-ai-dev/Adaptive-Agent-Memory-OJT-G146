@@ -9,6 +9,8 @@ from models.experience import (
     ExperienceStatus,
     TrustHistoryRecord,
 )
+from models.provider import ModelProvider, ProviderConfig
+from models.state import AgentState
 from models.task import (
     ExecutionStatus,
     MemoryMode,
@@ -30,4 +32,7 @@ __all__ = [
     "TrustUpdate",
     "TaskExecuteRequest",
     "TaskExecuteResponse",
+    "ModelProvider",
+    "ProviderConfig",
+    "AgentState",
 ]
