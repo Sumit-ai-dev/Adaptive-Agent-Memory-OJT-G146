@@ -64,7 +64,11 @@ def test_agent_state_typed_dict():
 def test_llm_gateway_deterministic_mock():
     """Verify mock LLM generation produces reproducible answers and counts tokens."""
     async def _run():
-        client = UniversalLLMClient()
+        # S10: no implicit provider -- the mock must be declared explicitly.
+        client = UniversalLLMClient(
+            default_config=ProviderConfig(provider=ModelProvider.MOCK,
+                                          model='mock-deterministic-v1')
+        )
         messages = [
             {"role": "system", "content": "You are a test agent."},
             {"role": "user", "content": "hotpotqa: who was the prime minister?"},
@@ -81,7 +85,11 @@ def test_llm_gateway_deterministic_mock():
 def test_llm_gateway_json_mode():
     """Verify JSON mode returns structured JSON response."""
     async def _run():
-        client = UniversalLLMClient()
+        # S10: no implicit provider -- the mock must be declared explicitly.
+        client = UniversalLLMClient(
+            default_config=ProviderConfig(provider=ModelProvider.MOCK,
+                                          model='mock-deterministic-v1')
+        )
         messages = [
             {"role": "system", "content": "Extract a structured experience tuple"},
             {"role": "user", "content": "Synthesize learning"},
@@ -102,6 +110,7 @@ def test_execute_node_bilateral_constraints():
         initial_state: AgentState = {
             "task_input": "Analyze the revenue metrics for Q3",
             "task_domain": "general",
+            "provider": "mock",   # S10: explicit provider required
             "positive_strategy": "Cross-check audited financial filings.",
             "negative_pitfall": "Do not cite unaudited press releases.",
             "loop_count": 0,
@@ -128,6 +137,7 @@ def test_execute_node_bilateral_constraints():
 def test_sync_execute_node_wrapper():
     """Verify synchronous wrapper works correctly without requiring explicit asyncio loop."""
     initial_state: AgentState = {
+        "provider": "mock",   # S10: explicit provider required
         "task_input": "Summarize policy documents",
         "task_domain": "general",
         "loop_count": 0,

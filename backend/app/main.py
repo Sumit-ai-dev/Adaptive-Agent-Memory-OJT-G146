@@ -31,8 +31,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount API v1 router under /api/v1
+# Mount API v1 router under /api/v1 and /api for frontend compatibility
 app.include_router(api_v1_router, prefix="/api/v1")
+app.include_router(api_v1_router, prefix="/api")
 
 # Convenience root health route
 app.include_router(health_router, prefix="")

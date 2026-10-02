@@ -49,3 +49,32 @@ paper.zip
 scripts/generate_paper_plots.py
 scripts/verify_paper_compliance.py
 
+
+# ──────────────────────────────────────────────────────────────────────────
+# S7: generated runtime artifacts — never source, must not be tracked
+# ──────────────────────────────────────────────────────────────────────────
+# SQLite stores created by the legacy memory store and benchmark runners
+*.db
+*.sqlite
+*.sqlite3
+data/
+!data/.gitkeep
+
+# Experiment run output (manifests, exposure logs, paired results)
+runs/
+manifests/
+*.jsonl
+benchmarks/results/
+
+# Large downloaded benchmark corpora (ALFWorld / HotpotQA / ToolBench, ~2.2 GB)
+benchmarks/data/
+
+# Harvested literature PDFs and derived artifacts
+research_papers/
+brag-output/
+chat_transcript.md
+
+# Kaggle / HF publishing scratch
+kaggle_*/
+hf_space/
+hf_dataset/

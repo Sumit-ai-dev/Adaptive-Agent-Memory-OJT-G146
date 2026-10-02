@@ -11,7 +11,7 @@ import asyncio
 import time
 from typing import Any, Dict, List, Optional
 
-from ai_service.llm_client import llm_gateway
+from ai_service.llm_client import llm_gateway, resolve_provider_config
 from models.provider import ModelProvider, ProviderConfig
 from models.state import AgentState
 
@@ -75,21 +75,15 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
         {"role": "user", "content": task_input_with_context},
     ]
 
-    # Resolve BYOK provider config if provided in state
-    provider_config = None
-    if state.get("provider"):
-        try:
-            prov = ModelProvider(state["provider"])
-            provider_config = ProviderConfig(
-                provider=prov,
-                model=state.get("model") or ProviderConfig.default_for(prov).model,
-                api_key=state.get("api_key"),
-            )
-        except ValueError:
-            pass
+    # S8: single shared resolver, so every call site in the graph dispatches with
+    # the run's declared provider/model/temperature.
+    provider_config, requested_temperature = resolve_provider_config(state)
 
-    # Call Universal LLM Gateway
-    final_answer, tokens = await llm_gateway.generate(messages, config=provider_config)
+    # Call Universal LLM Gateway. Passing `temperature` explicitly overrides the
+    # config default; passing None leaves the config/provider default in force.
+    final_answer, tokens = await llm_gateway.generate(
+        messages, config=provider_config, temperature=requested_temperature,
+    )
     duration_ms = int((time.time() - start_ts) * 1000)
 
     # Build stepper telemetry trace
