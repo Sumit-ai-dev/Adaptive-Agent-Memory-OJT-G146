@@ -26,15 +26,10 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
     setError(null)
     setGoogleLoading(true)
     try {
-      const { error } = await signInWithGoogle()
-      if (error) {
-        // Only show error if Supabase returned one (e.g. not configured, provider disabled)
-        setError(error.message)
-        setGoogleLoading(false)
-      }
-      // If no error: signInWithOAuth has already triggered browser navigation to Google.
-      // Keep the loading state — the page will navigate away momentarily.
-      // Session is restored via onAuthStateChange when the user returns from Google.
+      await signInWithGoogle()
+      setGoogleLoading(false)
+      onClose()
+      onSuccess?.()
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Google authentication failed')
       setGoogleLoading(false)
@@ -48,37 +43,22 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
 
     try {
       if (isSignUp) {
-        const { error } = await signUp(email, password, name)
-        if (error) {
-          setError(error.message)
-        } else {
-          // Sign up succeeded — Supabase sends a confirmation email.
-          // Do NOT redirect: the user must confirm their email before signing in.
-          setSuccessMsg(
-            `We've sent a confirmation link to ${email}. Please check your inbox and click the link, then sign in below.`
-          )
-          // Switch to sign-in mode and keep the email pre-filled so they can sign in after confirming
-          setIsSignUp(false)
-          // Clear the success banner after 5s so the sign-in form is the focus
-          setTimeout(() => setSuccessMsg(''), 5000)
-        }
+        await signUp(email, password, name)
+        setSuccessMsg('Signed in successfully!')
+        setTimeout(() => {
+          onClose()
+          onSuccess?.()
+        }, 400)
       } else {
         const { error } = await signIn(email, password)
         if (error) {
-          // Intercept the raw Supabase "Email not confirmed" error with a helpful message
-          if (error.message.toLowerCase().includes('email not confirmed')) {
-            setError(
-              'Your email address is not yet confirmed. Please check your inbox for a confirmation email from MemoryAgent and click the link before signing in.'
-            )
-          } else {
-            setError(error.message)
-          }
+          setError(error.message)
         } else {
           setSuccessMsg('Signed in successfully!')
           setTimeout(() => {
             onClose()
             onSuccess?.()
-          }, 600)
+          }, 400)
         }
       }
     } catch (err: unknown) {
