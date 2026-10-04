@@ -1,0 +1,826 @@
+"""
+Phase 8 Large-Scale Harmful-Memory Validation Runner.
+
+Executes the frozen Phase 8 benchmark protocol:
+- 24 Primary Harmful Cases across 8 operational categories
+- 6 Positive Control Cases across 6 operational categories
+- Conditions:
+  * E0: Stateless Baseline (1 trial/case, memory disabled)
+  * M0: Static Harmful Memory (4 sequential trials/harmful case, unmanaged)
+  * A0: Adaptive Harmful Memory (4 sequential trials/harmful case, A-EMA policy)
+  * P0: Adaptive Beneficial Memory (4 sequential trials/positive case, A-EMA policy)
+- Seeds:
+  * 42: Primary empirical seed
+  * 43, 44: Deterministic reproducibility audits
+- Model: Ollama qwen2.5:1.5b, temperature=0.0
+- Evaluator: StrictKeyAnswerEvaluator v1.0-strict (hash: 686bd43c10db85409f1b8f4137c979405162abaacd98827b4d67cec5acf1b114)
+- Manifest: benchmarks/manifests/phase8_case_manifest.json
+  (SHA-256: d4fdc269be7c40a2bfcf1e91f3f2c5ac56c73d8aefa882b1c556d37970d01da4)
+
+Total target inferences:
+- Per seed: 30 E0 + 96 M0 + 96 A0 + 24 P0 = 246 inferences
+- Across 3 seeds: 246 * 3 = 738 inferences
+"""
+
+import argparse
+import asyncio
+from datetime import datetime, timezone
+import hashlib
+import json
+import logging
+import math
+from pathlib import Path
+import sys
+import time
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from ai_service.config import settings
+from ai_service.experiment.memory_bank import MemoryBank, MemoryRecord
+from ai_service.experiment.run_context import RunContext
+from ai_service.graph import execute_task
+from ai_service.nodes.trust_node import (
+    ALPHA_SUCCESS,
+    BETA_FAILURE,
+    GAMMA_NEUTRAL,
+    QUARANTINE_THRESHOLD,
+)
+from ai_service.tools.evaluator import StrictKeyAnswerEvaluator
+from ai_service.trust.aema import AEMAPolicy, StaticTrustPolicy
+from models.domain import MemoryMode, TaskDomain
+from models.provider import ModelProvider
+from models.task import EvaluatorName, TaskExecuteRequest
+
+logger = logging.getLogger("phase8_runner")
+
+RESULTS_DIR = REPO_ROOT / "benchmarks" / "results" / "phase8_large_scale"
+MANIFEST_FILE = REPO_ROOT / "benchmarks" / "manifests" / "phase8_case_manifest.json"
+EXPECTED_MANIFEST_SHA256 = "d4fdc269be7c40a2bfcf1e91f3f2c5ac56c73d8aefa882b1c556d37970d01da4"
+RAW_JSONL_FILE = RESULTS_DIR / "raw_inferences.jsonl"
+STRUCTURED_JSON_FILE = RESULTS_DIR / "phase8_results.json"
+
+SEEDS = [42, 43, 44]
+PRIMARY_SEED = 42
+REPRODUCIBILITY_SEEDS = [43, 44]
+
+
+def verify_manifest_integrity() -> Dict[str, Any]:
+    """Verifies that the frozen manifest exists and exactly matches the approved SHA-256 hash."""
+    if not MANIFEST_FILE.exists():
+        raise FileNotFoundError(f"Manifest file not found: {MANIFEST_FILE}")
+    with open(MANIFEST_FILE, "rb") as f:
+        computed_hash = hashlib.sha256(f.read()).hexdigest()
+    if computed_hash != EXPECTED_MANIFEST_SHA256:
+        raise ValueError(
+            f"MANIFEST HASH MISMATCH! Expected: {EXPECTED_MANIFEST_SHA256}, Found: {computed_hash}"
+        )
+    with open(MANIFEST_FILE, "r", encoding="utf-8") as f:
+        manifest = json.load(f)
+    print(f"Verified manifest hash (SHA-256): {computed_hash} [MATCH]")
+    return manifest
+
+
+def build_request(
+    task_input: str,
+    memory_enabled: bool,
+    ground_truth: str,
+    distractor: Optional[str],
+    seed: int,
+) -> TaskExecuteRequest:
+    evaluator_cfg = {"ground_truth": ground_truth}
+    if distractor:
+        evaluator_cfg["distractor"] = distractor
+    return TaskExecuteRequest(
+        task_input=task_input,
+        task_domain=TaskDomain.GENERAL,
+        memory_enabled=memory_enabled,
+        memory_mode=MemoryMode.ADAPTIVE if memory_enabled else MemoryMode.OFF,
+        provider=ModelProvider.OLLAMA,
+        model="qwen2.5:1.5b",
+        temperature=0.0,
+        seed=seed,
+        evaluator=EvaluatorName.STRICT_KEY_ANSWER,
+        evaluator_config=evaluator_cfg,
+    )
+
+
+def wilson_score_interval(successes: int, total: int, z: float = 1.96) -> Tuple[float, float]:
+    """Calculates Wilson score 95% confidence interval for a binomial proportion."""
+    if total <= 0:
+        return (0.0, 0.0)
+    p = successes / total
+    denom = 1.0 + (z**2) / total
+    centre = (p + (z**2) / (2.0 * total)) / denom
+    spread = (z * math.sqrt((p * (1.0 - p) / total) + ((z**2) / (4.0 * (total**2))))) / denom
+    lower = max(0.0, round(centre - spread, 4))
+    upper = min(1.0, round(centre + spread, 4))
+    return (lower, upper)
+
+
+def mcnemar_exact_test(b: int, c: int) -> float:
+    """
+    Computes two-tailed exact p-value for McNemar test using binomial distribution.
+    b: discordant pairs where condition 1 succeeds and condition 2 fails.
+    c: discordant pairs where condition 1 fails and condition 2 succeeds.
+    """
+    n = b + c
+    if n == 0:
+        return 1.0
+    k = min(b, c)
+    # Cumulative probability sum for two-tailed test
+    p_cum = sum(math.comb(n, i) * (0.5**n) for i in range(k + 1))
+    return min(1.0, 2.0 * p_cum)
+
+
+async def run_phase8(target_seed: Optional[int] = None, rerun_all: bool = False):
+    settings.MAX_CYCLICAL_LOOPS = 1
+    total_start = time.time()
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    print("==================================================================")
+    print("PHASE 8: LARGE-SCALE HARMFUL-MEMORY VALIDATION")
+    print("==================================================================")
+
+    manifest = verify_manifest_integrity()
+    harmful_cases = manifest["primary_harmful_cases"]
+    pos_cases = manifest["positive_control_cases"]
+
+    print(f"Primary Harmful Cases: {len(harmful_cases)}")
+    print(f"Positive Control Cases: {len(pos_cases)}")
+
+    seeds_to_run = [target_seed] if target_seed is not None else SEEDS
+    print(f"Seeds to execute: {seeds_to_run}")
+
+    # Load existing inferences if resuming
+    existing_inferences: Dict[str, Dict[str, Any]] = {}
+    completed_sequences: Set[Tuple[str, str, int]] = set()  # (case_id, condition, seed)
+
+    if RAW_JSONL_FILE.exists() and not rerun_all:
+        try:
+            with open(RAW_JSONL_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    if line.strip():
+                        inf = json.loads(line)
+                        k = f"{inf['case_id']}::{inf['condition']}::{inf['seed']}::{inf['trial']}"
+                        existing_inferences[k] = inf
+
+            # Verify complete sequences (E0 has 1 trial, M0/A0/P0 have 4 trials)
+            counts: Dict[Tuple[str, str, int], int] = {}
+            for inf in existing_inferences.values():
+                seq_key = (inf["case_id"], inf["condition"], inf["seed"])
+                counts[seq_key] = counts.get(seq_key, 0) + 1
+
+            for seq_key, count in counts.items():
+                cond = seq_key[1]
+                expected = 1 if cond == "E0" else 4
+                if count == expected:
+                    completed_sequences.add(seq_key)
+                else:
+                    # Incomplete sequence detected: requirement 9 forbids partial trust resumption.
+                    print(
+                        f"Warning: Incomplete sequence detected for {seq_key} ({count}/{expected} trials). "
+                        "Purging incomplete records to rerun sequence cleanly."
+                    )
+                    # Remove incomplete records from memory so they are rerun cleanly
+                    keys_to_remove = [
+                        k for k, inf in existing_inferences.items()
+                        if (inf["case_id"], inf["condition"], inf["seed"]) == seq_key
+                    ]
+                    for k in keys_to_remove:
+                        del existing_inferences[k]
+
+            print(
+                f"Resuming from existing JSONL: {len(existing_inferences)} verified inferences, "
+                f"{len(completed_sequences)} complete sequences."
+            )
+        except Exception as e:
+            print(f"Warning: error loading existing JSONL ({e})")
+
+    # If some records were purged or file needs rewriting, rewrite raw_jsonl
+    if not rerun_all and RAW_JSONL_FILE.exists() and len(existing_inferences) > 0:
+        with open(RAW_JSONL_FILE, "w", encoding="utf-8") as f:
+            for inf in existing_inferences.values():
+                f.write(json.dumps(inf) + "\n")
+
+    jsonl_fh = open(RAW_JSONL_FILE, "a", encoding="utf-8")
+    all_inferences: List[Dict[str, Any]] = list(existing_inferences.values())
+    inference_counter = len(all_inferences)
+
+    def save_checkpoint():
+        """Computes summary metrics and updates phase8_results.json."""
+        # 1. Summary by condition & seed
+        condition_stats: Dict[str, Dict[str, Any]] = {
+            c: {"successes": 0, "total": 0, "rewards": []} for c in ["E0", "M0", "A0", "P0"]
+        }
+        per_seed_stats: Dict[int, Dict[str, Any]] = {
+            s: {c: {"successes": 0, "total": 0, "rewards": []} for c in ["E0", "M0", "A0", "P0"]}
+            for s in SEEDS
+        }
+
+        # 2. Case-level results for harmful cases (Trial 4 outcomes, quarantine, etc.)
+        harmful_case_ids = {c["case_id"] for c in harmful_cases}
+        pos_case_ids = {c["case_id"] for c in pos_cases}
+
+        case_level_data: Dict[str, Dict[str, Any]] = {}
+
+        for inf in all_inferences:
+            c = inf["condition"]
+            s = inf["seed"]
+            cid = inf["case_id"]
+            bin_res = inf["binary_result"]
+            r = inf["reward"]
+
+            if c in condition_stats:
+                condition_stats[c]["successes"] += bin_res
+                condition_stats[c]["total"] += 1
+                condition_stats[c]["rewards"].append(r)
+
+            if s in per_seed_stats and c in per_seed_stats[s]:
+                per_seed_stats[s][c]["successes"] += bin_res
+                per_seed_stats[s][c]["total"] += 1
+                per_seed_stats[s][c]["rewards"].append(r)
+
+            if cid not in case_level_data:
+                case_level_data[cid] = {
+                    "case_id": cid,
+                    "category": inf["category"],
+                    "case_type": inf["case_type"],
+                    "trials": {},
+                }
+            case_level_data[cid]["trials"][f"{c}::{s}::{inf['trial']}"] = inf
+
+        # Calculate Seed 42 primary metrics
+        s42_inf = [inf for inf in all_inferences if inf["seed"] == PRIMARY_SEED]
+
+        # Harmful Influence Rate (HIR): proportion of harmful cases where M0 Trial 1 selected distractor
+        m0_t1_harmful = [
+            inf for inf in s42_inf
+            if inf["condition"] == "M0" and inf["trial"] == 1 and inf["case_id"] in harmful_case_ids
+        ]
+        distractor_hits_t1 = sum(1 for inf in m0_t1_harmful if inf.get("distractor_selected", False))
+        hir = distractor_hits_t1 / len(m0_t1_harmful) if m0_t1_harmful else 0.0
+
+        # Trial-4 recovery rate for A0 on harmful cases
+        a0_t4_harmful = [
+            inf for inf in s42_inf
+            if inf["condition"] == "A0" and inf["trial"] == 4 and inf["case_id"] in harmful_case_ids
+        ]
+        a0_t4_recoveries = sum(inf["binary_result"] for inf in a0_t4_harmful)
+        t4_recovery_rate = a0_t4_recoveries / len(a0_t4_harmful) if a0_t4_harmful else 0.0
+
+        # Quarantine rate for A0 on harmful cases
+        a0_harmful_all = [
+            inf for inf in s42_inf
+            if inf["condition"] == "A0" and inf["case_id"] in harmful_case_ids
+        ]
+        quarantined_cases_set = {
+            inf["case_id"] for inf in a0_harmful_all if inf.get("quarantine_status", False)
+        }
+        quarantine_rate = len(quarantined_cases_set) / len(harmful_cases) if harmful_cases else 0.0
+
+        # False quarantine on positive controls
+        p0_all = [
+            inf for inf in s42_inf
+            if inf["condition"] == "P0" and inf["case_id"] in pos_case_ids
+        ]
+        false_quarantined_cases = {
+            inf["case_id"] for inf in p0_all if inf.get("quarantine_status", False)
+        }
+        false_quarantine_rate = len(false_quarantined_cases) / len(pos_cases) if pos_cases else 0.0
+
+        # Positive control final trust scores
+        p0_t4 = [
+            inf for inf in s42_inf
+            if inf["condition"] == "P0" and inf["trial"] == 4 and inf["case_id"] in pos_case_ids
+        ]
+        p0_final_trust_scores = [inf.get("trust_after", 0.0) for inf in p0_t4]
+
+        # Wilson Confidence Intervals
+        hir_ci = wilson_score_interval(distractor_hits_t1, len(m0_t1_harmful))
+        recovery_ci = wilson_score_interval(a0_t4_recoveries, len(a0_t4_harmful))
+        quarantine_ci = wilson_score_interval(len(quarantined_cases_set), len(harmful_cases))
+
+        # McNemar Test: M0 Trial 4 vs A0 Trial 4 (Seed 42)
+        # Discordant pairs: b = M0 succeeds & A0 fails; c = M0 fails & A0 succeeds
+        m0_t4_dict = {
+            inf["case_id"]: inf["binary_result"]
+            for inf in s42_inf if inf["condition"] == "M0" and inf["trial"] == 4
+        }
+        a0_t4_dict = {
+            inf["case_id"]: inf["binary_result"]
+            for inf in s42_inf if inf["condition"] == "A0" and inf["trial"] == 4
+        }
+        mcnemar_b = sum(
+            1 for cid in harmful_case_ids
+            if m0_t4_dict.get(cid, 0) == 1 and a0_t4_dict.get(cid, 0) == 0
+        )
+        mcnemar_c = sum(
+            1 for cid in harmful_case_ids
+            if m0_t4_dict.get(cid, 0) == 0 and a0_t4_dict.get(cid, 0) == 1
+        )
+        mcnemar_p = mcnemar_exact_test(mcnemar_b, mcnemar_c)
+
+        summary: Dict[str, Any] = {
+            "metadata": {
+                "manifest_file": str(MANIFEST_FILE),
+                "manifest_hash": EXPECTED_MANIFEST_SHA256,
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "n_inferences": len(all_inferences),
+                "total_target_inferences": len(SEEDS) * (len(harmful_cases) * 9 + len(pos_cases) * 5),
+                "wall_clock_seconds": round(time.time() - total_start, 2),
+                "model": "qwen2.5:1.5b",
+                "provider": "ollama",
+                "temperature": 0.0,
+                "seeds": SEEDS,
+                "primary_seed": PRIMARY_SEED,
+                "reproducibility_seeds": REPRODUCIBILITY_SEEDS,
+                "evaluator_name": EvaluatorName.STRICT_KEY_ANSWER.value,
+                "evaluator_version": "1.0-strict",
+                "evaluator_hash": "686bd43c10db85409f1b8f4137c979405162abaacd98827b4d67cec5acf1b114",
+                "aema_params": {
+                    "S0": 0.75,
+                    "alpha_success": ALPHA_SUCCESS,
+                    "beta_failure": BETA_FAILURE,
+                    "gamma_neutral": GAMMA_NEUTRAL,
+                    "quarantine_threshold": QUARANTINE_THRESHOLD,
+                },
+            },
+            "primary_results_seed_42": {
+                "harmful_cases_count": len(harmful_cases),
+                "positive_control_cases_count": len(pos_cases),
+                "harmful_influence_rate_hir": {
+                    "rate": round(hir, 4),
+                    "distractor_hits": distractor_hits_t1,
+                    "total_eligible_cases": len(m0_t1_harmful),
+                    "wilson_95_ci": hir_ci,
+                },
+                "a0_trial4_recovery_rate": {
+                    "rate": round(t4_recovery_rate, 4),
+                    "recovered_cases": a0_t4_recoveries,
+                    "total_cases": len(a0_t4_harmful),
+                    "wilson_95_ci": recovery_ci,
+                },
+                "a0_quarantine_rate": {
+                    "rate": round(quarantine_rate, 4),
+                    "quarantined_cases": len(quarantined_cases_set),
+                    "total_cases": len(harmful_cases),
+                    "wilson_95_ci": quarantine_ci,
+                },
+                "positive_control_retention": {
+                    "false_quarantine_rate": round(false_quarantine_rate, 4),
+                    "false_quarantined_cases": len(false_quarantined_cases),
+                    "total_positive_cases": len(pos_cases),
+                    "final_trust_s4_observed": [round(s, 4) for s in p0_final_trust_scores],
+                    "mean_final_trust_s4": round(sum(p0_final_trust_scores) / len(p0_final_trust_scores), 4) if p0_final_trust_scores else 0.0,
+                },
+                "mcnemar_test_m0_vs_a0_t4": {
+                    "discordant_m0_wins_b": mcnemar_b,
+                    "discordant_a0_wins_c": mcnemar_c,
+                    "exact_two_tailed_p_value": mcnemar_p,
+                },
+            },
+            "condition_summary": {
+                c: {
+                    "success_rate": round(stats["successes"] / stats["total"], 4) if stats["total"] > 0 else 0.0,
+                    "successes": stats["successes"],
+                    "total": stats["total"],
+                    "mean_reward": round(sum(stats["rewards"]) / len(stats["rewards"]), 4) if stats["rewards"] else 0.0,
+                }
+                for c, stats in condition_stats.items()
+            },
+            "per_seed_summary": {
+                s: {
+                    c: {
+                        "success_rate": round(stats["successes"] / stats["total"], 4) if stats["total"] > 0 else 0.0,
+                        "successes": stats["successes"],
+                        "total": stats["total"],
+                        "mean_reward": round(sum(stats["rewards"]) / len(stats["rewards"]), 4) if stats["rewards"] else 0.0,
+                    }
+                    for c, stats in s_data.items()
+                }
+                for s, s_data in per_seed_stats.items()
+            },
+            "case_level_data": case_level_data,
+        }
+
+        with open(STRUCTURED_JSON_FILE, "w", encoding="utf-8") as fh:
+            json.dump(summary, fh, indent=2)
+
+    evaluator = StrictKeyAnswerEvaluator()
+
+    # =====================================================================
+    # Main Execution Loop: Seeds -> Cases -> Conditions -> Trials
+    # =====================================================================
+    for seed in seeds_to_run:
+        print(f"\n==================================================================")
+        print(f"EXECUTING SEED {seed} / {seeds_to_run}")
+        print(f"==================================================================")
+
+        # -----------------------------------------------------------------
+        # STEP 1: Primary Harmful Cases (24 cases)
+        # -----------------------------------------------------------------
+        for case in harmful_cases:
+            cid = case["case_id"]
+            cat = case["category"]
+            prompt = case["prompt"]
+            gt = case["ground_truth"]
+            dist = case["distractor"]
+            bad_mem_id = f"mem_{cid}"
+
+            print(f"\n--- Primary Harmful Case: {cid} [{cat}] (Seed {seed}) ---")
+
+            rec_bad = MemoryRecord(
+                memory_id=bad_mem_id,
+                domain=TaskDomain.GENERAL,
+                trigger=case["bad_memory_trigger"],
+                strategy=case["bad_memory_strategy"],
+                pitfall=case["bad_memory_pitfall"],
+                initial_trust=0.75,
+            )
+            bank_bad = MemoryBank([rec_bad], bank_id=f"p8_bank_{cid}_{seed}").ensure_embeddings()
+            bank_empty = MemoryBank([], bank_id=f"p8_empty_{cid}_{seed}").ensure_embeddings()
+
+            # Condition 1: E0 (1 baseline trial)
+            seq_key_e0 = (cid, "E0", seed)
+            if seq_key_e0 in completed_sequences:
+                rec = existing_inferences[f"{cid}::E0::{seed}::1"]
+                print(f"  E0 T1 [CACHED]: Out={repr(rec['model_output'][:30])} R={rec['reward']:.2f} B={rec['binary_result']}")
+            else:
+                inference_counter += 1
+                t_start = time.time()
+                run_e0 = RunContext(
+                    bank=bank_empty,
+                    policy=StaticTrustPolicy(initial_trust=0.75),
+                    top_k=1,
+                    evaluator_name=EvaluatorName.STRICT_KEY_ANSWER.value,
+                    provider="ollama",
+                    temperature=0.0,
+                    seed=seed,
+                )
+                req = build_request(prompt, memory_enabled=False, ground_truth=gt, distractor=dist, seed=seed)
+                res = await execute_task(req, run_context=run_e0)
+                latency_ms = int((time.time() - t_start) * 1000)
+
+                reward = float(res.outcome_score if res.outcome_score is not None else 0.0)
+                binary = int(res.binary_outcome if res.binary_outcome is not None else 0)
+                model_out = res.final_output.strip() if res.final_output else ""
+                
+                # Check distractor and ground truth selection explicitly
+                r_eval, reason_eval = evaluator.evaluate(model_out, ground_truth=gt, distractor=dist)
+                dist_selected = (evaluator.normalize_text(dist) in evaluator.normalize_text(model_out)) if dist else False
+                gt_selected = (evaluator.normalize_text(gt) in evaluator.normalize_text(model_out))
+
+                rec = {
+                    "inference_id": inference_counter,
+                    "case_id": cid,
+                    "category": cat,
+                    "case_type": "primary_harmful",
+                    "condition": "E0",
+                    "seed": seed,
+                    "trial": 1,
+                    "model_output": model_out,
+                    "reward": reward,
+                    "binary_result": binary,
+                    "distractor_selected": dist_selected,
+                    "ground_truth_selected": gt_selected,
+                    "retrieved_memory_ids": [],
+                    "memory_exposed": False,
+                    "retrieval_count": 0,
+                    "trust_before": None,
+                    "trust_after": None,
+                    "quarantine_status": False,
+                    "latency_ms": latency_ms,
+                    "tokens_used": res.tokens_used or 0,
+                    "evaluator_name": str(res.evaluator_name),
+                    "evaluator_version": res.evaluator_version or "1.0-strict",
+                    "reason": res.attempts[-1].reason if res.attempts else "",
+                    "error": None,
+                }
+                all_inferences.append(rec)
+                existing_inferences[f"{cid}::E0::{seed}::1"] = rec
+                jsonl_fh.write(json.dumps(rec) + "\n")
+                jsonl_fh.flush()
+                completed_sequences.add(seq_key_e0)
+                save_checkpoint()
+                print(f"  E0 T1: Out={repr(model_out[:30])} R={reward:.2f} B={binary} ({latency_ms}ms)")
+
+            # Condition 2: M0 (4 sequential trials, unbroken)
+            seq_key_m0 = (cid, "M0", seed)
+            if seq_key_m0 in completed_sequences:
+                for t in range(1, 5):
+                    rec = existing_inferences[f"{cid}::M0::{seed}::{t}"]
+                    print(f"  M0 T{t} [CACHED]: Out={repr(rec['model_output'][:30])} R={rec['reward']:.2f} B={rec['binary_result']}")
+            else:
+                run_m0 = RunContext(
+                    bank=bank_bad,
+                    policy=StaticTrustPolicy(initial_trust=0.75),
+                    top_k=1,
+                    evaluator_name=EvaluatorName.STRICT_KEY_ANSWER.value,
+                    provider="ollama",
+                    temperature=0.0,
+                    seed=seed,
+                )
+                for t in range(1, 5):
+                    inference_counter += 1
+                    t_start = time.time()
+                    trust_before = run_m0.trust_state.get(bad_mem_id).extra["trust_score"]
+                    req = build_request(prompt, memory_enabled=True, ground_truth=gt, distractor=dist, seed=seed)
+                    res = await execute_task(req, run_context=run_m0)
+                    latency_ms = int((time.time() - t_start) * 1000)
+
+                    trust_after = run_m0.trust_state.get(bad_mem_id).extra["trust_score"]
+                    retrieved_ids = [m["experience"]["id"] for m in (res.retrieved_memories or [])]
+                    reward = float(res.outcome_score if res.outcome_score is not None else 0.0)
+                    binary = int(res.binary_outcome if res.binary_outcome is not None else 0)
+                    model_out = res.final_output.strip() if res.final_output else ""
+
+                    dist_selected = (evaluator.normalize_text(dist) in evaluator.normalize_text(model_out)) if dist else False
+                    gt_selected = (evaluator.normalize_text(gt) in evaluator.normalize_text(model_out))
+
+                    rec = {
+                        "inference_id": inference_counter,
+                        "case_id": cid,
+                        "category": cat,
+                        "case_type": "primary_harmful",
+                        "condition": "M0",
+                        "seed": seed,
+                        "trial": t,
+                        "model_output": model_out,
+                        "reward": reward,
+                        "binary_result": binary,
+                        "distractor_selected": dist_selected,
+                        "ground_truth_selected": gt_selected,
+                        "retrieved_memory_ids": retrieved_ids,
+                        "memory_exposed": len(retrieved_ids) > 0,
+                        "retrieval_count": len(retrieved_ids),
+                        "trust_before": trust_before,
+                        "trust_after": trust_after,
+                        "quarantine_status": False,
+                        "latency_ms": latency_ms,
+                        "tokens_used": res.tokens_used or 0,
+                        "evaluator_name": str(res.evaluator_name),
+                        "evaluator_version": res.evaluator_version or "1.0-strict",
+                        "reason": res.attempts[-1].reason if res.attempts else "",
+                        "error": None,
+                    }
+                    all_inferences.append(rec)
+                    existing_inferences[f"{cid}::M0::{seed}::{t}"] = rec
+                    jsonl_fh.write(json.dumps(rec) + "\n")
+                    jsonl_fh.flush()
+                    print(f"  M0 T{t}: Out={repr(model_out[:30])} R={reward:.2f} B={binary} Exp={rec['memory_exposed']} ({latency_ms}ms)")
+                completed_sequences.add(seq_key_m0)
+                save_checkpoint()
+
+            # Condition 3: A0 (4 sequential trials, unbroken A-EMA)
+            seq_key_a0 = (cid, "A0", seed)
+            if seq_key_a0 in completed_sequences:
+                for t in range(1, 5):
+                    rec = existing_inferences[f"{cid}::A0::{seed}::{t}"]
+                    print(f"  A0 T{t} [CACHED]: S={rec['trust_before']}->{rec['trust_after']} R={rec['reward']:.2f} B={rec['binary_result']}")
+            else:
+                policy_aema = AEMAPolicy(
+                    initial_trust=0.75,
+                    quarantine_threshold=QUARANTINE_THRESHOLD,
+                )
+                run_aema = RunContext(
+                    bank=bank_bad,
+                    policy=policy_aema,
+                    top_k=1,
+                    evaluator_name=EvaluatorName.STRICT_KEY_ANSWER.value,
+                    provider="ollama",
+                    temperature=0.0,
+                    seed=seed,
+                )
+                for t in range(1, 5):
+                    inference_counter += 1
+                    t_start = time.time()
+                    trust_before = run_aema.trust_state.get(bad_mem_id).extra["trust_score"]
+                    req = build_request(prompt, memory_enabled=True, ground_truth=gt, distractor=dist, seed=seed)
+                    res = await execute_task(req, run_context=run_aema)
+                    latency_ms = int((time.time() - t_start) * 1000)
+
+                    trust_after = run_aema.trust_state.get(bad_mem_id).extra["trust_score"]
+                    retrieved_ids = [m["experience"]["id"] for m in (res.retrieved_memories or [])]
+                    reward = float(res.outcome_score if res.outcome_score is not None else 0.0)
+                    binary = int(res.binary_outcome if res.binary_outcome is not None else 0)
+                    model_out = res.final_output.strip() if res.final_output else ""
+
+                    dist_selected = (evaluator.normalize_text(dist) in evaluator.normalize_text(model_out)) if dist else False
+                    gt_selected = (evaluator.normalize_text(gt) in evaluator.normalize_text(model_out))
+                    is_quarantined = (trust_after < QUARANTINE_THRESHOLD)
+
+                    rec = {
+                        "inference_id": inference_counter,
+                        "case_id": cid,
+                        "category": cat,
+                        "case_type": "primary_harmful",
+                        "condition": "A0",
+                        "seed": seed,
+                        "trial": t,
+                        "model_output": model_out,
+                        "reward": reward,
+                        "binary_result": binary,
+                        "distractor_selected": dist_selected,
+                        "ground_truth_selected": gt_selected,
+                        "retrieved_memory_ids": retrieved_ids,
+                        "memory_exposed": len(retrieved_ids) > 0,
+                        "retrieval_count": len(retrieved_ids),
+                        "trust_before": trust_before,
+                        "trust_after": trust_after,
+                        "quarantine_status": is_quarantined,
+                        "latency_ms": latency_ms,
+                        "tokens_used": res.tokens_used or 0,
+                        "evaluator_name": str(res.evaluator_name),
+                        "evaluator_version": res.evaluator_version or "1.0-strict",
+                        "reason": res.attempts[-1].reason if res.attempts else "",
+                        "error": None,
+                    }
+                    all_inferences.append(rec)
+                    existing_inferences[f"{cid}::A0::{seed}::{t}"] = rec
+                    jsonl_fh.write(json.dumps(rec) + "\n")
+                    jsonl_fh.flush()
+                    print(
+                        f"  A0 T{t}: S={trust_before:.4f}->{trust_after:.4f} (Q={is_quarantined}) "
+                        f"R={reward:.2f} B={binary} Exp={rec['memory_exposed']} ({latency_ms}ms)"
+                    )
+                completed_sequences.add(seq_key_a0)
+                save_checkpoint()
+
+        # -----------------------------------------------------------------
+        # STEP 2: Positive Control Cases (6 cases)
+        # -----------------------------------------------------------------
+        for case in pos_cases:
+            cid = case["case_id"]
+            cat = case["category"]
+            prompt = case["prompt"]
+            gt = case["ground_truth"]
+            pos_mem_id = f"mem_{cid}"
+
+            print(f"\n--- Positive Control Case: {cid} [{cat}] (Seed {seed}) ---")
+
+            rec_pos = MemoryRecord(
+                memory_id=pos_mem_id,
+                domain=TaskDomain.GENERAL,
+                trigger=case["prompt"],
+                strategy=case["memory_strategy"],
+                pitfall=case["memory_pitfall"],
+                initial_trust=0.75,
+            )
+            bank_pos = MemoryBank([rec_pos], bank_id=f"p8_posbank_{cid}_{seed}").ensure_embeddings()
+            bank_empty = MemoryBank([], bank_id=f"p8_emptypos_{cid}_{seed}").ensure_embeddings()
+
+            # Condition 1: E0 (1 baseline trial)
+            seq_key_e0_pos = (cid, "E0", seed)
+            if seq_key_e0_pos in completed_sequences:
+                rec = existing_inferences[f"{cid}::E0::{seed}::1"]
+                print(f"  E0 T1 [CACHED]: Out={repr(rec['model_output'][:30])} R={rec['reward']:.2f} B={rec['binary_result']}")
+            else:
+                inference_counter += 1
+                t_start = time.time()
+                run_e0 = RunContext(
+                    bank=bank_empty,
+                    policy=StaticTrustPolicy(initial_trust=0.75),
+                    top_k=1,
+                    evaluator_name=EvaluatorName.STRICT_KEY_ANSWER.value,
+                    provider="ollama",
+                    temperature=0.0,
+                    seed=seed,
+                )
+                req = build_request(prompt, memory_enabled=False, ground_truth=gt, distractor=None, seed=seed)
+                res = await execute_task(req, run_context=run_e0)
+                latency_ms = int((time.time() - t_start) * 1000)
+
+                reward = float(res.outcome_score if res.outcome_score is not None else 0.0)
+                binary = int(res.binary_outcome if res.binary_outcome is not None else 0)
+                model_out = res.final_output.strip() if res.final_output else ""
+                gt_selected = (evaluator.normalize_text(gt) in evaluator.normalize_text(model_out))
+
+                rec = {
+                    "inference_id": inference_counter,
+                    "case_id": cid,
+                    "category": cat,
+                    "case_type": "positive_control",
+                    "condition": "E0",
+                    "seed": seed,
+                    "trial": 1,
+                    "model_output": model_out,
+                    "reward": reward,
+                    "binary_result": binary,
+                    "distractor_selected": False,
+                    "ground_truth_selected": gt_selected,
+                    "retrieved_memory_ids": [],
+                    "memory_exposed": False,
+                    "retrieval_count": 0,
+                    "trust_before": None,
+                    "trust_after": None,
+                    "quarantine_status": False,
+                    "latency_ms": latency_ms,
+                    "tokens_used": res.tokens_used or 0,
+                    "evaluator_name": str(res.evaluator_name),
+                    "evaluator_version": res.evaluator_version or "1.0-strict",
+                    "reason": res.attempts[-1].reason if res.attempts else "",
+                    "error": None,
+                }
+                all_inferences.append(rec)
+                existing_inferences[f"{cid}::E0::{seed}::1"] = rec
+                jsonl_fh.write(json.dumps(rec) + "\n")
+                jsonl_fh.flush()
+                completed_sequences.add(seq_key_e0_pos)
+                save_checkpoint()
+                print(f"  E0 T1: Out={repr(model_out[:30])} R={reward:.2f} B={binary} ({latency_ms}ms)")
+
+            # Condition 4: P0 (4 sequential trials, unbroken A-EMA)
+            seq_key_p0 = (cid, "P0", seed)
+            if seq_key_p0 in completed_sequences:
+                for t in range(1, 5):
+                    rec = existing_inferences[f"{cid}::P0::{seed}::{t}"]
+                    print(f"  P0 T{t} [CACHED]: S={rec['trust_before']}->{rec['trust_after']} R={rec['reward']:.2f} B={rec['binary_result']}")
+            else:
+                policy_pos = AEMAPolicy(
+                    initial_trust=0.75,
+                    quarantine_threshold=QUARANTINE_THRESHOLD,
+                )
+                run_pos = RunContext(
+                    bank=bank_pos,
+                    policy=policy_pos,
+                    top_k=1,
+                    evaluator_name=EvaluatorName.STRICT_KEY_ANSWER.value,
+                    provider="ollama",
+                    temperature=0.0,
+                    seed=seed,
+                )
+                for t in range(1, 5):
+                    inference_counter += 1
+                    t_start = time.time()
+                    trust_before = run_pos.trust_state.get(pos_mem_id).extra["trust_score"]
+                    req = build_request(prompt, memory_enabled=True, ground_truth=gt, distractor=None, seed=seed)
+                    res = await execute_task(req, run_context=run_pos)
+                    latency_ms = int((time.time() - t_start) * 1000)
+
+                    trust_after = run_pos.trust_state.get(pos_mem_id).extra["trust_score"]
+                    retrieved_ids = [m["experience"]["id"] for m in (res.retrieved_memories or [])]
+                    reward = float(res.outcome_score if res.outcome_score is not None else 0.0)
+                    binary = int(res.binary_outcome if res.binary_outcome is not None else 0)
+                    model_out = res.final_output.strip() if res.final_output else ""
+
+                    gt_selected = (evaluator.normalize_text(gt) in evaluator.normalize_text(model_out))
+                    is_quarantined = (trust_after < QUARANTINE_THRESHOLD)
+
+                    rec = {
+                        "inference_id": inference_counter,
+                        "case_id": cid,
+                        "category": cat,
+                        "case_type": "positive_control",
+                        "condition": "P0",
+                        "seed": seed,
+                        "trial": t,
+                        "model_output": model_out,
+                        "reward": reward,
+                        "binary_result": binary,
+                        "distractor_selected": False,
+                        "ground_truth_selected": gt_selected,
+                        "retrieved_memory_ids": retrieved_ids,
+                        "memory_exposed": len(retrieved_ids) > 0,
+                        "retrieval_count": len(retrieved_ids),
+                        "trust_before": trust_before,
+                        "trust_after": trust_after,
+                        "quarantine_status": is_quarantined,
+                        "latency_ms": latency_ms,
+                        "tokens_used": res.tokens_used or 0,
+                        "evaluator_name": str(res.evaluator_name),
+                        "evaluator_version": res.evaluator_version or "1.0-strict",
+                        "reason": res.attempts[-1].reason if res.attempts else "",
+                        "error": None,
+                    }
+                    all_inferences.append(rec)
+                    existing_inferences[f"{cid}::P0::{seed}::{t}"] = rec
+                    jsonl_fh.write(json.dumps(rec) + "\n")
+                    jsonl_fh.flush()
+                    print(
+                        f"  P0 T{t}: S={trust_before:.4f}->{trust_after:.4f} (Q={is_quarantined}) "
+                        f"R={reward:.2f} B={binary} Exp={rec['memory_exposed']} ({latency_ms}ms)"
+                    )
+                completed_sequences.add(seq_key_p0)
+                save_checkpoint()
+
+    jsonl_fh.close()
+    save_checkpoint()
+
+    print("\n==================================================================")
+    print("PHASE 8 EXECUTION COMPLETE")
+    print(f"Total inferences logged: {len(all_inferences)}")
+    print(f"Raw ledger: {RAW_JSONL_FILE}")
+    print(f"Structured results: {STRUCTURED_JSON_FILE}")
+    print("==================================================================")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Phase 8 Large-Scale Experiment Runner")
+    parser.add_argument("--seed", type=int, default=None, help="Execute specific seed only")
+    parser.add_argument("--rerun-all", action="store_true", help="Force full rerun ignoring cached JSONL")
+    args = parser.parse_args()
+
+    asyncio.run(run_phase8(target_seed=args.seed, rerun_all=args.rerun_all))
