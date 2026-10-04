@@ -78,3 +78,8 @@ chat_transcript.md
 kaggle_*/
 hf_space/
 hf_dataset/
+
+# Local IDE and scratch
+.agents/
+ojt/
+
