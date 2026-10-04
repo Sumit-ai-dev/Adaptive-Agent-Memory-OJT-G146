@@ -61,6 +61,7 @@ class EvaluatorName(str, Enum):
     """
     PYTEST_EXECUTION = "pytest_execution"   # run candidate code against a frozen test suite
     EXACT_MATCH_F1 = "exact_match_f1"       # QA: EM / token-F1 against a ground-truth string
+    STRICT_KEY_ANSWER = "strict_key_answer" # Controlled Phase 3: deterministic structured key-answer semantics
     TOOLBENCH_TRAP = "toolbench_trap"       # tool-use: deprecated-param / trap detection
     HEURISTIC = "heuristic"                 # smoke-test only -- NOT valid for research conditions
 
@@ -70,6 +71,7 @@ class EvaluatorName(str, Enum):
 RESEARCH_GRADE_EVALUATORS = frozenset({
     EvaluatorName.PYTEST_EXECUTION,
     EvaluatorName.EXACT_MATCH_F1,
+    EvaluatorName.STRICT_KEY_ANSWER,
     EvaluatorName.TOOLBENCH_TRAP,
 })
 
