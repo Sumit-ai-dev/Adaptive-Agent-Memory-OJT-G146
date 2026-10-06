@@ -13,6 +13,7 @@ import string
 import subprocess
 import sys
 import tempfile
+import unicodedata
 from typing import Any, Dict, List, Optional, Tuple
 
 from models.task import (
@@ -197,6 +198,161 @@ class PytestExecutionEvaluator:
 
 
 pytest_execution_evaluator = PytestExecutionEvaluator()
+
+
+class StrictKeyAnswerEvaluator:
+    """
+    Deterministic Task-Aware Strict Key-Answer Evaluator for Controlled Benchmarks.
+
+    Measurement validity invariants:
+      1. Strictly eliminates the unconditional substring-match floor (R >= 0.85).
+      2. Deterministic: no LLM-as-a-judge, no non-deterministic heuristics, no first-5-token shortcuts.
+      3. Task-aware: evaluates against ground truth and known distractor entities from structured task metadata.
+      4. Distractor rejection: affirming the distractor in the primary clause or as the chosen answer scores as failure (R = 0.10).
+      5. Subordinate/hedging rejection: mentioning the ground truth in contrastive, explanatory, or subordinate clauses
+         (e.g., "DOWN. However, DESC is standard.", "Use DOWN, although DESC would normally be used.")
+         while affirming the distractor does NOT constitute selecting the ground truth and scores as failure (R = 0.10).
+      6. Ground truth clean selection: affirming the ground truth without affirming a distractor scores as pass (R = 1.0).
+    """
+
+    name = EvaluatorName.STRICT_KEY_ANSWER
+    version = "1.0-strict"
+
+    @staticmethod
+    def normalize_text(text: str) -> str:
+        """
+        Normalizes unicode, strips markdown bold/code markers, preserves flags with leading hyphens,
+        and fixes spacing.
+        """
+        if not text:
+            return ""
+        # Unicode normalization (e.g. Brasília -> Brasilia)
+        text = unicodedata.normalize("NFKD", text).encode("ASCII", "ignore").decode("utf-8")
+        text = text.lower()
+        # Remove markdown bold, italic, code backticks
+        text = re.sub(r"[*`_]", " ", text)
+        # Retain hyphens attached to tokens (for flags like -s, -q)
+        cleaned = []
+        for ch in text:
+            if ch in string.punctuation and ch != "-":
+                cleaned.append(" ")
+            else:
+                cleaned.append(ch)
+        return " ".join("".join(cleaned).split())
+
+    @classmethod
+    def evaluate(
+        cls,
+        prediction: str,
+        ground_truth: str,
+        distractor: Optional[str] = None,
+        task_category: Optional[str] = None,
+    ) -> Tuple[float, str]:
+        """
+        Evaluates a prediction against ground truth and known distractor.
+        Returns scalar reward R_t in [0.0, 1.0] and diagnostic rationale.
+        """
+        if not prediction or not prediction.strip():
+            return 0.0, "Failure: Output was empty"
+
+        pred_raw = prediction.strip()
+        norm_pred = cls.normalize_text(pred_raw)
+        norm_gt = cls.normalize_text(ground_truth)
+        norm_dist = cls.normalize_text(distractor) if distractor else None
+
+        # 1. Exact match checks
+        if norm_pred == norm_gt:
+            return 1.0, f'Success: Exact match with ground truth "{ground_truth}"'
+        if norm_dist and norm_pred == norm_dist:
+            return 0.10, f'Failure: Explicitly selected distractor "{distractor}"'
+
+        def contains_token(target: Optional[str], text: str) -> bool:
+            if not target or not text:
+                return False
+            pattern = r"(?<![\w\-])" + re.escape(target) + r"(?![\w\-])"
+            return bool(re.search(pattern, text))
+
+        has_dist_full = contains_token(norm_dist, norm_pred) if norm_dist else False
+        has_gt_full = contains_token(norm_gt, norm_pred)
+
+        # Split into primary clause (first sentence / line) vs subsequent text
+        sentences = [s.strip() for s in re.split(r"[.\n;]", pred_raw) if s.strip()]
+        first_clause = sentences[0] if sentences else pred_raw
+        norm_first = cls.normalize_text(first_clause)
+
+        has_dist_first = contains_token(norm_dist, norm_first) if norm_dist else False
+        has_gt_first = contains_token(norm_gt, norm_first)
+
+        # Helpers to detect negation vs contrastive framing
+        def is_negated(target: Optional[str], text: str, other: Optional[str] = None) -> bool:
+            if not target or not text:
+                return False
+            other_guard = f"(?!{re.escape(other)})" if other else ""
+            pattern = (
+                r"\b(not|never|do not use|don\'t use|instead of|rather than|deprecated|avoid)\s+"
+                r"(?: " + other_guard + r"[\w-]+\s+){0,3}" + re.escape(target)
+            )
+            return bool(re.search(pattern, text))
+
+        def is_subordinated_by_contrast(target: Optional[str], text: str, other: Optional[str] = None) -> bool:
+            if not target or not text:
+                return False
+            other_guard = f"(?!{re.escape(other)})" if other else ""
+            pattern = (
+                r"\b(however|although|though|recommended over|better practice than)\s+"
+                r"(?: " + other_guard + r"[\w-]+\s+){0,4}" + re.escape(target)
+            )
+            return bool(re.search(pattern, text))
+
+        dist_negated_first = is_negated(norm_dist, norm_first, norm_gt)
+        gt_negated_first = is_negated(norm_gt, norm_first, norm_dist)
+
+        dist_negated_full = is_negated(norm_dist, norm_pred, norm_gt)
+        gt_negated_full = is_negated(norm_gt, norm_pred, norm_dist)
+
+        gt_subordinated_full = is_subordinated_by_contrast(norm_gt, norm_pred, norm_dist)
+        dist_subordinated_full = is_subordinated_by_contrast(norm_dist, norm_pred, norm_gt)
+
+        # 2. Distractor affirmed in primary clause
+        if has_dist_first and not dist_negated_first:
+            return 0.10, f'Failure: Primary clause selected distractor "{distractor}"'
+
+        # 3. Ground truth explicitly negated
+        if gt_negated_full:
+            return 0.10, f'Failure: Ground truth "{ground_truth}" negated in answer'
+
+        # 4. Both distractor and ground truth appear in the output
+        if has_dist_full and has_gt_full:
+            # If ground truth is subordinated by contrastive markers (e.g. "However, DESC is standard")
+            # and distractor is not negated, it's a failure.
+            if gt_subordinated_full and not dist_negated_full:
+                return 0.10, f'Failure: Ground truth "{ground_truth}" mentioned only subordinately; distractor "{distractor}" affirmed'
+            # If distractor is not negated, both present means ambiguous or distractor chosen
+            if not dist_negated_full:
+                return 0.10, f'Failure: Distractor "{distractor}" affirmed alongside ground truth'
+
+        # 5. Only distractor appears (no ground truth)
+        if has_dist_full and not has_gt_full:
+            return 0.10, f'Failure: Selected distractor "{distractor}"'
+
+        # 6. Ground truth appears without distractor
+        if has_gt_full and not has_dist_full:
+            if gt_negated_full:
+                return 0.10, f'Failure: Ground truth "{ground_truth}" was negated'
+            return 1.0, f'Success: Ground truth "{ground_truth}" cleanly selected'
+
+        # 7. Fallback token-level overlap without 0.85 floor
+        gt_tokens = norm_gt.split()
+        pred_tokens = norm_pred.split()
+        if gt_tokens and all(t in pred_tokens for t in gt_tokens):
+            if gt_negated_full:
+                return 0.10, f'Failure: Ground truth "{ground_truth}" was negated'
+            return 0.90, f'Success: Ground truth tokens contained in answer'
+
+        return 0.10, "Failure: Answer does not match ground truth"
+
+
+strict_key_answer_evaluator = StrictKeyAnswerEvaluator()
 
 
 class DeterministicEvaluator:
@@ -659,6 +815,24 @@ class DeterministicEvaluator:
             score, reason = cls.evaluate_hotpotqa(prediction=final_answer, ground_truth=gt)
             return EvaluationOutcome.from_reward(
                 reward=score, evaluator_name=chosen, reason=reason, outcome_threshold=outcome_threshold
+            )
+
+        if chosen == EvaluatorName.STRICT_KEY_ANSWER:
+            gt = ground_truth or cfg.get("ground_truth", "")
+            distractor = cfg.get("distractor")
+            task_category = cfg.get("task_category")
+            score, reason = strict_key_answer_evaluator.evaluate(
+                prediction=final_answer,
+                ground_truth=gt,
+                distractor=distractor,
+                task_category=task_category,
+            )
+            return EvaluationOutcome.from_reward(
+                reward=score,
+                evaluator_name=chosen,
+                evaluator_version=strict_key_answer_evaluator.version,
+                reason=reason,
+                outcome_threshold=outcome_threshold,
             )
 
         if chosen == EvaluatorName.TOOLBENCH_TRAP:
