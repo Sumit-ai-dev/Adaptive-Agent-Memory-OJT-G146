@@ -4,11 +4,33 @@ export type TaskDomain = 'research' | 'coding' | 'analysis' | 'planning' | 'gene
 
 export type ExperienceStatus = 'active' | 'deprecated' | 'candidate'
 
+export type ModelProvider = 'mock' | 'openai' | 'groq' | 'ollama'
+
+export interface ProviderOption {
+  id: ModelProvider
+  name: string
+  models: string[]
+  defaultModel: string
+  requiresKey: boolean
+  description: string
+}
+
+export interface AgentConfig {
+  domain: TaskDomain
+  memoryEnabled: boolean
+  memoryMode: 'adaptive' | 'naive' | 'off'
+  provider: ModelProvider
+  model: string
+  apiKey?: string
+}
+
 export interface Experience {
   id: string
   taskDomain: TaskDomain
   triggerCondition: string
   strategyLesson: string
+  pitfall?: string
+  confidence?: number
   trustScore: number // 0.0 to 1.0 (e.g. 0.94)
   usesCount: number
   successesCount: number
@@ -18,6 +40,23 @@ export interface Experience {
   sourceTaskId?: string
   createdAt: string
   updatedAt: string
+}
+
+export interface RetrievedMemoryItem {
+  experience: Experience
+  similarityScore?: number
+  trustScore?: number
+  compositeScore?: number
+  gateReason?: string
+}
+
+export interface TrustUpdateItem {
+  experienceId: string
+  oldScore: number
+  newScore: number
+  delta: number
+  reason?: string
+  status?: string
 }
 
 export interface TrustHistoryRecord {
@@ -31,45 +70,50 @@ export interface TrustHistoryRecord {
   createdAt: string
 }
 
-export type ExecutionStatus = 'pending' | 'retrieving' | 'reasoning' | 'executing' | 'reflecting' | 'completed' | 'failed'
-
 export interface ExecutionStepTrace {
   id: string
-  type: 'retrieval' | 'thought' | 'action' | 'reflection' | 'trust_update'
-  timestamp: string
+  type: string
+  node?: string
   title: string
   detail: string
+  durationMs?: number
+  toolsCalled?: string[]
   metadata?: Record<string, unknown>
 }
 
 export interface TaskExecution {
   id: string
+  executionId?: string
+  taskId?: string
   userId?: string
   taskInput: string
   taskDomain: TaskDomain
   memoryEnabled: boolean
-  status: ExecutionStatus
-  retrievedExperiences: {
-    experience: Experience
-    relevanceScore: number
-  }[]
+  memoryMode?: string
+  status: 'pending' | 'retrieving' | 'reasoning' | 'executing' | 'reflecting' | 'completed' | 'failed'
   finalOutput?: string
+  finalAnswer?: string
   reflectionLesson?: string
   newExperienceCreated?: boolean
-  trustUpdates: {
-    experienceId: string
-    oldScore: number
-    newScore: number
-  }[]
-  tokensUsed: number
-  latencyMs: number
+  newExperience?: Experience
+  retrievedMemories?: RetrievedMemoryItem[]
+  trustUpdates?: TrustUpdateItem[]
+  trajectory?: ExecutionStepTrace[]
+  tokensUsed?: number
+  latencyMs?: number
   outcomeQuality?: 'positive' | 'neutral' | 'negative'
-  createdAt: string
+  outcomeScore?: number
+  binaryOutcome?: number
+  outcomeThreshold?: number
+  evaluatorName?: string
+  createdAt?: string
 }
 
 export interface AgentMetricSummary {
   totalTasks: number
   activeMemories: number
+  quarantinedMemories?: number
+  totalMemories?: number
   memoryHitRate: number // percentage, e.g. 87%
   slaAdherence: number // percentage, e.g. 99.9%
   avgTimeSavedMin: number
@@ -77,6 +121,7 @@ export interface AgentMetricSummary {
   memoryReuseRate: number // percentage, e.g. 76%
   aiDeflectionRate: number // percentage, e.g. 80%
   mttrMin: number // e.g. 6 min
+  latestBenchmarks?: Record<string, unknown>
 }
 
 export interface EvaluationComparison {
