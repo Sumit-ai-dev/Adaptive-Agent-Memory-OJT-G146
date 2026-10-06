@@ -25,6 +25,7 @@ class ProviderConfig(BaseModel):
     base_url: Optional[str] = Field(default=None)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=64, le=16384)
+    seed: Optional[int] = Field(default=None, description='S9: only set for seed-capable providers')
 
     @classmethod
     def default_for(cls, provider: ModelProvider) -> "ProviderConfig":
@@ -66,3 +67,51 @@ class ProviderConfig(BaseModel):
                 base_url="mock://localhost",
             )
         return cls(provider=provider, model="default")
+
+
+# ======================================================================
+# S9: provider seed-capability contract
+# ======================================================================
+#
+# A recorded seed must correspond to a seed the provider actually honours.
+# Providers whose chat API exposes a `seed` parameter are listed as True;
+# everything else is False and MUST reject a seed request rather than record
+# one that was never applied.
+PROVIDER_SUPPORTS_SEED: dict = {
+    ModelProvider.OPENAI: True,    # OpenAI chat completions accept `seed`
+    ModelProvider.OLLAMA: True,    # Ollama's OpenAI-compatible endpoint accepts `seed`
+    ModelProvider.GROQ: True,      # Groq's OpenAI-compatible endpoint accepts `seed`
+    ModelProvider.NVIDIA: True,    # NIM OpenAI-compatible endpoint accepts `seed`
+    ModelProvider.GEMINI: False,   # no seed on the OpenAI-compat shim
+    ModelProvider.ANTHROPIC: False,# Messages API exposes no seed
+    ModelProvider.MOCK: False,     # deterministic by construction; a seed would be meaningless
+}
+
+
+def provider_supports_seed(provider) -> bool:
+    """True when the provider genuinely honours a `seed` parameter."""
+    if not isinstance(provider, ModelProvider):
+        provider = ModelProvider(str(provider))
+    return bool(PROVIDER_SUPPORTS_SEED.get(provider, False))
+
+
+class UnsupportedSeedError(ValueError):
+    """Raised when a seed is requested from a provider that cannot honour it."""
+
+
+def validate_seed(provider, seed) -> None:
+    """
+    Rejects a seed request the provider cannot satisfy.
+
+    Deliberately strict: silently recording an unused seed would make a run manifest
+    claim reproducibility it does not have.
+    """
+    if seed is None:
+        return
+    if not provider_supports_seed(provider):
+        name = provider.value if isinstance(provider, ModelProvider) else str(provider)
+        raise UnsupportedSeedError(
+            f"provider '{name}' does not support a seed parameter; "
+            f"requested seed={seed!r}. Use seed=None (recorded as not-applicable) "
+            f"or choose a seed-capable provider."
+        )

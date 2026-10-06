@@ -13,6 +13,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from models.domain import TaskDomain
 
 
+def utc_now_iso() -> str:
+    """Returns current UTC timestamp in ISO 8601 string format."""
+    return datetime.now(timezone.utc).isoformat()
+
+
 class ExperienceStatus(str, Enum):
     """Lifecycle status of a memory experience."""
     ACTIVE = "active"
@@ -40,6 +45,7 @@ class Experience(BaseModel):
     failures_count: int = Field(default=0, ge=0, alias="failuresCount")
     status: ExperienceStatus = Field(default=ExperienceStatus.ACTIVE)
     embedding: Optional[list[float]] = Field(default=None, description="384-dimensional vector embedding")
+    source_task_id: Optional[str] = Field(default=None, alias="sourceTaskId")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), alias="createdAt")
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc), alias="updatedAt")
 
@@ -51,6 +57,9 @@ class ExperienceMatch(BaseModel):
     experience: Experience
     similarity: float = Field(..., ge=0.0, le=1.0, description="Cosine similarity score")
     composite_score: float = Field(..., ge=0.0, le=1.0, description="0.70 * Sim + 0.30 * Trust", alias="compositeScore")
+
+
+RetrievedMemory = ExperienceMatch
 
 
 class TrustHistoryRecord(BaseModel):

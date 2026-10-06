@@ -9,6 +9,7 @@ Implements Asymmetric Exponential Moving Average (A-EMA):
 """
 
 from datetime import datetime, timezone
+import logging
 from typing import Any, Sequence
 
 from models.experience import (
@@ -18,6 +19,8 @@ from models.experience import (
     TrustHistoryRecord,
 )
 from models.task import TrustUpdate
+
+logger = logging.getLogger("ai_service.nodes.trust_node")
 
 
 ALPHA_SUCCESS = 0.85
@@ -144,4 +147,99 @@ def trust_node(state: dict[str, Any]) -> dict[str, Any]:
         "updated_experiences": updated_experiences,
         "trust_history_records": audit_records,
         "trust_updates": trust_updates,
+    }
+
+
+async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
+    """
+    Asynchronous StateGraph node function for trust lifecycle updates and new experience registration.
+    """
+    import time
+    start_ts = time.time()
+    outcome_score = state.get("outcome_score", 0.85)
+    execution_id = state.get("task_id")
+    raw_matches = state.get("retrieved_memories") or state.get("retrieved_experiences", [])
+
+    # F1: this node sits ON the retry cycle and is therefore visited once per ATTEMPT.
+    # It is now PURE -- it computes trust updates but performs no I/O. Persistence
+    # happens exactly once per task, from the terminal state, in
+    # `ai_service.graph.execute_task`. Writing from here caused one failing task to
+    # emit 3 trust_history rows and 3 counter increments (uses=3, s=2, f=1), which
+    # fed straight into the ADAPTIVE retrieval gate and inflated P(reliable)
+    # from 0.348 to 0.580. A retry is an attempt, not an independent observation.
+    trust_updates: list[dict[str, Any]] = []
+
+    for item in raw_matches:
+        exp_dict = item.get("experience", item) if isinstance(item, dict) else item
+        exp_id = exp_dict.get("id") if isinstance(exp_dict, dict) else getattr(exp_dict, "id", None)
+        if not exp_id:
+            continue
+        old_trust = float(exp_dict.get("trustScore", exp_dict.get("trust_score", 0.75)))
+        new_trust, reason = compute_next_trust(old_trust, outcome_score)
+        delta = round(new_trust - old_trust, 4)
+        is_quarantined = new_trust < QUARANTINE_THRESHOLD
+
+        trust_updates.append({
+            "experienceId": exp_id,
+            "oldScore": old_trust,
+            "newScore": new_trust,
+            "delta": delta,
+            "status": "quarantined" if is_quarantined else "active",
+            "reason": reason,
+            # Set by execute_task when the single task-level write is performed.
+            "persisted": False,
+        })
+
+    candidate_exp = state.get("candidate_experience")
+    new_exp_obj = None
+    if candidate_exp and state.get("memory_enabled", True):
+        from models.domain import TaskDomain
+        from models.experience import Experience, ExperienceStatus
+        domain_val = candidate_exp.get("task_domain", "general")
+        try:
+            task_domain_enum = TaskDomain(domain_val)
+        except ValueError:
+            task_domain_enum = TaskDomain.GENERAL
+
+        new_exp_obj = Experience(
+            task_domain=task_domain_enum,
+            trigger_condition=candidate_exp.get("trigger_condition", ""),
+            strategy_lesson=candidate_exp.get("strategy_lesson", ""),
+            pitfall=candidate_exp.get("pitfall"),
+            confidence=candidate_exp.get("confidence", 0.85),
+            trust_score=0.75,
+            status=ExperienceStatus.CANDIDATE,
+        )
+
+        # F1: the candidate is NOT written here. reflect_node also runs once per
+        # attempt, so writing from this node produced one new candidate memory per
+        # retry (3 rows for a single task). execute_task persists the terminal
+        # candidate exactly once.
+
+    duration_ms = int((time.time() - start_ts) * 1000)
+
+    trace = {
+        "id": f"step_trust_{int(start_ts)}",
+        "type": "trust_update",
+        "node": "trust_node",
+        "title": "Reliability Audit & Trust Calibration",
+        "detail": (
+            f"Updated {len(trust_updates)} experiences via Asymmetric EMA. "
+            f"{'New candidate memory stored in quarantine.' if new_exp_obj else ''}"
+        ),
+        "durationMs": duration_ms,
+        "metadata": {
+            "trustUpdates": trust_updates,
+            "newExperienceCreated": new_exp_obj is not None,
+        },
+    }
+
+    trajectory = list(state.get("trajectory", []))
+    trajectory.append(trace)
+
+    return {
+        "trust_updates": trust_updates,
+        "new_experience": new_exp_obj,
+        "trajectory": trajectory,
+        "status": "completed",
     }

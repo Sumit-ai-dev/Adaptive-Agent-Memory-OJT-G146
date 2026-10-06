@@ -1,0 +1,16 @@
+# Development / test-only dependencies.
+# P0-7: `tests/test_math_properties.py` and `tests/test_arxiv_fetcher.py` failed at
+# COLLECTION because these were undeclared, aborting the entire pytest run with
+# "Interrupted: 2 errors during collection".
+#
+# Install with:  pip install -r backend/requirements.txt -r requirements-dev.txt
+
+-r backend/requirements.txt
+
+hypothesis>=6.100.0               # tests/test_math_properties.py (property-based tests)
+
+# Literature-fetching utilities under scripts/ -- exercised by
+# tests/test_arxiv_fetcher.py and tests/test_semanticscholar_fetcher.py.
+arxiv>=2.1.0
+pymupdf>=1.24.0
+requests>=2.32.0

@@ -32,9 +32,68 @@ except ImportError:
         REQUEST_TIMEOUT_SECONDS: float = 45.0
     settings = FallbackSettings()
 
-from models.provider import ModelProvider, ProviderConfig
+from models.provider import ModelProvider, ProviderConfig, validate_seed
 
 logger = logging.getLogger("ai_service.llm_client")
+
+
+class ProviderConfigurationError(RuntimeError):
+    """
+    Raised when an LLM call is attempted with no explicitly declared provider.
+
+    S10: silence here is what allowed a run declaring `provider=ollama` to dispatch
+    reflection calls to an ambient OpenAI key. Failing loudly is the only safe default.
+    """
+
+
+def resolve_provider_config(state: Dict[str, Any]) -> Tuple[Optional[ProviderConfig], Optional[float]]:
+    """
+    Builds the provider configuration for an agent state.
+
+    S8: EVERY LLM call site in the graph must use this, so that a run's declared
+    provider/model/temperature are the ones actually dispatched. `reflect_node`
+    previously called the gateway with no config at all, which fell through to
+    `UniversalLLMClient.default_config` -- resolved from ambient environment
+    variables at import time. A run manifest could therefore say
+    `provider=ollama, temperature=0.0` while the reflection call went to a
+    completely different hosted provider at a different temperature.
+
+    Returns (config_or_None, requested_temperature_or_None). A None config means the
+    caller supplied no provider and the gateway default legitimately applies.
+    """
+    requested_temperature = state.get("temperature")
+    requested_seed = state.get("seed")
+    requested_max_tokens = state.get("max_tokens")
+    provider_name = state.get("provider")
+    if not provider_name:
+        return None, requested_temperature
+
+    try:
+        provider = ModelProvider(provider_name)
+    except ValueError:
+        return None, requested_temperature
+
+    # S9: reject a seed the provider cannot honour rather than recording a dead one.
+    validate_seed(provider, requested_seed)
+
+    defaults = ProviderConfig.default_for(provider)
+    config = ProviderConfig(
+        provider=provider,
+        model=state.get("model") or defaults.model,
+        api_key=state.get("api_key"),
+        temperature=(
+            defaults.temperature if requested_temperature is None
+            else float(requested_temperature)
+        ),
+        seed=requested_seed,
+        # S12: effective token budget. None keeps the provider default (2048),
+        # which the manifest records explicitly rather than leaving invisible.
+        max_tokens=(
+            defaults.max_tokens if requested_max_tokens is None
+            else int(requested_max_tokens)
+        ),
+    )
+    return config, requested_temperature
 
 
 class UniversalLLMClient:
@@ -44,42 +103,15 @@ class UniversalLLMClient:
     """
 
     def __init__(self, default_config: Optional[ProviderConfig] = None):
-        self.default_config = default_config or self._resolve_default_config()
+        # None means 'no implicit provider'. Callers must pass an explicit config.
+        self.default_config = default_config
 
-    def _resolve_default_config(self) -> ProviderConfig:
-        if getattr(settings, "GROQ_API_KEY", None):
-            return ProviderConfig(
-                provider=ModelProvider.GROQ,
-                model="llama-3.3-70b-versatile",
-                api_key=settings.GROQ_API_KEY,
-                base_url="https://api.groq.com/openai/v1",
-            )
-        elif getattr(settings, "NVIDIA_API_KEY", None):
-            return ProviderConfig(
-                provider=ModelProvider.NVIDIA,
-                model="nvidia/llama-3.1-nemotron-70b-instruct",
-                api_key=settings.NVIDIA_API_KEY,
-                base_url="https://integrate.api.nvidia.com/v1",
-            )
-        elif getattr(settings, "GEMINI_API_KEY", None):
-            return ProviderConfig(
-                provider=ModelProvider.GEMINI,
-                model="gemini-2.0-flash",
-                api_key=settings.GEMINI_API_KEY,
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-            )
-        elif getattr(settings, "OPENAI_API_KEY", None):
-            return ProviderConfig(
-                provider=ModelProvider.OPENAI,
-                model="gpt-4o-mini",
-                api_key=settings.OPENAI_API_KEY,
-                base_url="https://api.openai.com/v1",
-            )
-        else:
-            return ProviderConfig(
-                provider=ModelProvider.MOCK,
-                model="mock-deterministic-v1",
-            )
+    # S10: `_resolve_default_config` used to scan ambient environment variables
+    # (GROQ_API_KEY, then NVIDIA, GEMINI, OPENAI...) and silently pick a provider.
+    # An unconfigured call could therefore dispatch to a paid hosted provider that
+    # no run manifest ever declared. Ambient credentials are still honoured for an
+    # EXPLICITLY declared provider (see `_get_client_and_model`); what is removed is
+    # silent provider SELECTION.
 
     def _get_client_and_model(
         self, override_config: Optional[ProviderConfig] = None
@@ -111,13 +143,23 @@ class UniversalLLMClient:
         json_mode: bool = False,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
+        seed: Optional[int] = None,
     ) -> Tuple[str, int]:
         """
         Asynchronously dispatch a chat completion request to the resolved model.
         Returns: (response_text, tokens_used)
         """
         cfg = config or self.default_config
+        if cfg is None:
+            raise ProviderConfigurationError(
+                "No provider configuration supplied. Pass an explicit ProviderConfig "
+                "(e.g. via ai_service.llm_client.resolve_provider_config(state)) or "
+                "construct the client with an explicit default_config. Implicit "
+                "selection from environment variables has been removed (S10)."
+            )
         provider = cfg.provider
+        effective_seed = cfg.seed if seed is None else seed
+        validate_seed(provider, effective_seed)
 
         if provider == ModelProvider.MOCK:
             return self._generate_mock_response(messages, json_mode)
@@ -158,6 +200,9 @@ class UniversalLLMClient:
                 }
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
+                # S9: only ever sent to providers that honour it (validated above).
+                if effective_seed is not None:
+                    kwargs["seed"] = int(effective_seed)
 
                 response = await client.chat.completions.create(**kwargs)
                 choice = response.choices[0]
