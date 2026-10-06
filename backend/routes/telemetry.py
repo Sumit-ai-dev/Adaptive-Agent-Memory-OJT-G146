@@ -34,7 +34,7 @@ async def get_telemetry() -> Dict[str, Any]:
 
     total_execs = len(_execution_history)
     hits = sum(1 for e in _execution_history if e.retrieved_experiences and len(e.retrieved_experiences) > 0)
-    hit_rate = round((hits / total_execs * 100), 1) if total_execs > 0 else 87.0
+    hit_rate = round((hits / total_execs * 100), 1) if total_execs > 0 else 0.0
 
     # Load latest benchmark evaluation if available
     benchmark_file = Path("benchmarks/results/table2_summary_latest.json")

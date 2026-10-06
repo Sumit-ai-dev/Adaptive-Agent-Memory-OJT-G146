@@ -11,7 +11,7 @@ import uuid
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from models.domain import TaskDomain
+from models.domain import MemoryMode, TaskDomain
 from models.experience import Experience, ExperienceMatch
 
 
@@ -23,13 +23,6 @@ def to_camel(string: str) -> str:
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
-
-
-class MemoryMode(str, Enum):
-    """Memory operational modes for benchmark ablation."""
-    OFF = "off"
-    NAIVE = "naive"
-    ADAPTIVE = "adaptive"
 
 
 class ExecutionStatus(str, Enum):

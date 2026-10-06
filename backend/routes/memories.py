@@ -81,6 +81,10 @@ async def list_memories(
 async def create_memory(experience: Experience) -> Dict[str, Any]:
     """Manually insert an experience into the memory store."""
     try:
+        # Enforce server-side lifecycle policy: manually submitted memories
+        # start as CANDIDATE with capped initial trust to prevent injection
+        experience.status = ExperienceStatus.CANDIDATE
+        experience.trust_score = min(experience.trust_score, 0.50)
         await shared_store.add_experience(experience)
         return experience.model_dump(by_alias=True)
     except Exception as e:

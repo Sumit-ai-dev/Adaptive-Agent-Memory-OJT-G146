@@ -36,15 +36,15 @@ class SearchTool:
                     "output": "\n\n".join(f"[{r['title']}]: {r['snippet']}" for r in results),
                 }
         except Exception as e:
-            logger.warning(f"DuckDuckGo search error: {e}. Using deterministic factual snippet.")
+            logger.warning(f"DuckDuckGo search error: {e}. Search is unavailable.")
 
-        # Fallback snippet
+        # Unavailable error result (no fabricated claims)
         return {
             "tool": "duckduckgo_search",
             "query": clean_query,
-            "status": "success",
-            "results": [{"title": clean_query, "snippet": f"Verified factual data regarding '{clean_query}' retrieved."}],
-            "output": f"Verified multi-source summary for '{clean_query}' based on primary academic literature.",
+            "status": "error",
+            "results": [],
+            "output": f"Search unavailable for '{clean_query}'.",
         }
 
     def _duckduckgo_instant_search(self, query: str, max_results: int) -> List[Dict[str, str]]:
