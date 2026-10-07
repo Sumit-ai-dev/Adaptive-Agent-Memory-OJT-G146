@@ -1,17 +1,18 @@
 """
-Telemetry and Dashboard KPIs API endpoints.
-Provides real-time system metrics, memory hit rates, and benchmark evaluations.
+Telemetry API endpoint.
+Returns truthful system metrics derived entirely from stored data.
+No fabricated constants.
 """
 
 import json
 import logging
+import sqlite3
 from pathlib import Path
 from typing import Any, Dict
 from fastapi import APIRouter
 
-from backend.routes.agent import shared_store, _execution_history
+from backend.routes.agent import shared_store
 from models.domain import ExperienceStatus
-from models.task import AgentMetricSummary
 
 logger = logging.getLogger("backend.routes.telemetry")
 
@@ -21,46 +22,87 @@ router = APIRouter(prefix="/telemetry", tags=["Dashboard Telemetry"])
 @router.get(
     "",
     response_model=Dict[str, Any],
-    summary="Get System KPIs and Telemetry Summary",
+    summary="Get System Telemetry — real metrics only, no fabricated values",
 )
 async def get_telemetry() -> Dict[str, Any]:
     """
-    Returns aggregate operational KPIs and empirical benchmark metrics
-    for the React frontend dashboard.
+    Returns truthful backend metrics derived from SQLite records.
+
+    All values are computed from actual stored data. Metrics that cannot
+    be honestly derived are omitted entirely.
     """
+    # ── Memory metrics from SQLite experiences table ──────────────────────────
     all_exps = await shared_store.list_experiences(min_trust=0.0)
-    active_exps = [e for e in all_exps if e.status == ExperienceStatus.ACTIVE]
-    quarantined_exps = [e for e in all_exps if e.trust_score < 0.35 or e.status == ExperienceStatus.DEPRECATED]
+    active_exps    = [e for e in all_exps if e.status == ExperienceStatus.ACTIVE]
+    candidate_exps = [e for e in all_exps if e.status == ExperienceStatus.CANDIDATE]
+    quarantined_exps = [
+        e for e in all_exps
+        if e.trust_score < 0.35 or e.status == ExperienceStatus.DEPRECATED
+    ]
 
-    total_execs = len(_execution_history)
-    hits = sum(1 for e in _execution_history if e.retrieved_experiences and len(e.retrieved_experiences) > 0)
-    hit_rate = round((hits / total_execs * 100), 1) if total_execs > 0 else 0.0
+    # ── Execution metrics from SQLite task_executions table ───────────────────
+    total_executions = 0
+    executions_with_memory_hit = 0
+    memory_hit_rate: float = 0.0
 
-    # Load latest benchmark evaluation if available
+    try:
+        conn = sqlite3.connect(shared_store.db_path)
+        total_executions = conn.execute(
+            "SELECT COUNT(*) FROM task_executions"
+        ).fetchone()[0]
+
+        rows = conn.execute(
+            "SELECT payload_json FROM task_executions"
+        ).fetchall()
+        conn.close()
+
+        for (payload_json,) in rows:
+            try:
+                data = json.loads(payload_json)
+                retrieved = (
+                    data.get("retrievedExperiences")
+                    or data.get("retrievedMemories")
+                    or []
+                )
+                if retrieved:
+                    executions_with_memory_hit += 1
+            except Exception:
+                pass
+
+        if total_executions > 0:
+            memory_hit_rate = round(executions_with_memory_hit / total_executions * 100, 1)
+
+    except Exception as exc:
+        logger.warning(f"Could not compute execution metrics from SQLite: {exc}")
+
+    return {
+        # ── Memory store (always real) ─────────────────────────────────────
+        "totalMemories": len(all_exps),
+        "activeMemories": len(active_exps),
+        "candidateMemories": len(candidate_exps),
+        "quarantinedMemories": len(quarantined_exps),
+        # ── Execution history (persisted to SQLite) ────────────────────────
+        "totalExecutions": total_executions,
+        "executionsWithMemoryHit": executions_with_memory_hit,
+        "memoryHitRate": memory_hit_rate,
+        # ── Trust system constants (informational, always truthful) ────────
+        "quarantineThreshold": 0.35,
+        "trustDecayBeta": 0.70,
+        "trustBoostAlpha": 0.85,
+        "initialTrustScore": 0.75,
+        # ── Benchmark results (populated only when Phase 9 runs) ───────────
+        "latestBenchmarks": _load_benchmark_summary(),
+    }
+
+
+def _load_benchmark_summary() -> Any:
+    """Load latest benchmark results JSON if available, else null."""
     benchmark_file = Path("benchmarks/results/table2_summary_latest.json")
-    benchmark_data = None
-    if benchmark_file.exists():
-        try:
-            with open(benchmark_file, "r", encoding="utf-8") as f:
-                benchmark_data = json.load(f)
-        except Exception as e:
-            logger.warning(f"Could not load benchmark summary: {e}")
-
-    summary = AgentMetricSummary(
-        total_tasks=total_execs or 142,
-        active_memories=len(active_exps) or len(all_exps),
-        memory_hit_rate=hit_rate,
-        sla_adherence=99.9,
-        avg_time_saved_min=4.2,
-        tokens_saved="2.4M",
-        memory_reuse_rate=76.0,
-        ai_deflection_rate=80.0,
-        mttr_min=6.0,
-    )
-
-    data = summary.model_dump(by_alias=True)
-    data["quarantinedMemories"] = len(quarantined_exps)
-    data["totalMemories"] = len(all_exps)
-    data["latestBenchmarks"] = benchmark_data
-
-    return data
+    if not benchmark_file.exists():
+        return None
+    try:
+        with open(benchmark_file, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        logger.warning(f"Could not load benchmark summary: {exc}")
+        return None
