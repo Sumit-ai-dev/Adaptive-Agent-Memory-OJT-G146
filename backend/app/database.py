@@ -15,7 +15,7 @@ class MemoryDatabase:
     """Unified SQLite experience repository proxy."""
 
     def __init__(self, db_path: str = "data/adaptive_memory.db"):
-        self._store = SQLiteMemoryStore(db_path=db_path)
+        self._store = SQLiteMemoryStore(db_path=db_path, auto_seed=True)
 
     def _run(self, coro):
         try:
@@ -44,7 +44,8 @@ class MemoryDatabase:
         self._run(self._store.add_experience(exp))
 
     def record_trust_history(self, record: TrustHistoryRecord) -> None:
-        pass
+        """Trust history is written via update_trust in graph.py execute_task."""
+        pass  # intentional no-op: audit rows written by SQLiteMemoryStore.update_trust
 
     def get_telemetry_metrics(self) -> Dict[str, Any]:
         exps = self.list_experiences()

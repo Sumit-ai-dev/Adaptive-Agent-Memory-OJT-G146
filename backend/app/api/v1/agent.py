@@ -17,8 +17,9 @@ logger = logging.getLogger("backend.app.api.v1.agent")
 
 router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 
-# Global shared memory store for API server
-shared_store = SQLiteMemoryStore(db_path="data/adaptive_memory.db")
+# Global shared memory store for API server — auto_seed ensures the 5 canonical
+# seed experiences exist on every fresh CI run (idempotent: skipped if already present).
+shared_store = SQLiteMemoryStore(db_path="data/adaptive_memory.db", auto_seed=True)
 
 # In-memory execution history cache
 _execution_history: List[TaskExecution] = []

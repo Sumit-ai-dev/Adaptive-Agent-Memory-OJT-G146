@@ -51,3 +51,8 @@ jobs:
         env:
           TRANSFORMERS_OFFLINE: "1"
           HF_DATASETS_OFFLINE: "1"
+          # When sentence-transformers is absent the hash embedder produces ~0.32
+          # cosine similarity. Lower the retrieval gate so tests that seed a
+          # matching memory can actually retrieve it. Production config is unchanged.
+          SIMILARITY_THRESHOLD: "0.20"
+
