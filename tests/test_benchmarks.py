@@ -6,8 +6,9 @@ Tests:
 """
 
 import pytest
-from benchmarks.alfworld_runner import load_alfworld_tasks
-from benchmarks.hotpotqa_runner import load_hotpotqa_tasks
+import json
+from benchmarks.alfworld_runner import ALFWORLD_DATA_DIR, load_alfworld_tasks
+from benchmarks.hotpotqa_runner import HOTPOTQA_DATA_PATH, load_hotpotqa_tasks
 from benchmarks.metrics import (
     TrialRecord,
     compute_all_metrics,
@@ -16,31 +17,67 @@ from benchmarks.metrics import (
     compute_quarantine_precision,
     compute_token_economy,
 )
-from benchmarks.toolbench_runner import load_toolbench_tasks
+from benchmarks.toolbench_runner import TOOLBENCH_DATA_PATH, load_toolbench_tasks
+
 
 
 def test_benchmark_data_loaders():
     """Verify all 3 datasets load valid task structures when data files are present."""
-    try:
-        hp_tasks = load_hotpotqa_tasks(limit=3)
-        tb_tasks = load_toolbench_tasks(limit=3)
-        alf_tasks = load_alfworld_tasks(limit=3)
-    except FileNotFoundError as e:
-        pytest.skip(f"Benchmark datasets not downloaded yet: {e}")
-
-    if not hp_tasks or not tb_tasks or not alf_tasks:
-        pytest.skip("Benchmark dataset files are empty or not populated")
-
+    has_alfworld = ALFWORLD_DATA_DIR.exists() or bool(list((ALFWORLD_DATA_DIR.parent).rglob("traj_data.json"))) if ALFWORLD_DATA_DIR.parent.exists() else False
+    if not (HOTPOTQA_DATA_PATH.exists() and TOOLBENCH_DATA_PATH.exists() and has_alfworld):
+        pytest.skip(
+            "Benchmark corpora (HotpotQA / ToolBench / ALFWorld) not found on disk. "
+            "benchmarks/data/ is gitignored (~2.2 GB corpora). Skipping live corpus loader test."
+        )
+    hp_tasks = load_hotpotqa_tasks(limit=3)
     assert len(hp_tasks) == 3
     assert "question" in hp_tasks[0]
     assert "answer" in hp_tasks[0]
 
+    tb_tasks = load_toolbench_tasks(limit=3)
     assert len(tb_tasks) == 3
     assert "query" in tb_tasks[0]
     assert "trap_type" in tb_tasks[0]
 
+    alf_tasks = load_alfworld_tasks(limit=3)
     assert len(alf_tasks) == 3
     assert "goal" in alf_tasks[0]
+
+
+def test_hotpotqa_data_loader_parsing(tmp_path, monkeypatch):
+    """Verify HotpotQA parser logic using synthetic fixture."""
+    fixture_file = tmp_path / "hp_sample.json"
+    fixture_file.write_text(
+        json.dumps([{"id": f"hp_{i}", "question": f"Q{i}", "answer": f"A{i}"} for i in range(5)]),
+        encoding="utf-8",
+    )
+    import benchmarks.hotpotqa_runner as hp_mod
+    monkeypatch.setattr(hp_mod, "HOTPOTQA_DATA_PATH", fixture_file)
+    tasks = hp_mod.load_hotpotqa_tasks(limit=3)
+    assert len(tasks) == 3
+    assert tasks[0]["question"] == "Q0"
+    assert tasks[0]["answer"] == "A0"
+
+
+def test_toolbench_data_loader_parsing(tmp_path, monkeypatch):
+    """Verify ToolBench parser logic using synthetic fixture."""
+    fixture_file = tmp_path / "tb_sample.json"
+    fixture_file.write_text(
+        json.dumps({
+            "tasks": [
+                {"id": f"tb_{i}", "query": f"Query {i}", "trap_type": "obsolete_api"}
+                for i in range(5)
+            ]
+        }),
+        encoding="utf-8",
+    )
+    import benchmarks.toolbench_runner as tb_mod
+    monkeypatch.setattr(tb_mod, "TOOLBENCH_DATA_PATH", fixture_file)
+    tasks = tb_mod.load_toolbench_tasks(limit=3)
+    assert len(tasks) == 3
+    assert tasks[0]["query"] == "Query 0"
+    assert tasks[0]["trap_type"] == "obsolete_api"
+
 
 
 def test_metrics_math():
