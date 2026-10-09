@@ -91,16 +91,10 @@ let localExperiences: Experience[] = [...INITIAL_EXPERIENCES]
 
 export async function fetchExperiences(domain?: TaskDomain | 'all'): Promise<Experience[]> {
   try {
-    // 1. Try Supabase first if configured
-    const dbResults = await dbFetchExperiences(domain)
-    if (dbResults && dbResults.length > 0) {
-      return dbResults
-    }
-
-    // 2. Try Backend API endpoint if reachable
+    // 1. Try Backend API endpoint (/api/v1/memories)
     const url = domain && domain !== 'all' 
-      ? `${API_BASE_URL}/api/memories?domain=${domain}` 
-      : `${API_BASE_URL}/api/memories`
+      ? `${API_BASE_URL}/api/v1/memories?domain=${domain}` 
+      : `${API_BASE_URL}/api/v1/memories`
       
     const session = await getCurrentSession()
     const token = session.session?.access_token
@@ -113,7 +107,29 @@ export async function fetchExperiences(domain?: TaskDomain | 'all'): Promise<Exp
     })
     if (res.ok) {
       const data = await res.json()
+      if (Array.isArray(data) && data.length > 0) {
+        return data.map((item: any) => ({
+          id: item.id,
+          taskDomain: item.taskDomain || item.task_domain,
+          triggerCondition: item.triggerCondition || item.trigger_condition,
+          strategyLesson: item.strategyLesson || item.strategy_lesson,
+          pitfall: item.pitfall,
+          trustScore: item.trustScore !== undefined ? item.trustScore : item.trust_score,
+          usesCount: item.usesCount !== undefined ? item.usesCount : item.uses_count,
+          successesCount: item.successesCount !== undefined ? item.successesCount : item.successes_count,
+          failuresCount: item.failuresCount !== undefined ? item.failuresCount : item.failures_count,
+          status: item.status,
+          createdAt: item.createdAt || item.created_at,
+          updatedAt: item.updatedAt || item.updated_at,
+        }))
+      }
       return data
+    }
+
+    // 2. Fallback to Supabase if configured
+    const dbResults = await dbFetchExperiences(domain)
+    if (dbResults && dbResults.length > 0) {
+      return dbResults
     }
   } catch {
     // Backend offline or unreachable — use local cached experiences
@@ -146,24 +162,34 @@ export async function executeAgentTask({
     onProgress?.({
       type: 'connecting',
       title: 'Connecting to AI Service',
-      detail: `Dispatching to ${API_BASE_URL}/api/agent/execute`,
+      detail: `Dispatching to ${API_BASE_URL}/api/v1/agent/execute`,
     })
 
-    const res = await fetch(`${API_BASE_URL}/api/agent/execute`, {
+    const res = await fetch(`${API_BASE_URL}/api/v1/agent/execute`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
-        task_input: taskInput,
-        task_domain: taskDomain,
-        memory_enabled: memoryEnabled,
+        taskInput,
+        taskDomain,
+        memoryEnabled,
+        memoryMode: 'adaptive',
       }),
     })
 
     if (res.ok) {
       const liveData = await res.json()
+      if (Array.isArray(liveData.trajectory)) {
+        for (const step of liveData.trajectory) {
+          onProgress?.({
+            type: step.node || 'thought',
+            title: step.title || step.node || 'Agent Step',
+            detail: step.detail || step.content || '',
+          })
+        }
+      }
       return liveData
     }
   } catch {
