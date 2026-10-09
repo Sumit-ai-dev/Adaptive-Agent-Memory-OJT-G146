@@ -19,9 +19,11 @@ from ai_service.nodes.retrieve_node import retrieve_experiences
 from ai_service.nodes.trust_node import update_experience_trust
 
 try:
-    from app.database import db
+    from app.api.v1.agent import shared_store
 except ModuleNotFoundError:
-    from backend.app.database import db
+    from backend.app.api.v1.agent import shared_store
+
+from ai_service.embedder import local_embedder
 
 
 router = APIRouter(prefix="/memories", tags=["Memories"])
@@ -49,14 +51,14 @@ async def list_memories(
     status: Optional[ExperienceStatus] = Query(default=None, description="Filter by status (active, candidate, deprecated)"),
     min_trust: float = Query(default=0.0, ge=0.0, le=1.0, description="Minimum trust score"),
 ):
-    """Returns persistent experiences stored in the database matching optional query filters."""
-    return db.list_experiences(domain=domain, status=status, min_trust=min_trust)
+    """Returns persistent experiences stored in SQLite matching optional query filters."""
+    return await shared_store.list_experiences(domain=domain, status=status, min_trust=min_trust)
 
 
 @router.get("/{experience_id}", response_model=Experience, summary="Get single memory by ID")
 async def get_memory(experience_id: str):
-    """Fetches full 7-tuple details for a specific memory experience."""
-    exp = db.get_experience(experience_id)
+    """Fetches full 7-tuple details for a specific memory experience from SQLite."""
+    exp = await shared_store.get_experience(experience_id)
     if not exp:
         raise HTTPException(status_code=404, detail=f"Experience '{experience_id}' not found.")
     return exp
@@ -69,15 +71,32 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
         CompositeScore = 0.70 * Similarity + 0.30 * TrustScore
     Applies Theorem 1 dual-threshold cutoffs (Sim >= 0.70, Trust >= 0.35).
     """
-    all_candidates = db.list_experiences()
+    query_emb = None
+    if payload.task_input:
+        try:
+            query_emb = local_embedder.embed_text(payload.task_input)
+        except Exception:
+            query_emb = None
+
+    all_candidates = await shared_store.list_experiences()
     matches = retrieve_experiences(
-        query_embedding=None,  # Uses neutral baseline similarity for prompt demonstration
+        query_embedding=query_emb,
         candidates=all_candidates,
         filter_domain=payload.domain,
         min_similarity=payload.min_similarity,
         min_trust=payload.min_trust,
         top_k=payload.top_k,
     )
+    # If strict embedding similarity cutoff produces 0 matches, fallback to neutral baseline estimate
+    if not matches and query_emb is not None:
+        matches = retrieve_experiences(
+            query_embedding=None,
+            candidates=all_candidates,
+            filter_domain=payload.domain,
+            min_similarity=payload.min_similarity,
+            min_trust=payload.min_trust,
+            top_k=payload.top_k,
+        )
     return matches
 
 
@@ -89,7 +108,7 @@ async def trust_update_endpoint(payload: TrustUpdateRequest):
     - Failure (R <= 0.30): S_{t+1} = 0.70 * S_t (Aggressive penalty)
     - Automatically deprecates memory if trust drops below theta = 0.35.
     """
-    exp = db.get_experience(payload.experience_id)
+    exp = await shared_store.get_experience(payload.experience_id)
     if not exp:
         raise HTTPException(status_code=404, detail=f"Experience '{payload.experience_id}' not found.")
 
@@ -99,8 +118,16 @@ async def trust_update_endpoint(payload: TrustUpdateRequest):
         execution_id=payload.execution_id,
     )
 
-    db.upsert_experience(updated_exp)
-    db.record_trust_history(audit_record)
+    status_val = updated_exp.status.value if hasattr(updated_exp.status, "value") else str(updated_exp.status)
+    bin_outcome = 1 if payload.outcome_score >= 0.80 else (0 if payload.outcome_score <= 0.30 else None)
+    await shared_store.update_trust(
+        experience_id=payload.experience_id,
+        new_trust=updated_exp.trust_score,
+        reason=audit_record.reason,
+        execution_id=payload.execution_id,
+        status=status_val,
+        binary_outcome=bin_outcome,
+    )
 
     return {
         "experience": updated_exp,

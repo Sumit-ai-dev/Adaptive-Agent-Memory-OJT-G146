@@ -77,8 +77,9 @@ class SQLiteMemoryStore(BaseMemoryStore):
     Uses numpy for vectorized cosine similarity search over stored embeddings.
     """
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: Optional[str] = None, auto_seed: bool = False):
         self.db_path = db_path or settings.SQLITE_DB_PATH
+        self.auto_seed = auto_seed
         os.makedirs(os.path.dirname(os.path.abspath(self.db_path)), exist_ok=True)
         self._init_tables()
 
@@ -126,6 +127,74 @@ class SQLiteMemoryStore(BaseMemoryStore):
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_domain_status ON experiences(task_domain, status)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_trust ON experiences(trust_score DESC)")
             conn.commit()
+            if self.auto_seed:
+                self._seed_default_experiences(conn)
+
+    def _seed_default_experiences(self, conn: sqlite3.Connection) -> None:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM experiences WHERE id = 'exp-coding-001'")
+        if cursor.fetchone()[0] > 0:
+            return
+
+        seeds = [
+            (
+                "exp-coding-001", None, "coding",
+                "Recursive depth calculation in deeply nested tree structures",
+                "Use iterative traversal with an explicit deque/stack to prevent RecursionError on deep trees",
+                "Do not use default sys.setrecursionlimit above 5000 due to OS C-stack overflow risks",
+                0.92, 0.88, 45, 42, 3, "active", None, None, "2026-08-20T14:20:00Z", "2026-09-08T11:45:00Z"
+            ),
+            (
+                "exp-research-002", None, "research",
+                "Multi-source factual claims in academic literature",
+                "Cross-reference claims across at least 2 independent peer-reviewed primary citations before synthesizing conclusions",
+                "Do not cite single secondary review summaries when empirical rate estimates diverge significantly",
+                0.90, 0.94, 120, 114, 6, "active", None, None, "2026-08-15T10:00:00Z", "2026-09-09T18:30:00Z"
+            ),
+            (
+                "exp-analysis-003", None, "analysis",
+                "Time series financial forecasting with missing date intervals",
+                "Resample time series with forward-fill strictly up to 2 intervals, then flag remaining gaps as NaN",
+                "Do not apply linear interpolation across market holiday boundary discontinuities",
+                0.85, 0.82, 30, 26, 4, "active", None, None, "2026-08-28T09:15:00Z", "2026-09-07T16:10:00Z"
+            ),
+            (
+                "exp-candidate-004", None, "coding",
+                "High-concurrency async SQLite connection pooling",
+                "Enable WAL mode and use a dedicated write queue with short exponential backoffs",
+                "Do not share raw SQLite connection objects across asyncio thread boundaries",
+                0.80, 0.50, 5, 4, 1, "candidate", None, None, "2026-09-01T12:00:00Z", "2026-09-10T14:00:00Z"
+            ),
+            (
+                "exp-deprecated-005", None, "coding",
+                "HTML parsing from unstructured web pages",
+                "Use complex regular expressions to extract nested div contents",
+                "Regex parsing fails catastrophically on malformed or non-compliant HTML trees",
+                0.30, 0.22, 18, 2, 16, "deprecated", None, None, "2026-08-10T08:00:00Z", "2026-09-10T20:15:00Z"
+            ),
+        ]
+
+        try:
+            from ai_service.embedder import local_embedder
+        except Exception:
+            local_embedder = None
+
+        for item in seeds:
+            id_, uid, domain, trig, strat, pit, conf, trust, uses, succ, fail, stat, emb, src, cat, uat = item
+            if local_embedder is not None:
+                try:
+                    vec = local_embedder.embed_text(trig)
+                    emb = json.dumps(vec)
+                except Exception:
+                    emb = None
+            cursor.execute("""
+                INSERT OR IGNORE INTO experiences (
+                    id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
+                    confidence, trust_score, uses_count, successes_count, failures_count,
+                    status, embedding, source_task_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (id_, uid, domain, trig, strat, pit, conf, trust, uses, succ, fail, stat, emb, src, cat, uat))
+        conn.commit()
 
     async def add_experience(self, exp: Experience) -> str:
         # P0-3: Nothing in the pipeline previously populated `Experience.embedding`,
