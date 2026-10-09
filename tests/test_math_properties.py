@@ -8,8 +8,13 @@ Adversarially tests mathematical guarantees, boundaries, monotonicity, and stabi
 """
 
 import math
-from hypothesis import given, settings as hyp_settings, strategies as st
 import pytest
+
+try:
+    from hypothesis import given, settings as hyp_settings, strategies as st
+except ImportError as e:
+    pytest.skip(f"hypothesis not installed: {e}", allow_module_level=True)
+
 
 from ai_service.trust_math import (
     beta_lcb,
