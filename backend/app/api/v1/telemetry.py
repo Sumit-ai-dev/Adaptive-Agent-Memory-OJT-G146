@@ -9,9 +9,9 @@ Provides:
 from fastapi import APIRouter
 
 try:
-    from app.api.v1.agent import shared_store
+    from app.api.v1.agent import get_task_execution_count, shared_store
 except ModuleNotFoundError:
-    from backend.app.api.v1.agent import shared_store
+    from backend.app.api.v1.agent import get_task_execution_count, shared_store
 
 
 router = APIRouter(prefix="/telemetry", tags=["Telemetry"])
@@ -37,9 +37,11 @@ async def get_telemetry():
     total_uses = sum(e.uses_count for e in exps)
     total_successes = sum(e.successes_count for e in exps)
     hit_rate = round((total_successes / total_uses * 100), 1) if total_uses > 0 else 85.0
+    task_count = total_uses + get_task_execution_count()
 
     return {
-        "totalTasks": max(len(exps), 1),
+        "totalTasks": task_count,
+        "totalTaskExecutions": task_count,
         "activeMemories": len(active),
         "candidateMemories": len(candidate),
         "deprecatedMemories": len(deprecated),

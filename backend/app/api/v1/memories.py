@@ -87,16 +87,6 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
         min_trust=payload.min_trust,
         top_k=payload.top_k,
     )
-    # If strict embedding similarity cutoff produces 0 matches, fallback to neutral baseline estimate
-    if not matches and query_emb is not None:
-        matches = retrieve_experiences(
-            query_embedding=None,
-            candidates=all_candidates,
-            filter_domain=payload.domain,
-            min_similarity=payload.min_similarity,
-            min_trust=payload.min_trust,
-            top_k=payload.top_k,
-        )
     return matches
 
 

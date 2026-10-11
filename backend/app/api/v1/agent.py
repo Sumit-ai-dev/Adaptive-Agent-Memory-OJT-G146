@@ -21,8 +21,14 @@ router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 # seed experiences exist on every fresh CI run (idempotent: skipped if already present).
 shared_store = SQLiteMemoryStore(db_path="data/adaptive_memory.db", auto_seed=True)
 
-# In-memory execution history cache
+# In-memory execution history cache and unbounded lifetime execution counter
 _execution_history: List[TaskExecution] = []
+_total_task_executions: int = 0
+
+
+def get_task_execution_count() -> int:
+    """Returns the cumulative lifetime agent task execution count."""
+    return _total_task_executions
 
 
 @router.post(
@@ -37,9 +43,11 @@ async def run_agent_task(request: TaskExecuteRequest) -> TaskExecution:
     `retrieve_node` -> `execute_node` -> `evaluate_node` -> `reflect_node` -> `trust_node`.
     Handles multi-model dispatch, tool verification, and experiential memory calibration.
     """
+    global _total_task_executions
     try:
         logger.info(f"Received agent execution request: domain={request.task_domain}, mode={request.memory_mode}")
         execution_result = await execute_task(request, memory_store=shared_store)
+        _total_task_executions += 1
 
         # Store in historical cache (keep latest 100)
         _execution_history.insert(0, execution_result)

@@ -123,7 +123,6 @@ export async function fetchExperiences(domain?: TaskDomain | 'all'): Promise<Exp
           updatedAt: item.updatedAt || item.updated_at,
         }))
       }
-      return data
     }
 
     // 2. Fallback to Supabase if configured
