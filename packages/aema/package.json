@@ -1,0 +1,67 @@
+{
+  "name": "aema",
+  "version": "0.1.0",
+  "description": "Reliability-Aware Experiential Memory for Autonomous AI Agents — Asymmetric Exponential Moving Average (AEMA) SDK and MCP Server",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "aema": "./dist/cli.js",
+    "aema-mcp": "./dist/mcp.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./mcp": {
+      "types": "./dist/mcp.d.ts",
+      "import": "./dist/mcp.js",
+      "require": "./dist/mcp.cjs"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "start": "node dist/mcp.js",
+    "test": "node --experimental-strip-types --test src/trust.test.ts"
+  },
+  "keywords": [
+    "aema",
+    "agent-memory",
+    "ai-agents",
+    "mcp",
+    "model-context-protocol",
+    "langchain",
+    "claude",
+    "cursor",
+    "negative-transfer",
+    "experiential-learning"
+  ],
+  "author": "Sumit Das <sumitds2005@gmail.com>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146/issues"
+  },
+  "homepage": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146#readme",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.6.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.0",
+    "tsup": "^8.3.6",
+    "typescript": "^5.7.3"
+  }
+}

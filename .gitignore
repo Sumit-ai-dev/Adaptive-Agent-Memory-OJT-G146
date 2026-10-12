@@ -46,6 +46,7 @@ yarn-error.log*
 # Confidential Research Paper Manuscripts & LaTeX
 paper/
 paper.zip
+paper_bundle.zip
 scripts/generate_paper_plots.py
 scripts/verify_paper_compliance.py
 
