@@ -12,6 +12,9 @@
 export * from './types.js';
 export * from './trust.js';
 export * from './client.js';
+export * from './wal.js';
+export * from './dedup.js';
+export * from './audit.js';
 
 // Default export
 import { AEMAClient } from './client.js';

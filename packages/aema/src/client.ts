@@ -1,6 +1,6 @@
 /**
  * AEMA Client: Connects to local or remote AEMA Memory Gateway.
- * Supports both standalone in-memory mode and remote API mode.
+ * Supports standalone in-memory mode, remote API mode, WAL audit trails, and dedup.
  */
 
 import type {
@@ -19,6 +19,9 @@ import {
   DEFAULT_QUARANTINE_THRESHOLD,
   rankByReliability,
 } from './trust.js';
+import { globalWAL, type WALEntry } from './wal.js';
+import { deduplicateExperiences, type DedupResult } from './dedup.js';
+import { auditMemoryBank, type AuditReport } from './audit.js';
 
 export class AEMAClient {
   private baseUrl: string;
@@ -33,11 +36,12 @@ export class AEMAClient {
   }
 
   /**
-   * Store a new experiential memory.
+   * Store a new experiential memory and record WAL entry.
    */
   async store(newExp: NewExperience): Promise<Experience> {
     const initialTrust = newExp.initialTrust ?? 1.0;
     const now = new Date().toISOString();
+    const isQuar = isQuarantined(initialTrust);
 
     const experience: Experience = {
       id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -47,13 +51,23 @@ export class AEMAClient {
       trustScore: initialTrust,
       totalTrials: 1,
       consecutiveFailures: newExp.outcome === 'failure' ? 1 : 0,
-      isQuarantined: isQuarantined(initialTrust),
+      isQuarantined: isQuar,
       metadata: newExp.metadata,
       createdAt: now,
       updatedAt: now,
     };
 
-    // If API is available, attempt remote sync; otherwise save locally
+    // Log to Write-Ahead Log
+    globalWAL.log({
+      eventType: 'STORE',
+      experienceId: experience.id,
+      domain: newExp.metadata?.domain as string | undefined,
+      newTrust: initialTrust,
+      quarantined: isQuar,
+      metadata: { taskLength: newExp.task.length },
+    });
+
+    // If remote API is available, attempt remote sync; otherwise save locally
     try {
       if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
         const res = await this.fetchWithTimeout(`${this.baseUrl}/api/v1/memories`, {
@@ -92,6 +106,7 @@ export class AEMAClient {
             query: options.query,
             top_k: topK,
             min_trust: minTrust,
+            domain: options.domain,
           }),
         });
         if (res.ok) {
@@ -102,9 +117,14 @@ export class AEMAClient {
       // Fallback to local ranking
     }
 
-    // Local semantic mock matching via keyword overlap
+    // Local semantic mock matching via keyword overlap & domain filtering
+    let candidatesList = Array.from(this.localStore.values());
+    if (options.domain) {
+      candidatesList = candidatesList.filter((e) => e.metadata?.domain === options.domain);
+    }
+
     const queryTokens = new Set(options.query.toLowerCase().split(/\s+/).filter(Boolean));
-    const candidates = Array.from(this.localStore.values()).map((exp) => {
+    const candidates = candidatesList.map((exp) => {
       const taskTokens = exp.task.toLowerCase().split(/\s+/);
       const overlap = taskTokens.filter((t) => queryTokens.has(t)).length;
       const semanticRelevance = queryTokens.size > 0 ? Math.min(1.0, overlap / queryTokens.size + 0.2) : 0.5;
@@ -115,7 +135,7 @@ export class AEMAClient {
   }
 
   /**
-   * Record outcome feedback and update trust using A-EMA.
+   * Record outcome feedback, update trust via A-EMA, and log to WAL.
    */
   async recordFeedback(
     experienceId: string,
@@ -141,6 +161,17 @@ export class AEMAClient {
       this.localStore.set(experienceId, exp);
     }
 
+    // Write-Ahead Log audit
+    globalWAL.log({
+      eventType: result.isQuarantined ? 'QUARANTINE' : 'FEEDBACK',
+      experienceId,
+      domain: exp?.metadata?.domain as string | undefined,
+      outcome,
+      previousTrust: result.previousScore,
+      newTrust: result.newScore,
+      quarantined: result.isQuarantined,
+    });
+
     try {
       if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
         await this.fetchWithTimeout(`${this.baseUrl}/api/v1/memories/${experienceId}/feedback`, {
@@ -154,6 +185,48 @@ export class AEMAClient {
     }
 
     return result;
+  }
+
+  /**
+   * Offline deduplication sweep across stored experiences.
+   */
+  dedup(options?: { threshold?: number; dryRun?: boolean; domain?: string }): DedupResult {
+    const all = Array.from(this.localStore.values());
+    const { cleaned, report } = deduplicateExperiences(all, {
+      similarityThreshold: options?.threshold,
+      dryRun: options?.dryRun,
+      domain: options?.domain,
+    });
+
+    if (!options?.dryRun) {
+      this.localStore.clear();
+      for (const item of cleaned) {
+        this.localStore.set(item.id, item);
+      }
+    }
+
+    return report;
+  }
+
+  /**
+   * Memory bank health audit report.
+   */
+  audit(): AuditReport {
+    return auditMemoryBank(Array.from(this.localStore.values()));
+  }
+
+  /**
+   * Get recent WAL audit records.
+   */
+  getWAL(limit = 20): WALEntry[] {
+    return globalWAL.getRecent(limit);
+  }
+
+  /**
+   * Return all stored experiences.
+   */
+  getAll(): Experience[] {
+    return Array.from(this.localStore.values());
   }
 
   /**

@@ -14,10 +14,13 @@
 
 Standard retrieval-augmented generation (RAG) and agent memory architectures retrieve past experiences based solely on **semantic similarity**. When an agent recalls a flawed, poisoned, or contextually invalid solution, it blindly repeats past mistakes—a catastrophic failure mode known as **negative transfer**.
 
-**AEMA** introduces a reliability layer:
+**AEMA** introduces a robust reliability and memory lifecycle layer:
 1. **Asymmetric EMA Trust Tracking**: Fast penalty on failure ($\beta = 0.70$), cautious reinforcement on success ($\alpha = 0.85$).
 2. **Theorem 1 Deterministic Quarantine**: Automatically isolates degraded memories into an inactive state when trust drops below the threshold ($\theta = 0.35$).
-3. **MCP Native Protocol**: Plug directly into **Claude Desktop**, **Cursor**, **Windsurf**, or custom LangChain/LangGraph pipelines.
+3. **Write-Ahead Logging (WAL)**: Immutable append-only audit trail logging every memory mutation, decay step, and quarantine event.
+4. **Offline Memory Deduplication**: Token-level clustering and deduplication sweeps to merge redundant memories while preserving the highest-trust experience.
+5. **System Health & Risk Audit**: Automated diagnostic reporting calculating average trust, quarantine ratios, and the Negative Transfer Risk Index.
+6. **MCP Native Protocol**: Plug directly into **Claude Desktop**, **Cursor**, **Windsurf**, or custom LangChain/LangGraph pipelines.
 
 ---
 
@@ -37,6 +40,12 @@ npx aema-mcp
 
 # Or inspect system status via CLI
 npx aema status
+
+# Run full memory bank health audit
+npx aema audit
+
+# Deduplicate redundant memory traces
+npx aema dedup --dry-run
 ```
 
 ---
@@ -60,7 +69,7 @@ Add the following to your `claude_desktop_config.json`:
 ```
 
 ### Cursor IDE Configuration
-Add to `.cursor/mcp.json`:
+Add to `.cursor/mcp.json` or install via the included `.cursor-plugin`:
 
 ```json
 {
@@ -82,6 +91,20 @@ docker run -i --rm aema/mcp
 
 ---
 
+## 🛠️ MCP Tools Overview
+
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| `aema_retrieve` | `query`, `topK`, `minTrust`, `domain` | Retrieves non-quarantined, verified experiences ranked by reliability |
+| `aema_store` | `task`, `solution`, `initialTrust`, `domain` | Records execution traces with initial trust score and logs to WAL |
+| `aema_feedback` | `experienceId`, `outcome` (`success`/`failure`) | Updates trust via A-EMA; activates Theorem 1 quarantine if score decays below 0.35 |
+| `aema_audit` | *(none)* | Comprehensive health diagnostics and Negative Transfer Risk Index |
+| `aema_dedup` | `threshold`, `dryRun`, `domain` | Offline deduplication sweep merging redundant memories |
+| `aema_wal` | `limit` | Inspects recent immutable Write-Ahead Log audit entries |
+| `aema_status` | *(none)* | Displays active trust parameters, quarantined count, and system health |
+
+---
+
 ## 💻 TypeScript / JavaScript SDK
 
 ```typescript
@@ -92,22 +115,27 @@ const memory = new AEMAClient();
 
 // 2. Store an experiential memory
 const exp = await memory.store({
-  task: 'Fix React hydratation mismatch in Next.js SSR',
+  task: 'Fix React hydration mismatch in Next.js SSR',
   solution: 'Use useEffect or dynamic import with ssr: false for browser-only APIs.',
   initialTrust: 1.0,
+  metadata: { domain: 'coding' },
 });
 
 // 3. Retrieve verified, non-quarantined memories
-const results = await memory.retrieve('React hydration bug');
+const results = await memory.retrieve({ query: 'React hydration bug', domain: 'coding' });
 for (const match of results) {
   console.log(`[Rank: ${match.effectiveScore}] ${match.experience.task}`);
 }
 
-// 4. Record execution outcome (updates trust via A-EMA)
+// 4. Record execution outcome (updates trust via A-EMA & logs to WAL)
 const feedback = await memory.recordFeedback(exp.id, 'failure');
 if (feedback.isQuarantined) {
   console.warn('Memory quarantined to prevent negative transfer!');
 }
+
+// 5. Run health audit
+const report = memory.audit();
+console.log(`Memory Health: ${report.healthStatus}, Risk: ${report.negativeTransferRiskScore}`);
 ```
 
 ---
