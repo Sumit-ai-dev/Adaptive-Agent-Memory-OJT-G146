@@ -140,3 +140,31 @@ describe('MemPalace-Inspired Robustness (WAL, Dedup, Audit)', () => {
     wal.clear();
   });
 });
+
+describe('Multi-LLM Adapters (Claude, Cursor, OpenAI, Grok, Gemini)', () => {
+  it('dispatches OpenAI / Grok tool calls seamlessly', async () => {
+    const { handleOpenAIToolCall, openAITools } = await import('./adapters.js');
+    assert.equal(openAITools.length, 4);
+
+    const storeRes = await handleOpenAIToolCall('aema_store', {
+      task: 'Solve quadratic equation',
+      solution: 'Use quadratic formula -b +- sqrt(b^2 - 4ac) / 2a',
+      initialTrust: 1.0,
+      domain: 'math',
+    });
+    const parsed = JSON.parse(storeRes);
+    assert.equal(parsed.trustScore, 1.0);
+
+    const auditRes = await handleOpenAIToolCall('aema_audit', {});
+    const auditObj = JSON.parse(auditRes);
+    assert.ok(auditObj.totalMemories >= 1);
+  });
+
+  it('dispatches Gemini tool calls seamlessly', async () => {
+    const { handleGeminiToolCall, geminiTools } = await import('./adapters.js');
+    assert.equal(geminiTools[0].functionDeclarations.length, 4);
+
+    const res = await handleGeminiToolCall('aema_audit', {});
+    assert.ok(res.totalMemories !== undefined);
+  });
+});

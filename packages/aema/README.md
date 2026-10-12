@@ -50,13 +50,12 @@ npx aema dedup --dry-run
 
 ---
 
-## 🤖 Use with Claude Desktop & Cursor (MCP)
+## 🤖 Multi-LLM Ecosystem Integration
 
-AEMA implements the official [Model Context Protocol (MCP)](https://modelcontextprotocol.io) specification.
+AEMA provides first-class support for **Claude**, **Cursor**, **OpenAI**, **Grok**, and **Google Gemini**:
 
-### Claude Desktop Configuration
-Add the following to your `claude_desktop_config.json`:
-
+### 1. Claude Desktop & Claude Code (via MCP)
+Add to your `claude_desktop_config.json`:
 ```json
 {
   "mcpServers": {
@@ -68,9 +67,8 @@ Add the following to your `claude_desktop_config.json`:
 }
 ```
 
-### Cursor IDE Configuration
-Add to `.cursor/mcp.json` or install via the included `.cursor-plugin`:
-
+### 2. Cursor IDE (via MCP or `.cursor-plugin`)
+Add to `.cursor/mcp.json` or enable the included `.cursor-plugin`:
 ```json
 {
   "mcpServers": {
@@ -82,11 +80,58 @@ Add to `.cursor/mcp.json` or install via the included `.cursor-plugin`:
 }
 ```
 
-### Docker Execution
-Run the isolated container without local Node.js:
+### 3. OpenAI (GPT-4o, o1, o3-mini)
+```typescript
+import OpenAI from 'openai';
+import { openAITools, handleOpenAIToolCall } from 'aema';
 
-```bash
-docker run -i --rm aema/mcp
+const openai = new OpenAI();
+
+const response = await openai.chat.completions.create({
+  model: 'gpt-4o',
+  messages: [{ role: 'user', content: 'How do I handle React SSR hydration error?' }],
+  tools: openAITools,
+});
+
+// Dispatch tool call directly
+for (const call of response.choices[0].message.tool_calls || []) {
+  const result = await handleOpenAIToolCall(call.function.name, JSON.parse(call.function.arguments));
+  console.log('AEMA Memory Output:', result);
+}
+```
+
+### 4. Grok / xAI (Grok-2, Grok-3)
+xAI uses OpenAI-compatible schemas. Simply point the OpenAI SDK to `https://api.x.ai/v1`:
+```typescript
+import OpenAI from 'openai';
+import { grokTools, handleOpenAIToolCall } from 'aema';
+
+const grok = new OpenAI({
+  baseURL: 'https://api.x.ai/v1',
+  apiKey: process.env.XAI_API_KEY,
+});
+
+const response = await grok.chat.completions.create({
+  model: 'grok-2-latest',
+  messages: [{ role: 'user', content: 'Debug memory leaks in Python asyncio.' }],
+  tools: grokTools,
+});
+```
+
+### 5. Google Gemini (Gemini 1.5 Pro, 2.0 Flash)
+```typescript
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { geminiTools, handleGeminiToolCall } from 'aema';
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+const model = genAI.getGenerativeModel({
+  model: 'gemini-2.0-flash',
+  tools: geminiTools,
+});
+
+const chat = model.startChat();
+const result = await chat.sendMessage('Find reliable past solutions for PostgreSQL indexing.');
+// Handle function calls via handleGeminiToolCall(name, args)
 ```
 
 ---
