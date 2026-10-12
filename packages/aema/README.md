@@ -52,7 +52,7 @@ npx aema dedup --dry-run
 
 ## 🤖 Multi-LLM Ecosystem Integration
 
-AEMA provides first-class support for **Claude**, **Cursor**, **Google Antigravity**, **OpenAI**, **Grok**, and **Google Gemini**:
+AEMA provides first-class support for **Claude**, **Cursor**, **Google Antigravity**, **Codex CLI**, **OpenAI**, **Grok**, and **Google Gemini**:
 
 ### 1. Claude Desktop & Claude Code (via MCP)
 Add to your `claude_desktop_config.json`:
@@ -94,7 +94,20 @@ Includes a native `.antigravity-plugin` with automatic MCP tool registration and
 ```
 Antigravity agents can directly call `@skill:aema` to follow reliability-aware retrieval protocols.
 
-### 4. OpenAI (GPT-4o, o1, o3-mini)
+### 4. Codex CLI & OpenAI Codex (via `.codex-plugin`)
+Add to `~/.codex/config.json` or install via `.codex-plugin`:
+```json
+{
+  "mcpServers": {
+    "aema": {
+      "command": "npx",
+      "args": ["-y", "aema-mcp"]
+    }
+  }
+}
+```
+
+### 5. OpenAI (GPT-4o, o1, o3-mini)
 ```typescript
 import OpenAI from 'openai';
 import { openAITools, handleOpenAIToolCall } from 'aema';

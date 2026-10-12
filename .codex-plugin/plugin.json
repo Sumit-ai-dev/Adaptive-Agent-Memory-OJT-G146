@@ -1,0 +1,42 @@
+{
+  "name": "aema",
+  "version": "0.1.0",
+  "description": "Reliability-Aware Experiential Memory for AI Agents — Isolates negative transfer via Asymmetric EMA and Theorem 1 deterministic quarantine.",
+  "author": {
+    "name": "Sumit Das"
+  },
+  "homepage": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146",
+  "repository": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146",
+  "license": "MIT",
+  "keywords": [
+    "memory",
+    "agent-memory",
+    "ai",
+    "rag",
+    "mcp",
+    "codex",
+    "trust",
+    "negative-transfer"
+  ],
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "AEMA Memory",
+    "shortDescription": "Reliability-aware experiential memory for Codex",
+    "longDescription": "Equip Codex with self-correcting experiential memory. Prevents negative transfer by coupling semantic search with empirical reliability tracking, automated quarantine, and audit diagnostics.",
+    "developerName": "Sumit Das",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Read",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146",
+    "defaultPrompt": [
+      "Retrieve reliable memories for this programming task",
+      "Store this verified solution in AEMA memory",
+      "Run memory bank health audit and check negative transfer risk"
+    ],
+    "brandColor": "#2563EB"
+  }
+}
