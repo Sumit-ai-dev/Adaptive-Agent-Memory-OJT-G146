@@ -53,8 +53,10 @@ class AIServiceSettings(BaseSettings):
     WEIGHT_TRUST: float = Field(default=0.30, description="Weight for empirical trust S_e(t)")
     SIMILARITY_THRESHOLD: float = Field(default=0.60, description="Minimum cosine similarity cutoff")
 
-    # Storage Paths
+    # Storage Paths & Engines
+    STORAGE_ENGINE: str = Field(default="sqlite", description="Storage backend: 'sqlite', 'postgres', or 'supabase'")
     SQLITE_DB_PATH: str = Field(default="data/adaptive_memory.db")
+    DATABASE_URL: Optional[str] = Field(default=None, description="PostgreSQL / Supabase connection URL with pgvector")
     SUPABASE_URL: Optional[str] = Field(default=None)
     SUPABASE_ANON_KEY: Optional[str] = Field(default=None)
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = Field(default=None)

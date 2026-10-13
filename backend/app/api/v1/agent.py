@@ -9,7 +9,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Query, status
 
 from ai_service.graph import execute_task
-from ai_service.memory.store import SQLiteMemoryStore
+from ai_service.memory.store import BaseMemoryStore, SQLiteMemoryStore, get_memory_store
 from models.domain import MemoryMode, TaskDomain
 from models.task import TaskExecuteRequest, TaskExecution
 
@@ -19,7 +19,7 @@ router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 
 # Global shared memory store for API server — auto_seed ensures the 5 canonical
 # seed experiences exist on every fresh CI run (idempotent: skipped if already present).
-shared_store = SQLiteMemoryStore(db_path="data/adaptive_memory.db", auto_seed=True)
+shared_store: BaseMemoryStore = get_memory_store(auto_seed=True)
 
 # In-memory execution history cache and unbounded lifetime execution counter
 _execution_history: List[TaskExecution] = []

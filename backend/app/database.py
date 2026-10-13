@@ -1,21 +1,25 @@
 """
 Experience Database Repository for Adaptive Agent Memory System.
-Proxies directly to SQLiteMemoryStore for unified local vector and relational storage.
+Proxies to get_memory_store() supporting SQLite, PostgreSQL (pgvector), and Supabase.
 """
 
 import asyncio
 from typing import Any, Dict, List, Optional
 
-from ai_service.memory.store import SQLiteMemoryStore
+from ai_service.memory.store import BaseMemoryStore, get_memory_store
 from models.domain import TaskDomain
 from models.experience import Experience, ExperienceStatus, TrustHistoryRecord
 
 
 class MemoryDatabase:
-    """Unified SQLite experience repository proxy."""
+    """Unified experience repository proxy supporting SQLite, PostgreSQL & Supabase."""
 
-    def __init__(self, db_path: str = "data/adaptive_memory.db"):
-        self._store = SQLiteMemoryStore(db_path=db_path, auto_seed=True)
+    def __init__(self, db_path: Optional[str] = None, engine: Optional[str] = None):
+        self._store: BaseMemoryStore = get_memory_store(engine=engine, db_path=db_path, auto_seed=True)
+
+    @property
+    def store(self) -> BaseMemoryStore:
+        return self._store
 
     def _run(self, coro):
         try:
@@ -45,7 +49,7 @@ class MemoryDatabase:
 
     def record_trust_history(self, record: TrustHistoryRecord) -> None:
         """Trust history is written via update_trust in graph.py execute_task."""
-        pass  # intentional no-op: audit rows written by SQLiteMemoryStore.update_trust
+        pass  # intentional no-op: audit rows written by memory store update_trust
 
     def get_telemetry_metrics(self) -> Dict[str, Any]:
         exps = self.list_experiences()
