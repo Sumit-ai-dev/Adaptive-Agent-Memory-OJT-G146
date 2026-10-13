@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "aema": {
+      "command": "npx",
+      "args": ["-y", "aema-mcp"],
+      "env": {
+        "AEMA_API_URL": "http://localhost:8000"
+      }
+    }
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "name": "aema",
+  "displayName": "AEMA: Reliability-Aware Agent Memory",
+  "description": "Isolate negative transfer and eliminate hallucinations from agent experiential memory. Features A-EMA trust scoring, Theorem 1 quarantine, and offline deduplication for Cursor.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Sumit Das"
+  },
+  "homepage": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146",
+  "repository": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146",
+  "license": "MIT",
+  "keywords": [
+    "memory",
+    "agent-memory",
+    "ai",
+    "mcp",
+    "trust",
+    "negative-transfer",
+    "cursor"
+  ]
+}

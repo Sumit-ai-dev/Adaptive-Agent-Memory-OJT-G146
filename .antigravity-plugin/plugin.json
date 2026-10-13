@@ -1,0 +1,8 @@
+{
+  "name": "aema",
+  "displayName": "AEMA: Reliability-Aware Agent Memory",
+  "version": "0.1.0",
+  "description": "Adaptive Experience Memory Agent (AEMA) plugin for Google Antigravity. Eliminates negative transfer using Theorem 1 quarantine and A-EMA trust dynamics.",
+  "author": "Sumit Das",
+  "homepage": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146"
+}

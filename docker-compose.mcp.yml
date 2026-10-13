@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  aema-mcp:
+    build:
+      context: ./packages/aema
+      dockerfile: Dockerfile
+    image: aema/mcp:0.1.0
+    container_name: aema-mcp-server
+    environment:
+      - NODE_ENV=production
+      - AEMA_API_URL=http://backend:8000
+    restart: unless-stopped
+    stdin_open: true
+    tty: true
