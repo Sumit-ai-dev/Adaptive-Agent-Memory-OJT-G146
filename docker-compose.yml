@@ -1,0 +1,95 @@
+# ==============================================================================
+# Docker Compose Orchestration for AEMA (Adaptive Agent Memory System)
+# Multi-service topology: FastAPI Backend, React Frontend Dashboard, and MCP Server
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # Backend: FastAPI Gateway, LangGraph cyclical agent, and memory engine
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    image: aema/backend:0.1.0
+    container_name: aema-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_PATH=/app/data/adaptive_memory.db
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_KEY=${SUPABASE_KEY:-}
+    volumes:
+      - aema_data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - aema-net
+
+  # ----------------------------------------------------------------------------
+  # Frontend: Production Nginx serving Vite/React dashboard with reverse proxy
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: aema/frontend:0.1.0
+    container_name: aema-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - aema-net
+
+  # ----------------------------------------------------------------------------
+  # MCP Server: Node.js Model Context Protocol Server for Claude Desktop & Cursor
+  # ----------------------------------------------------------------------------
+  mcp:
+    build:
+      context: ./packages/aema
+      dockerfile: Dockerfile
+    image: aema/mcp:0.1.0
+    container_name: aema-mcp
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - AEMA_API_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    networks:
+      - aema-net
+
+# ------------------------------------------------------------------------------
+# Persistent Volumes
+# ------------------------------------------------------------------------------
+volumes:
+  aema_data:
+    driver: local
+
+# ------------------------------------------------------------------------------
+# Networks
+# ------------------------------------------------------------------------------
+networks:
+  aema-net:
+    driver: bridge

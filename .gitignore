@@ -24,6 +24,7 @@ build/
 # IDE and editors
 .vscode/
 .idea/
+.agents/
 *.swp
 *.swo
 

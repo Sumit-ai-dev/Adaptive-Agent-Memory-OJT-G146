@@ -1,4 +1,7 @@
-version: '3.8'
+# ==============================================================================
+# Standalone Docker Compose for AEMA MCP Server (MemPalace-style deployment)
+# Runs the Model Context Protocol server over stdio for Claude Desktop & Cursor
+# ==============================================================================
 
 services:
   aema-mcp:
@@ -9,7 +12,13 @@ services:
     container_name: aema-mcp-server
     environment:
       - NODE_ENV=production
-      - AEMA_API_URL=http://backend:8000
+      - AEMA_API_URL=${AEMA_API_URL:-http://localhost:8000}
     restart: unless-stopped
     stdin_open: true
-    tty: true
+    tty: false
+    volumes:
+      - aema_mcp_data:/app/data
+
+volumes:
+  aema_mcp_data:
+    driver: local
