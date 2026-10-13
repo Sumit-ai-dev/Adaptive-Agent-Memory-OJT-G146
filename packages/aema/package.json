@@ -45,7 +45,11 @@
     "negative-transfer",
     "experiential-learning"
   ],
-  "author": "Sumit Das <sumitds2005@gmail.com>",
+  "author": "Group G146 (Sumit Das & Kasat Sakshi Dattaprasad)",
+  "contributors": [
+    "Sumit Das <sumitds2005@gmail.com>",
+    "Kasat Sakshi Dattaprasad <sakshisamu18@gmail.com>"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
