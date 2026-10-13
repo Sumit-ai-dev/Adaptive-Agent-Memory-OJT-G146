@@ -30,12 +30,17 @@ router = APIRouter(prefix="/memories", tags=["Memories"])
 
 
 class MemoryRetrieveRequest(BaseModel):
-    """Payload for testing live composite memory retrieval."""
-    task_input: str = Field(..., min_length=1, description="Task prompt or query to match against memory index")
+    """Payload for live composite memory retrieval (supports both API and SDK schemas)."""
+    task_input: Optional[str] = Field(default=None, description="Task prompt or query to match against memory index")
+    query: Optional[str] = Field(default=None, description="SDK/MCP alias for task_input")
     domain: Optional[TaskDomain] = Field(default=None, description="Optional task domain filter")
     min_similarity: float = Field(default=0.70, ge=0.0, le=1.0, description="Minimum cosine similarity cutoff")
     min_trust: float = Field(default=0.35, ge=0.0, le=1.0, description="Minimum trust score cutoff (Theorem 1 boundary)")
     top_k: int = Field(default=3, ge=1, le=10, description="Maximum number of memories to return")
+
+    @property
+    def effective_input(self) -> str:
+        return self.task_input or self.query or ""
 
 
 class TrustUpdateRequest(BaseModel):
@@ -43,6 +48,13 @@ class TrustUpdateRequest(BaseModel):
     experience_id: str = Field(..., description="ID of the experience to update")
     outcome_score: float = Field(..., ge=0.0, le=1.0, description="Evaluated outcome reward (0.0=failure, 1.0=success)")
     execution_id: Optional[str] = Field(default=None, description="Optional audit execution ID")
+
+
+class MemoryFeedbackRequest(BaseModel):
+    """Feedback payload used by AEMA TypeScript SDK and MCP clients."""
+    outcome: Optional[str] = Field(default="success", description="Outcome label: 'success' or 'failure'")
+    outcome_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    new_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
 
 
 @router.get("", response_model=list[Experience], summary="List stored memories")
@@ -72,9 +84,10 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
     Applies Theorem 1 dual-threshold cutoffs (Sim >= 0.70, Trust >= 0.35).
     """
     query_emb = None
-    if payload.task_input:
+    query_text = payload.effective_input
+    if query_text:
         try:
-            query_emb = local_embedder.embed_text(payload.task_input)
+            query_emb = local_embedder.embed_text(query_text)
         except Exception:
             query_emb = None
 
@@ -88,6 +101,12 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
         top_k=payload.top_k,
     )
     return matches
+
+
+@router.post("/search", response_model=list[ExperienceMatch], summary="SDK/MCP alias for composite memory retrieval")
+async def search_memories_endpoint(payload: MemoryRetrieveRequest):
+    """Alias for /retrieve matching AEMA TypeScript SDK and MCP specification."""
+    return await retrieve_memories_endpoint(payload)
 
 
 @router.post("/trust-update", summary="Execute Asymmetric EMA trust update")
@@ -124,3 +143,21 @@ async def trust_update_endpoint(payload: TrustUpdateRequest):
         "auditRecord": audit_record,
         "trustUpdate": trust_update,
     }
+
+
+@router.post("/{experience_id}/feedback", summary="Record feedback from AEMA SDK/MCP clients")
+async def record_feedback_endpoint(experience_id: str, payload: MemoryFeedbackRequest):
+    """
+    Direct feedback bridge for AEMAClient and MCP server.
+    Maps outcome ('success'/'failure') to Asymmetric EMA update.
+    """
+    score = payload.outcome_score
+    if score is None:
+        score = 1.0 if payload.outcome == "success" else 0.0
+
+    trust_req = TrustUpdateRequest(
+        experience_id=experience_id,
+        outcome_score=score,
+        execution_id=None,
+    )
+    return await trust_update_endpoint(trust_req)

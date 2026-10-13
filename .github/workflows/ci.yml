@@ -56,3 +56,25 @@ jobs:
           # matching memory can actually retrieve it. Production config is unchanged.
           SIMILARITY_THRESHOLD: "0.20"
 
+  test-sdk:
+    name: Build & Test AEMA TypeScript SDK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install SDK dependencies
+        run: |
+          cd packages/aema
+          npm install
+
+      - name: Run AEMA SDK Test Suite
+        run: |
+          cd packages/aema
+          npm test
+
