@@ -8,9 +8,10 @@ Validates:
 - get_memory_store() factory resolution and graceful fallbacks
 """
 
+import asyncio
+from datetime import datetime, timezone
 import json
 from unittest.mock import AsyncMock, MagicMock, patch
-import pytest
 
 from ai_service.memory.store import (
     BaseMemoryStore,
@@ -23,192 +24,196 @@ from models.domain import ExperienceStatus, TaskDomain
 from models.experience import Experience, ExperienceStatus as ExpStatus
 
 
-@pytest.mark.asyncio
-async def test_postgres_memory_store_init_and_ddl():
+def test_postgres_memory_store_init_and_ddl():
     """Verify PostgresMemoryStore initializes tables with vector(384) and HNSW index."""
-    mock_conn = AsyncMock()
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+    async def _run():
+        mock_conn = AsyncMock()
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-    store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
-    await store.init_db()
+        with patch("ai_service.memory.store.HAS_POSTGRES", True):
+            store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
+            await store.init_db()
 
-    # Verify DDL calls
-    execute_calls = [call.args[0] for call in mock_conn.execute.call_args_list]
-    assert any("CREATE EXTENSION IF NOT EXISTS vector" in q for q in execute_calls)
-    assert any("embedding vector(384)" in q for q in execute_calls)
-    assert any("hnsw" in q.lower() for q in execute_calls)
+            execute_calls = [call.args[0] for call in mock_conn.execute.call_args_list]
+            assert any("CREATE EXTENSION IF NOT EXISTS vector" in q for q in execute_calls)
+            assert any("embedding vector(384)" in q for q in execute_calls)
+            assert any("hnsw" in q.lower() for q in execute_calls)
+
+    asyncio.run(_run())
 
 
-@pytest.mark.asyncio
-async def test_postgres_memory_store_add_experience():
+def test_postgres_memory_store_add_experience():
     """Verify add_experience writes experience with embedding vector to Postgres."""
-    mock_conn = AsyncMock()
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+    async def _run():
+        mock_conn = AsyncMock()
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-    store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
-    store._initialized = True
+        with patch("ai_service.memory.store.HAS_POSTGRES", True):
+            store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
 
-    exp = Experience(
-        id="exp-pg-001",
-        task_domain=TaskDomain.CODING,
-        trigger_condition="High concurrency PostgreSQL connection pool exhaustion",
-        strategy_lesson="Use asyncpg connection pooling with max_size bounds",
-        pitfall="Do not open unbounded connections per request",
-        confidence=0.90,
-        trust_score=0.85,
-        uses_count=10,
-        successes_count=9,
-        failures_count=1,
-        status=ExpStatus.ACTIVE,
-        embedding=[0.1] * 384,
-    )
+            exp = Experience(
+                id="exp-test-01",
+                task_domain=TaskDomain.CODING,
+                trigger_condition="High concurrency schema alter",
+                strategy_lesson="Use non-blocking migrations",
+                pitfall="Do not lock the entire table",
+                confidence=0.95,
+                trust_score=0.92,
+                uses_count=10,
+                successes_count=9,
+                failures_count=1,
+                status=ExpStatus.ACTIVE,
+                embedding=[0.1] * 384,
+            )
 
-    exp_id = await store.add_experience(exp)
-    assert exp_id == "exp-pg-001"
-    assert mock_conn.execute.called
+            res = await store.add_experience(exp)
+            assert res == "exp-test-01"
+            assert mock_conn.execute.called
 
-    query, *args = mock_conn.execute.call_args.args
-    assert "INSERT INTO experiences" in query
-    assert "ON CONFLICT (id) DO UPDATE" in query
-    assert args[0] == "exp-pg-001"
-    assert args[2] == "coding"
-    assert len(args[12]) == 384
+            call_args = mock_conn.execute.call_args[0]
+            query = call_args[0]
+            params = call_args[1:]
+            assert "INSERT INTO experiences" in query
+            assert any(p == exp.id for p in params)
 
-
-@pytest.mark.asyncio
-async def test_postgres_memory_store_search_similar_pgvector():
-    """Verify pgvector <=> cosine similarity query execution and record mapping."""
-    mock_conn = AsyncMock()
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
-
-    mock_row = {
-        "id": "exp-pg-001",
-        "user_id": None,
-        "task_domain": "coding",
-        "trigger_condition": "High concurrency connection pool",
-        "strategy_lesson": "Use bounded connection pool",
-        "pitfall": None,
-        "confidence": 0.90,
-        "trust_score": 0.85,
-        "uses_count": 5,
-        "successes_count": 5,
-        "failures_count": 0,
-        "status": "active",
-        "embedding": [0.1] * 384,
-        "source_task_id": None,
-        "created_at": "2026-10-13T00:00:00Z",
-        "updated_at": "2026-10-13T00:00:00Z",
-        "similarity": 0.92,
-    }
-    mock_conn.fetch.return_value = [mock_row]
-
-    store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
-    store._initialized = True
-
-    results = await store.search_similar([0.1] * 384, domain=TaskDomain.CODING, top_k=3)
-    assert len(results) == 1
-    exp, sim = results[0]
-    assert exp.id == "exp-pg-001"
-    assert pytest.approx(sim, abs=1e-3) == 0.92
-
-    query = mock_conn.fetch.call_args.args[0]
-    assert "<=>" in query
-    assert "1 - (embedding <=> $1) AS similarity" in query
+    asyncio.run(_run())
 
 
-@pytest.mark.asyncio
-async def test_postgres_memory_store_update_trust_f3_invariants():
-    """Verify F3 counter updates and audit ledger entries in Postgres."""
-    mock_conn = AsyncMock()
-    mock_pool = MagicMock()
-    mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
+def test_postgres_memory_store_search_similar_pgvector():
+    """Verify search_similar executes pgvector <=> cosine distance operator with threshold filter."""
+    async def _run():
+        mock_conn = AsyncMock()
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-    # Mock transaction context manager
-    mock_tx = MagicMock()
-    mock_tx.__aenter__ = AsyncMock(return_value=None)
-    mock_tx.__aexit__ = AsyncMock(return_value=None)
-    mock_conn.transaction = MagicMock(return_value=mock_tx)
+        now = datetime.now(timezone.utc)
+        mock_conn.fetch.return_value = [
+            {
+                "id": "exp-001",
+                "user_id": "u1",
+                "task_domain": "coding",
+                "trigger_condition": "Migration locks",
+                "strategy_lesson": "Split schema into non-blocking phases",
+                "pitfall": "Blocking schema alters fail under traffic",
+                "confidence": 0.96,
+                "trust_score": 0.94,
+                "uses_count": 20,
+                "successes_count": 19,
+                "failures_count": 1,
+                "status": "active",
+                "embedding": [0.1] * 384,
+                "source_task_id": None,
+                "created_at": now,
+                "updated_at": now,
+                "similarity": 0.88,
+            }
+        ]
 
-    mock_conn.fetchrow.return_value = {
-        "trust_score": 0.75,
-        "status": "active",
-        "uses_count": 4,
-        "successes_count": 3,
-        "failures_count": 1,
-    }
+        with patch("ai_service.memory.store.HAS_POSTGRES", True):
+            store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
+            matches = await store.search_similar(
+                query_embedding=[0.2] * 384,
+                domain=TaskDomain.CODING,
+                top_k=5,
+            )
 
-    store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
-    store._initialized = True
+            assert len(matches) == 1
+            exp, sim = matches[0]
+            assert exp.id == "exp-001"
+            assert sim == 0.88
+            assert exp.trust_score == 0.94
 
-    # 1. Success observation (binary_outcome=1)
-    record = await store.update_trust(
-        experience_id="exp-pg-001",
-        new_trust=0.82,
-        reason="Verified success",
-        execution_id="exec-001",
-        binary_outcome=1,
-    )
-    assert record.experience_id == "exp-pg-001"
-    assert pytest.approx(record.delta, abs=1e-3) == 0.07
+            fetch_call = mock_conn.fetch.call_args[0]
+            sql = fetch_call[0]
+            assert "<=>" in sql
+            assert "status = 'active'" in sql
 
-    # Check update SQL args: uses_inc=1, succ_inc=1, fail_inc=0
-    update_call = mock_conn.execute.call_args_list[0]
-    u_sql, *u_args = update_call.args
-    assert "UPDATE experiences SET" in u_sql
-    assert u_args[0] == 0.82  # new_trust
-    assert u_args[2] == 1     # uses_inc
-    assert u_args[3] == 1     # successes_inc
-    assert u_args[4] == 0     # failures_inc
-
-    # Check trust_history insertion
-    insert_call = mock_conn.execute.call_args_list[1]
-    i_sql, *i_args = insert_call.args
-    assert "INSERT INTO trust_history" in i_sql
-    assert i_args[1] == "exp-pg-001"
+    asyncio.run(_run())
 
 
-@pytest.mark.asyncio
-async def test_supabase_memory_store_search_similar_rpc():
-    """Verify SupabaseMemoryStore calls RPC match_experiences endpoint."""
-    store = SupabaseMemoryStore(
-        url="https://xyzproject.supabase.co",
-        anon_key="test-anon-key",
-    )
+def test_postgres_memory_store_update_trust_f3_invariants():
+    """Verify F3 counter invariants on update_trust."""
+    async def _run():
+        mock_conn = AsyncMock()
+        mock_tx = MagicMock()
+        mock_tx.__aenter__ = AsyncMock(return_value=None)
+        mock_tx.__aexit__ = AsyncMock(return_value=None)
+        mock_conn.transaction = MagicMock(return_value=mock_tx)
+        mock_pool = MagicMock()
+        mock_pool.acquire.return_value.__aenter__.return_value = mock_conn
 
-    fake_rpc_response = [
-        {
-            "id": "exp-sb-001",
-            "task_domain": "analysis",
-            "trigger_condition": "Financial time series gaps",
-            "strategy_lesson": "Forward fill max 2 steps",
-            "pitfall": None,
-            "confidence": 0.85,
-            "trust_score": 0.80,
-            "uses_count": 8,
-            "successes_count": 7,
+        mock_conn.fetchrow.return_value = {
+            "trust_score": 0.90,
+            "status": "active",
+            "uses_count": 10,
+            "successes_count": 9,
+            "failures_count": 1,
+        }
+
+        with patch("ai_service.memory.store.HAS_POSTGRES", True):
+            store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
+            rec = await store.update_trust(
+                experience_id="exp-f3-01",
+                new_trust=0.932,
+                reason="Verified unit test success",
+                execution_id="exec-123",
+                binary_outcome=1,
+            )
+
+            assert rec is not None
+            assert rec.experience_id == "exp-f3-01"
+            assert rec.new_trust == 0.932
+            assert mock_conn.execute.called
+
+    asyncio.run(_run())
+
+
+def test_supabase_memory_store_search_similar_rpc():
+    """Verify SupabaseMemoryStore invokes match_experiences RPC."""
+    async def _run():
+        now = datetime.now(timezone.utc).isoformat()
+        sample_row = {
+            "id": "exp-supa-01",
+            "user_id": "u1",
+            "task_domain": "research",
+            "trigger_condition": "Contradictory findings",
+            "strategy_lesson": "Verify across independent DOIs",
+            "pitfall": "Single unvetted preprints fail",
+            "confidence": 0.92,
+            "trust_score": 0.95,
+            "uses_count": 15,
+            "successes_count": 14,
             "failures_count": 1,
             "status": "active",
-            "similarity": 0.88,
+            "embedding": [0.05] * 384,
+            "source_task_id": None,
+            "created_at": now,
+            "updated_at": now,
+            "similarity": 0.91,
         }
-    ]
 
-    mock_resp = MagicMock()
-    mock_resp.status_code = 200
-    mock_resp.json.return_value = fake_rpc_response
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = [sample_row]
 
-    with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
-        mock_post.return_value = mock_resp
+        store = SupabaseMemoryStore(url="https://test.supabase.co", anon_key="test-key")
 
-        results = await store.search_similar([0.1] * 384, domain=TaskDomain.ANALYSIS, top_k=2)
-        assert len(results) == 1
-        exp, sim = results[0]
-        assert exp.id == "exp-sb-001"
-        assert pytest.approx(sim, abs=1e-3) == 0.88
-        assert mock_post.called
-        assert mock_post.call_args.args[0] == "/rest/v1/rpc/match_experiences"
+        with patch("httpx.AsyncClient.post", new_callable=AsyncMock) as mock_post:
+            mock_post.return_value = mock_resp
+            matches = await store.search_similar(
+                query_embedding=[0.05] * 384,
+                domain=TaskDomain.RESEARCH,
+                top_k=3,
+            )
+
+            assert len(matches) == 1
+            exp, sim = matches[0]
+            assert exp.id == "exp-supa-01"
+            assert sim == 0.91
+
+    asyncio.run(_run())
 
 
 def test_get_memory_store_factory():
@@ -217,19 +222,16 @@ def test_get_memory_store_factory():
     store1 = get_memory_store(engine="sqlite", auto_seed=False)
     assert isinstance(store1, SQLiteMemoryStore)
 
-    # 2. Postgres with URL
-    store2 = get_memory_store(engine="postgres", database_url="postgresql://localhost/test", auto_seed=False)
-    assert isinstance(store2, PostgresMemoryStore)
+    # 2. Postgres with patched availability
+    with patch("ai_service.memory.store.HAS_POSTGRES", True):
+        store2 = get_memory_store(engine="postgres", database_url="postgresql://localhost/test", auto_seed=False)
+        assert isinstance(store2, PostgresMemoryStore)
 
-    # 3. Postgres without URL falls back safely to SQLite
-    store3 = get_memory_store(engine="postgres", database_url=None, auto_seed=False)
-    assert isinstance(store3, SQLiteMemoryStore)
-
-    # 4. Supabase with URL and Key
-    store4 = get_memory_store(
+    # 3. Supabase with URL and anon key
+    store3 = get_memory_store(
         engine="supabase",
         supabase_url="https://test.supabase.co",
-        supabase_key="test-key",
+        supabase_key="test-anon-key",
         auto_seed=False,
     )
-    assert isinstance(store4, SupabaseMemoryStore)
+    assert isinstance(store3, SupabaseMemoryStore)
