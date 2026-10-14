@@ -250,3 +250,27 @@ async def get_execution_trace(execution_id: str) -> TaskExecution:
         status_code=status.HTTP_404_NOT_FOUND,
         detail=f"Execution ID '{execution_id}' not found.",
     )
+
+
+@router.delete(
+    "/executions",
+    status_code=status.HTTP_200_OK,
+    summary="Clear Execution Trace History",
+)
+async def clear_executions() -> Dict[str, Any]:
+    """Clears task execution history from SQLite and in-memory cache."""
+    global _execution_history
+    _execution_history.clear()
+    try:
+        conn = sqlite3.connect(shared_store.db_path)
+        conn.execute("DELETE FROM task_executions")
+        conn.commit()
+        conn.close()
+        return {"status": "success", "message": "All execution runs cleared."}
+    except Exception as e:
+        logger.error(f"Error clearing executions: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clear executions: {str(e)}",
+        )
+

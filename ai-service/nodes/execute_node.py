@@ -7,6 +7,8 @@ Injects bilateral experience constraints into the prompt:
 Dispatches generation through the Universal BYOK LLM gateway (Groq, Gemini, Ollama, OpenAI, or Mock).
 """
 
+from __future__ import annotations
+
 import asyncio
 import time
 from typing import Any, Dict, List, Optional

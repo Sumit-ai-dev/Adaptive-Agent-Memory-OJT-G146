@@ -13,7 +13,7 @@ from models.provider import ModelProvider
 
 class AIServiceSettings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(".env", "backend/.env", "../.env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -63,7 +63,7 @@ class AIServiceSettings(BaseSettings):
 
     # Execution Bounds
     MAX_CYCLICAL_LOOPS: int = Field(default=3, description="Maximum reflection loops before forced exit")
-    REQUEST_TIMEOUT_SECONDS: float = Field(default=45.0)
+    REQUEST_TIMEOUT_SECONDS: float = Field(default=15.0)
 
 
 # Global singleton settings instance

@@ -32,7 +32,7 @@ class ProviderConfig(BaseModel):
         if provider == ModelProvider.GROQ:
             return cls(
                 provider=ModelProvider.GROQ,
-                model="llama-3.3-70b-versatile",
+                model="openai/gpt-oss-20b",
                 base_url="https://api.groq.com/openai/v1",
             )
         elif provider == ModelProvider.NVIDIA:
@@ -51,8 +51,8 @@ class ProviderConfig(BaseModel):
         elif provider == ModelProvider.GEMINI:
             return cls(
                 provider=ModelProvider.GEMINI,
-                model="gemini-2.0-flash",
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                model="gemini-1.5-flash",
+                base_url="https://generativelanguage.googleapis.com/v1beta",
             )
         elif provider == ModelProvider.OPENAI:
             return cls(
