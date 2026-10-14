@@ -32,7 +32,7 @@ class ProviderConfig(BaseModel):
         if provider == ModelProvider.GROQ:
             return cls(
                 provider=ModelProvider.GROQ,
-                model="openai/gpt-oss-20b",
+                model="llama-3.3-70b-versatile",
                 base_url="https://api.groq.com/openai/v1",
             )
         elif provider == ModelProvider.NVIDIA:

@@ -13,14 +13,6 @@ cd "$REPO_ROOT"
 # Ensure common binary paths are available on macOS / Linux
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-# Load root .env if present
-if [ -f "$REPO_ROOT/.env" ]; then
-    set -a
-    # shellcheck disable=SC1091
-    source "$REPO_ROOT/.env" 2>/dev/null || true
-    set +a
-fi
-
 # Color formatting
 BOLD='\033[1m'
 CYAN='\033[0;36m'
@@ -61,6 +53,7 @@ cleanup_port() {
 }
 
 cleanup_port 8000
+cleanup_port 5173
 
 # Trap SIGINT, SIGTERM, and EXIT to kill child processes cleanly
 BACKEND_PID=""
@@ -90,14 +83,22 @@ BACKEND_PID=$!
 
 # Wait for backend health check
 echo -n "Waiting for backend to initialize..."
+backend_ready=false
 for i in {1..40}; do
     if curl -s http://localhost:8000/api/health >/dev/null 2>&1; then
         echo -e " ${GREEN}READY!${NC}"
+        backend_ready=true
         break
     fi
     echo -n "."
     sleep 0.5
 done
+
+if [ "$backend_ready" != "true" ]; then
+    echo -e "\n${RED}[ERROR] Backend failed to initialize on http://localhost:8000 within 20 seconds.${NC}"
+    echo -e "${YELLOW}Aborting launcher. Please review the backend traceback above.${NC}"
+    exit 1
+fi
 
 # 5. Launch Frontend
 echo -e "\n${BOLD}${GREEN}[2/2] Starting Vite Frontend on http://localhost:5173...${NC}"

@@ -153,7 +153,8 @@ def test_postgres_memory_store_update_trust_f3_invariants():
         }
 
         with patch("ai_service.memory.store.HAS_POSTGRES", True):
-            store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool)
+            store = PostgresMemoryStore(database_url="postgresql://localhost:5432/testdb", pool=mock_pool, auto_seed=False)
+            store._initialized = True
             rec = await store.update_trust(
                 experience_id="exp-f3-01",
                 new_trust=0.932,
@@ -165,7 +166,35 @@ def test_postgres_memory_store_update_trust_f3_invariants():
             assert rec is not None
             assert rec.experience_id == "exp-f3-01"
             assert rec.new_trust == 0.932
-            assert mock_conn.execute.called
+            assert mock_conn.execute.call_count == 2
+
+            # Call 1: Experience counter updates (uses_count + 1, successes_count + 1, failures_count + 0)
+            update_call = mock_conn.execute.call_args_list[0]
+            update_sql = update_call.args[0]
+            assert "UPDATE experiences SET" in update_sql
+            assert "uses_count = uses_count + $3" in update_sql
+            assert "successes_count = successes_count + $4" in update_sql
+            assert "failures_count = failures_count + $5" in update_sql
+
+            new_trust_arg, status_arg, uses_inc, succ_inc, fail_inc, _, exp_id_arg = update_call.args[1:]
+            assert new_trust_arg == 0.932
+            assert status_arg == "active"
+            assert uses_inc == 1
+            assert succ_inc == 1
+            assert fail_inc == 0
+            assert exp_id_arg == "exp-f3-01"
+
+            # Call 2: Trust history record insertion
+            history_call = mock_conn.execute.call_args_list[1]
+            history_sql = history_call.args[0]
+            assert "INSERT INTO trust_history" in history_sql
+            _, exp_id_hist, exec_id_hist, old_trust_hist, new_trust_hist, delta_hist, reason_hist, _ = history_call.args[1:]
+            assert exp_id_hist == "exp-f3-01"
+            assert exec_id_hist == "exec-123"
+            assert old_trust_hist == 0.90
+            assert new_trust_hist == 0.932
+            assert abs(delta_hist - 0.032) < 1e-4
+            assert reason_hist == "Verified unit test success"
 
     asyncio.run(_run())
 
@@ -235,3 +264,18 @@ def test_get_memory_store_factory():
         auto_seed=False,
     )
     assert isinstance(store3, SupabaseMemoryStore)
+
+    # 4. Fallback to SQLite when Postgres is requested but asyncpg/pgvector is unavailable
+    with patch("ai_service.memory.store.HAS_POSTGRES", False):
+        store_pg_fallback = get_memory_store(engine="postgres", database_url="postgresql://localhost/test", auto_seed=False)
+        assert isinstance(store_pg_fallback, SQLiteMemoryStore)
+
+    # 5. Fallback to SQLite when Postgres is requested but no DATABASE_URL is supplied
+    with patch("ai_service.memory.store.HAS_POSTGRES", True), patch("ai_service.config.settings.DATABASE_URL", None):
+        store_no_url_fallback = get_memory_store(engine="postgres", database_url=None, auto_seed=False)
+        assert isinstance(store_no_url_fallback, SQLiteMemoryStore)
+
+    # 6. Fallback to SQLite when Supabase is requested but SUPABASE_URL / keys are missing
+    with patch("ai_service.config.settings.SUPABASE_URL", None), patch("ai_service.config.settings.SUPABASE_ANON_KEY", None):
+        store_supa_fallback = get_memory_store(engine="supabase", supabase_url=None, supabase_key=None, auto_seed=False)
+        assert isinstance(store_supa_fallback, SQLiteMemoryStore)

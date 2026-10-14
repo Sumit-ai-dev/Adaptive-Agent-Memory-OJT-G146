@@ -193,7 +193,7 @@ class TaskExecuteRequest(BaseModel):
     memory_enabled: bool = Field(default=True, alias="memoryEnabled")
     memory_mode: MemoryMode = Field(default=MemoryMode.ADAPTIVE, alias="memoryMode")
     provider: Optional[str] = Field(default="groq", description="Model provider")
-    model: Optional[str] = Field(default="llama-3.3-70b-versatile", description="Model identifier")
+    model: Optional[str] = Field(default=None, description="Model identifier (falls back to provider default if None)")
     api_key: Optional[str] = Field(default=None, description="Optional BYOK API key", alias="apiKey")
     # S8: sampling temperature actually handed to the provider. None => the provider's
     # own default applies (ProviderConfig.temperature). Recorded manifests must report

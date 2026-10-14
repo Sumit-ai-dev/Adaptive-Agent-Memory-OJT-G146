@@ -10,8 +10,9 @@ server restarts.
 import logging
 import sqlite3
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
 
+from ai_service.config import settings
 from ai_service.graph import execute_task
 from ai_service.memory.store import SQLiteMemoryStore
 from models.domain import MemoryMode, TaskDomain
@@ -257,8 +258,29 @@ async def get_execution_trace(execution_id: str) -> TaskExecution:
     status_code=status.HTTP_200_OK,
     summary="Clear Execution Trace History",
 )
-async def clear_executions() -> Dict[str, Any]:
-    """Clears task execution history from SQLite and in-memory cache."""
+async def clear_executions(
+    authorization: Optional[str] = Header(None, description="Admin authorization header"),
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token", description="Admin authorization token"),
+) -> Dict[str, Any]:
+    """
+    Clears task execution history from SQLite and in-memory cache.
+    Requires admin authorization token/header to prevent unauthorized trace destruction.
+    """
+    admin_key = getattr(settings, "ADMIN_API_KEY", None) or "aema-admin-secret"
+    token = (x_admin_token or "").strip()
+    if not token and authorization:
+        if authorization.lower().startswith("bearer "):
+            token = authorization[7:].strip()
+        else:
+            token = authorization.strip()
+
+    if not token or token != admin_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin authorization required to clear execution history.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     global _execution_history
     _execution_history.clear()
     try:

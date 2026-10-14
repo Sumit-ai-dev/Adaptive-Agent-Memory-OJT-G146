@@ -25,6 +25,7 @@ class AIServiceSettings(BaseSettings):
     GEMINI_API_KEY: Optional[str] = Field(default=None)
     ANTHROPIC_API_KEY: Optional[str] = Field(default=None)
     MEM0_API_KEY: Optional[str] = Field(default=None)
+    ADMIN_API_KEY: Optional[str] = Field(default=None)
 
     # Local Ollama endpoint
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434")

@@ -80,7 +80,7 @@ def resolve_provider_config(state: Dict[str, Any]) -> Tuple[Optional[ProviderCon
     config = ProviderConfig(
         provider=provider,
         model=state.get("model") or defaults.model,
-        api_key=state.get("api_key"),
+        api_key=state.get("api_key") or defaults.api_key,
         temperature=(
             defaults.temperature if requested_temperature is None
             else float(requested_temperature)
@@ -122,15 +122,17 @@ class UniversalLLMClient:
         if provider == ModelProvider.MOCK:
             return None, cfg.model, ModelProvider.MOCK
 
-        api_key = (cfg.api_key or "").strip() or getattr(settings, f"{provider.value.upper()}_API_KEY", None)
-        base_url = cfg.base_url or ProviderConfig.default_for(provider).base_url
+        default_cfg = ProviderConfig.default_for(provider)
+        api_key = (
+            (cfg.api_key or "").strip()
+            or getattr(settings, f"{provider.value.upper()}_API_KEY", None)
+            or default_cfg.api_key
+        )
+        base_url = cfg.base_url or default_cfg.base_url
+        model = cfg.model or default_cfg.model
 
         if not api_key:
-            return None, cfg.model, provider
-
-        model = cfg.model
-        if provider == ModelProvider.GROQ and ("llama" in model.lower() or not model):
-            model = "openai/gpt-oss-20b"
+            return None, model, provider
 
         if AsyncOpenAI is not None:
             timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
@@ -192,10 +194,16 @@ class UniversalLLMClient:
                 elif provider == ModelProvider.OLLAMA and not litellm_model.startswith("ollama/"):
                     litellm_model = f"ollama/{litellm_model}"
 
+                resolved_key = (
+                    (cfg.api_key or "").strip()
+                    or getattr(settings, f"{provider.value.upper()}_API_KEY", None)
+                    or ProviderConfig.default_for(provider).api_key
+                )
+
                 response = await litellm.acompletion(
                     model=litellm_model,
                     messages=messages,
-                    api_key=cfg.api_key,
+                    api_key=resolved_key,
                     base_url=cfg.base_url,
                     temperature=temperature if temperature is not None else cfg.temperature,
                     max_tokens=max_tokens or cfg.max_tokens,
@@ -300,14 +308,12 @@ class UniversalLLMClient:
                 return notice + raw_ans, tokens
             return raw_ans, tokens
 
-        model = (cfg.model or "gemini-1.5-flash").replace("models/", "")
-        # Canonical active models on Google native REST API
-        if "flash" in model.lower():
-            model = "gemini-1.5-flash"
-        elif "pro" in model.lower():
-            model = "gemini-1.5-pro"
-
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+        model = (cfg.model or ProviderConfig.default_for(ModelProvider.GEMINI).model).replace("models/", "")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        headers = {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+        }
 
         contents = []
         system_instruction = None
@@ -340,7 +346,7 @@ class UniversalLLMClient:
         timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
-                res = await client.post(url, json=payload)
+                res = await client.post(url, json=payload, headers=headers)
                 if res.status_code == 200:
                     data = res.json()
                     candidates = data.get("candidates", [])
