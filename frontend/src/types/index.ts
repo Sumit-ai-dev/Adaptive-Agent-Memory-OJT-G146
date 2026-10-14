@@ -1,19 +1,23 @@
-// ─── Domain Models matching PRD (docs/03-prd.md) ───────────────────────────
+// ─── AEMA Operational Domain Types ──────────────────────────────────────────
 
 export type TaskDomain = 'research' | 'coding' | 'analysis' | 'planning' | 'general'
 
-export type ExperienceStatus = 'active' | 'deprecated' | 'candidate'
+export type ExperienceStatus = 'active' | 'provisional' | 'quarantined' | 'deprecated'
 
 export interface Experience {
   id: string
   taskDomain: TaskDomain
   triggerCondition: string
   strategyLesson: string
-  trustScore: number // 0.0 to 1.0 (e.g. 0.94)
+  pitfallWarning?: string
+  trustScore: number // St in [0.0, 1.0]
+  confidenceScore?: number // Bayesian beta uncertainty or posterior confidence
   usesCount: number
   successesCount: number
   failuresCount: number
+  consecutiveFailures: number // k count for Theorem 1 quarantine
   status: ExperienceStatus
+  trustTrajectory: number[] // historical values of St
   embedding?: number[]
   sourceTaskId?: string
   createdAt: string
@@ -31,11 +35,11 @@ export interface TrustHistoryRecord {
   createdAt: string
 }
 
-export type ExecutionStatus = 'pending' | 'retrieving' | 'reasoning' | 'executing' | 'reflecting' | 'completed' | 'failed'
+export type ExecutionNode = 'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update'
 
 export interface ExecutionStepTrace {
   id: string
-  type: 'retrieval' | 'thought' | 'action' | 'reflection' | 'trust_update'
+  node: ExecutionNode
   timestamp: string
   title: string
   detail: string
@@ -48,47 +52,53 @@ export interface TaskExecution {
   taskInput: string
   taskDomain: TaskDomain
   memoryEnabled: boolean
-  status: ExecutionStatus
+  status: 'pending' | 'running' | 'completed' | 'failed'
   retrievedExperiences: {
     experience: Experience
-    relevanceScore: number
+    similarityScore: number
+    empiricalTrust: number
+    combinedRankScore: number
   }[]
   finalOutput?: string
   reflectionLesson?: string
-  newExperienceCreated?: boolean
   trustUpdates: {
     experienceId: string
     oldScore: number
     newScore: number
+    delta: number
+    isQuarantined?: boolean
+    formulaApplied: string
   }[]
   tokensUsed: number
   latencyMs: number
-  outcomeQuality?: 'positive' | 'neutral' | 'negative'
+  outcomeQuality?: 'positive' | 'negative' | 'neutral'
+  trajectory?: ExecutionStepTrace[]
   createdAt: string
 }
 
 export interface AgentMetricSummary {
   totalTasks: number
   activeMemories: number
-  memoryHitRate: number // percentage, e.g. 87%
-  slaAdherence: number // percentage, e.g. 99.9%
-  avgTimeSavedMin: number
-  tokensSaved: string // e.g. '2.4M'
-  memoryReuseRate: number // percentage, e.g. 76%
-  aiDeflectionRate: number // percentage, e.g. 80%
-  mttrMin: number // e.g. 6 min
+  quarantinedMemories: number
+  meanTrustScore: number
+  memoryHitRate: number // %
+  negativeTransferReduction: number // %
+  timeSavedPct: number
+  tokensSavedPct: number
 }
 
-export interface EvaluationComparison {
-  domain: TaskDomain
-  memoryOffAccuracy: number
-  memoryOnAccuracy: number
-  latencyReductionPct: number
-  tokenReductionPct: number
-  sampleCount: number
+export interface BenchmarkResult {
+  suite: string
+  baselineAccuracy: number
+  naiveMemoryAccuracy: number
+  aemaAccuracy: number
+  recoveryTrial: number
+  pValMcNemar: string
+  datasetSize: number
+  status: 'Completed' | 'Running' | 'Planned'
 }
 
-// ─── Supabase / Auth Types ───────────────────────────────────────────────────
+export type AvailabilityBadge = 'Available Now' | 'Demo' | 'Preview' | 'Planned'
 
 export interface UserProfile {
   id: string
