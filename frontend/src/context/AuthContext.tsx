@@ -33,19 +33,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Check initial session
-    getCurrentSession().then(({ session }) => {
+    // Check initial active Supabase session
+    getCurrentSession().then(({ data }) => {
+      const session = data?.session
       if (session?.user) {
         setUser({
           id: session.user.id,
           email: session.user.email || '',
           name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
+          avatarUrl: session.user.user_metadata?.avatar_url,
         })
+      } else {
+        setUser(null)
       }
+      setLoading(false)
+    }).catch(() => {
+      setUser(null)
       setLoading(false)
     })
 
-    // Listen to live Supabase auth state changes
+    // Listen to real Supabase auth state changes
     if (supabase) {
       const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
         if (session?.user) {
@@ -53,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             id: session.user.id,
             email: session.user.email || '',
             name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
+            avatarUrl: session.user.user_metadata?.avatar_url,
           })
         } else {
           setUser(null)
@@ -66,47 +74,68 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signIn = async (email: string, pass: string) => {
     setLoading(true)
-    const { data, error } = await signInWithEmail(email, pass)
-    if (!error && data?.user) {
-      setUser({
-        id: data.user.id,
-        email: data.user.email || '',
-        name: data.user.user_metadata?.name || data.user.email?.split('@')[0],
-      })
+    try {
+      const { data, error } = await signInWithEmail(email, pass)
+      if (error) {
+        setLoading(false)
+        return { error: new Error(error.message) }
+      }
+      if (data?.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email || '',
+          name: data.user.user_metadata?.name || data.user.email?.split('@')[0],
+          avatarUrl: data.user.user_metadata?.avatar_url,
+        })
+      }
+      setLoading(false)
+      return { error: null }
+    } catch (err: unknown) {
+      setLoading(false)
+      return { error: err instanceof Error ? err : new Error('Sign in failed') }
     }
-    setLoading(false)
-    return { error: error ? new Error(error.message) : null }
   }
 
   const signUp = async (email: string, pass: string, name?: string) => {
     setLoading(true)
-    const { data, error } = await signUpWithEmail(email, pass, name)
-    if (!error && data?.user) {
-      setUser({
-        id: data.user.id,
-        email: data.user.email || '',
-        name: data.user.user_metadata?.name || name || data.user.email?.split('@')[0],
-      })
+    try {
+      const { data, error } = await signUpWithEmail(email, pass, name)
+      if (error) {
+        setLoading(false)
+        return { error: new Error(error.message) }
+      }
+      if (data?.user) {
+        setUser({
+          id: data.user.id,
+          email: data.user.email || '',
+          name: data.user.user_metadata?.name || name || data.user.email?.split('@')[0],
+        })
+      }
+      setLoading(false)
+      return { error: null }
+    } catch (err: unknown) {
+      setLoading(false)
+      return { error: err instanceof Error ? err : new Error('Sign up failed') }
     }
-    setLoading(false)
-    return { error: error ? new Error(error.message) : null }
   }
 
   const signInWithGoogle = async () => {
-    // In real Supabase mode, signInWithOAuth redirects the browser to Google.
-    // The page navigates away, so no code after the call runs.
-    // Session is picked up by onAuthStateChange after the OAuth redirect returns.
-    // In mock mode (no Supabase credentials), the mock user is set via onAuthStateChange
-    // through getCurrentSession on next load.
-    const { error } = await supabaseSignInWithGoogle()
-    return { error: error ? new Error(error.message) : null }
+    try {
+      const { error } = await supabaseSignInWithGoogle()
+      return { error: error ? new Error(error.message) : null }
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error('Google sign in failed') }
+    }
   }
 
   const signOut = async () => {
     setLoading(true)
-    await supabaseSignOut()
-    setUser(null)
-    setLoading(false)
+    try {
+      await supabaseSignOut()
+      setUser(null)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
