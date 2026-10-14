@@ -1,182 +1,551 @@
-import { useEffect } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  Brain,
-  LogOut,
-  ArrowLeft,
-  Database,
   Shield,
+  Database,
   Activity,
+  Award,
+  CheckCircle2,
   Clock,
-  Inbox,
+  Menu,
+  ExternalLink,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import Sidebar, { TabType } from '../components/Sidebar'
+import MemoryExplorer from '../components/MemoryExplorer'
+import PromptConsole from '../components/PromptConsole'
+import ExecutionStepper from '../components/ExecutionStepper'
+import ContextInspector from '../components/ContextInspector'
+import TheoremSandbox from '../components/TheoremSandbox'
+import BenchmarkMatrix from '../components/BenchmarkMatrix'
+import AuthModal from '../components/AuthModal'
+import {
+  fetchExperiences,
+  createExperience,
+  executeAgentTask,
+  fetchExecutions,
+  fetchTelemetry,
+  clearExecutionsApi,
+  getTelemetryMetrics,
+  INITIAL_EXPERIENCES,
+  ALPHA_SUCCESS,
+  BETA_FAILURE,
+  QUARANTINE_THRESHOLD,
+  CONSECUTIVE_FAILURES_BOUND,
+} from '../services/api'
+import type { Experience, TaskExecution, TaskDomain } from '../types'
 
 export default function DashboardPage() {
-  const { user, signOut, loading } = useAuth()
+  const { user, loading } = useAuth()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
 
-  // Route guard — redirect unauthenticated users before rendering anything
+  const isDemo = searchParams.get('demo') === 'true'
+  const [activeTab, setActiveTab] = useState<TabType>('overview')
+  const [experiences, setExperiences] = useState<Experience[]>([])
+  const [metrics, setMetrics] = useState(getTelemetryMetrics())
+  const [recentExecutions, setRecentExecutions] = useState<TaskExecution[]>([])
+  const [selectedExecution, setSelectedExecution] = useState<TaskExecution | null>(null)
+
+  // Execution Studio States
+  const [isExecuting, setIsExecuting] = useState(false)
+  const [currentStage, setCurrentStage] = useState<'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'idle' | 'complete'>('idle')
+  const [activeExecution, setActiveExecution] = useState<TaskExecution | null>(null)
+
+  // Auth modal triggered from demo banner
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
+
+  // Route guard: if not loading and neither authenticated nor in demo mode, redirect
   useEffect(() => {
-    if (!loading && !user) {
+    if (!loading && !user && !isDemo) {
       navigate('/', { replace: true })
     }
-  }, [user, loading, navigate])
+  }, [user, loading, isDemo, navigate])
 
-  const handleSignOut = async () => {
-    await signOut()
-    navigate('/')
+  // Load real persistent experiences, telemetry, and execution runs from backend
+  useEffect(() => {
+    fetchExperiences().then((exps) => {
+      setExperiences(exps.length > 0 ? exps : INITIAL_EXPERIENCES)
+    })
+    fetchTelemetry().then((m) => {
+      setMetrics(m)
+    })
+    fetchExecutions(15).then((runs) => {
+      if (runs.length > 0) {
+        setRecentExecutions(runs)
+        setSelectedExecution(runs[0])
+      }
+    })
+  }, [])
+
+  const handleRunTask = async (params: {
+    prompt: string
+    domain: TaskDomain
+    memoryEnabled: boolean
+    provider?: string
+    apiKey?: string
+    simulateFailure?: boolean
+  }) => {
+    setIsExecuting(true)
+    setCurrentStage('retrieval')
+
+    try {
+      const exec = await executeAgentTask({
+        taskInput: params.prompt,
+        taskDomain: params.domain,
+        memoryEnabled: params.memoryEnabled,
+        provider: params.provider,
+        apiKey: params.apiKey,
+        simulateFailure: params.simulateFailure,
+        onStageChange: (stage) => setCurrentStage(stage),
+      })
+
+      setActiveExecution(exec)
+      setSelectedExecution(exec)
+      setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
+      // Refresh experiences to reflect any real trust update or quarantine
+      const updatedExps = await fetchExperiences()
+      setExperiences(updatedExps)
+      const updatedMetrics = await fetchTelemetry()
+      setMetrics(updatedMetrics)
+    } finally {
+      setIsExecuting(false)
+    }
   }
 
-  // Show spinner while auth session is being determined
+  const handleAddExperience = async (exp: Partial<Experience>) => {
+    const created = await createExperience(exp)
+    setExperiences((prev) => [created, ...prev])
+    setMetrics(getTelemetryMetrics())
+  }
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0010] flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-[#FBFBFA] dark:bg-[#0C0E14]">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
+          <span className="text-xs font-mono text-zinc-500">Initializing AEMA Console...</span>
+        </div>
       </div>
     )
   }
 
-  // Guard: never render with null user (redirect is already fired via useEffect)
-  if (!user) return null
-
-  const displayName = user.name || user.email.split('@')[0]
+  if (!user && !isDemo) return null
 
   return (
-    <div className="min-h-screen bg-[#0a0010] text-white selection:bg-purple-500/30">
-      {/* Background ambient lighting */}
-      <div className="fixed inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute -top-40 left-1/4 w-[600px] h-[600px] bg-purple-600/10 rounded-full blur-[120px]" />
-        <div className="absolute top-1/3 right-10 w-[500px] h-[500px] bg-emerald-600/10 rounded-full blur-[140px]" />
+    <div className="min-h-screen flex bg-[#FBFBFA] dark:bg-[#0C0E14] text-[#18181B] dark:text-[#F4F4F6] transition-colors">
+      {/* Desktop Sidebar */}
+      <div className="hidden lg:block">
+        <Sidebar
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+          isDemo={isDemo}
+          onExitDemo={() => navigate('/')}
+          onOpenAuth={() => setIsAuthModalOpen(true)}
+        />
       </div>
 
-      {/* Top Navigation Bar */}
-      <header className="sticky top-0 z-50 border-b border-white/10 backdrop-blur-xl bg-[#0a0010]/80">
-        <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center anim-gradient-bg shadow-lg group-hover:scale-105 transition-transform">
-                <Brain size={18} className="text-white" />
-              </div>
-              <span className="text-white font-bold text-lg font-display tracking-tight">
-                MemoryAgent
+      {/* Mobile Sidebar Overlay */}
+      {mobileSidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="relative z-10 w-64">
+            <Sidebar
+              activeTab={activeTab}
+              onSelectTab={(tab) => {
+                setActiveTab(tab)
+                setMobileSidebarOpen(false)
+              }}
+              isDemo={isDemo}
+              onExitDemo={() => {
+                setMobileSidebarOpen(false)
+                navigate('/')
+              }}
+              onOpenAuth={() => {
+                setMobileSidebarOpen(false)
+                setIsAuthModalOpen(true)
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
+        {/* Top Header Rail */}
+        <header className="h-14 border-b px-6 flex items-center justify-between shrink-0 bg-white/70 dark:bg-[#131722]/70 backdrop-blur-md border-[#E6E6E1] dark:border-[#252B3B]">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="lg:hidden p-1.5 rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-500"
+            >
+              <Menu size={16} />
+            </button>
+            <div className="font-semibold text-xs capitalize tracking-wide flex items-center gap-2">
+              <span className="text-zinc-400 font-mono">Workspace /</span>
+              <span>{activeTab === 'runs' ? 'Runs & Traces' : activeTab}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {isDemo && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+                Demo Sandbox
               </span>
-            </Link>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-mono uppercase tracking-wider bg-purple-500/15 border border-purple-500/30 text-purple-300">
-              Dashboard
+            )}
+            <span className="font-mono text-xs text-zinc-400">
+              AEMA 0.1.0
             </span>
           </div>
+        </header>
 
-          <div className="flex items-center gap-4">
-            <Link
-              to="/"
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-white/70 hover:text-white text-xs font-mono transition-colors"
-            >
-              <ArrowLeft size={13} />
-              <span>Back to Landing</span>
-            </Link>
-
-            {/* User session badge */}
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <div className="text-left hidden sm:block">
-                <div className="text-xs font-semibold text-white truncate max-w-[150px]">
-                  {displayName}
+        {/* Tab Viewport */}
+        <main className="p-6 flex-1 max-w-7xl w-full mx-auto space-y-6">
+          {/* TAB 1: OVERVIEW */}
+          {activeTab === 'overview' && (
+            <div className="space-y-6 anim-fade-in">
+              {/* Stat Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
+                  <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
+                    <span>MEAN TRUST SCORE</span>
+                    <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-[#18181B] dark:text-[#F4F4F6]">
+                    {(metrics.meanTrustScore * 100).toFixed(1)}%
+                  </div>
+                  <div className="text-[11px] text-zinc-500 mt-1">
+                    Asymmetric EMA St across {experiences.length} memories
+                  </div>
                 </div>
-                <div className="text-[10px] font-mono text-white/40 truncate max-w-[150px]">
-                  {user.email}
+
+                <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
+                  <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
+                    <span>ACTIVE EXPERIENCES</span>
+                    <Database size={16} className="text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {metrics.activeMemories}
+                  </div>
+                  <div className="text-[11px] text-zinc-500 mt-1">
+                    {metrics.quarantinedMemories} quarantined under Theorem 1
+                  </div>
+                </div>
+
+                <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
+                  <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
+                    <span>MEMORY HIT RATE</span>
+                    <Activity size={16} className="text-indigo-600 dark:text-indigo-400" />
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-[#18181B] dark:text-[#F4F4F6]">
+                    {metrics.memoryHitRate}%
+                  </div>
+                  <div className="text-[11px] text-zinc-500 mt-1">
+                    Similarity &gt; 0.70 with valid trust
+                  </div>
+                </div>
+
+                <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
+                  <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
+                    <span>NEGATIVE TRANSFER DROP</span>
+                    <Award size={16} className="text-emerald-600 dark:text-emerald-400" />
+                  </div>
+                  <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                    {metrics.negativeTransferReduction}%
+                  </div>
+                  <div className="text-[11px] text-zinc-500 mt-1">
+                    Full recovery by Trial 4 (McNemar p=1.192e-7)
+                  </div>
+                </div>
+              </div>
+
+              {/* Quick Launch & Recent Runs */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+                      Quick Execution Launcher
+                    </h3>
+                    <button
+                      onClick={() => setActiveTab('studio')}
+                      className="text-xs font-mono text-indigo-600 dark:text-indigo-400 hover:underline"
+                    >
+                      Open Full Studio →
+                    </button>
+                  </div>
+                  <PromptConsole onRunTask={handleRunTask} isRunning={isExecuting} />
+                  {currentStage !== 'idle' && (
+                    <ExecutionStepper currentStage={currentStage} execution={activeExecution} />
+                  )}
+                </div>
+
+                {/* Right: Operational Status & Ecosystem */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+                    Engine Status
+                  </h3>
+                  <div className="rounded-2xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-3 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-mono">Persistence:</span>
+                      <span className="font-mono font-semibold">PostgreSQL (pgvector)</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-mono">Quarantine Bound:</span>
+                      <span className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">
+                        k* = {CONSECUTIVE_FAILURES_BOUND} failures
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-mono">Success Momentum (α):</span>
+                      <span className="font-mono font-semibold">{ALPHA_SUCCESS}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-mono">Failure Penalty (β):</span>
+                      <span className="font-mono font-semibold">{BETA_FAILURE}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-mono">Isolation Cutoff (θ):</span>
+                      <span className="font-mono font-semibold">{QUARANTINE_THRESHOLD}</span>
+                    </div>
+                    <div className="pt-2 border-t border-[#E6E6E1] dark:border-[#252B3B] flex items-center justify-between">
+                      <span className="text-zinc-500 font-mono">PyPI SDK:</span>
+                      <a
+                        href="https://pypi.org/project/aema/0.1.0/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                      >
+                        <span>aema 0.1.0</span>
+                        <ExternalLink size={11} />
+                      </a>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-zinc-500 font-mono">npm & MCP:</span>
+                      <a
+                        href="https://www.npmjs.com/package/aema-memory"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                      >
+                        <span>aema-memory 0.1.0</span>
+                        <ExternalLink size={11} />
+                      </a>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
+          )}
 
-            <button
-              onClick={handleSignOut}
-              id="dashboard-signout-btn"
-              className="flex items-center gap-2 px-3.5 py-2 rounded-xl bg-red-500/15 hover:bg-red-500/25 text-red-300 hover:text-red-200 border border-red-500/30 text-xs font-mono font-bold transition-all shadow-md hover:scale-105 active:scale-95 cursor-pointer"
-            >
-              <LogOut size={14} />
-              <span>Sign out</span>
-            </button>
-          </div>
-        </div>
-      </header>
+          {/* TAB 2: STUDIO */}
+          {activeTab === 'studio' && (
+            <div className="space-y-6 anim-fade-in">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+                    Execution Studio
+                  </h2>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Visibly track: Retrieve → Execute → Evaluate → Reflect → Trust Update.
+                  </p>
+                </div>
+              </div>
 
-      {/* Main Content */}
-      <main className="relative max-w-7xl mx-auto px-6 py-10">
+              <PromptConsole onRunTask={handleRunTask} isRunning={isExecuting} />
+              <ExecutionStepper currentStage={currentStage} execution={activeExecution} />
+              <ContextInspector execution={activeExecution} />
+            </div>
+          )}
 
-        {/* Welcome Section — compact, no colored block */}
-        <div className="mb-10">
-          <h1 className="text-2xl font-display font-bold text-white tracking-tight">
-            Welcome back, <span className="text-purple-300">{displayName}</span>
-          </h1>
-          <p className="text-white/50 text-sm font-sans mt-1">
-            Your agent workspace is ready. Backend and memory store are not yet connected.
-          </p>
-        </div>
+          {/* TAB 3: MEMORY */}
+          {activeTab === 'memory' && (
+            <div className="space-y-6 anim-fade-in">
+              <div>
+                <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+                  Experiential Memory Index
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  7-tuple operational memories containing affirmative lessons and negative transfer pitfall bounds.
+                </p>
+              </div>
 
-        {/* Stat Cards — honest empty states */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-          <div className="p-5 rounded-2xl glass border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-white/50 text-xs font-mono uppercase tracking-wider">Experiences</span>
-              <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center">
-                <Database size={16} />
+              <MemoryExplorer
+                experiences={experiences}
+                onRefresh={async () => {
+                  const exps = await fetchExperiences()
+                  setExperiences(exps)
+                }}
+                onAddExperience={handleAddExperience}
+              />
+            </div>
+          )}
+
+          {/* TAB 4: RUNS & TRACES */}
+          {activeTab === 'runs' && (
+            <div className="space-y-6 anim-fade-in">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+                    Execution Runs & Traces
+                  </h2>
+                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                    Inspect historical agent trajectories, retrieved context augmentations, and trust updates.
+                  </p>
+                </div>
+
+                {recentExecutions.length > 0 && (
+                  <button
+                    onClick={async () => {
+                      await clearExecutionsApi()
+                      setRecentExecutions([])
+                      setSelectedExecution(null)
+                      const updatedMetrics = await fetchTelemetry()
+                      setMetrics(updatedMetrics)
+                    }}
+                    className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono text-zinc-500 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800 border-zinc-200 dark:border-zinc-800 transition-colors cursor-pointer"
+                  >
+                    <span>Clear All History</span>
+                  </button>
+                )}
+              </div>
+
+              {recentExecutions.length === 0 ? (
+                <div className="rounded-xl border p-12 text-center bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
+                  <Clock size={32} className="mx-auto text-zinc-300 dark:text-zinc-600 mb-3" />
+                  <h3 className="text-sm font-semibold">No execution runs in this session</h3>
+                  <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
+                    Execute a prompt in the Studio or Overview launcher to record live execution traces.
+                  </p>
+                  <button
+                    onClick={() => setActiveTab('studio')}
+                    className="mt-4 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
+                  >
+                    Launch a Task
+                  </button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* Left List of Runs */}
+                  <div className="lg:col-span-1 space-y-2">
+                    {recentExecutions.map((run) => (
+                      <div
+                        key={run.id}
+                        onClick={() => setSelectedExecution(run)}
+                        className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                          selectedExecution?.id === run.id
+                            ? 'border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/20'
+                            : 'bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] hover:border-zinc-400'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between text-xs mb-1">
+                          <span className="font-mono text-[11px] font-semibold">{run.id}</span>
+                          <span
+                            className={`font-mono text-[10px] font-bold uppercase ${
+                              run.outcomeQuality === 'positive'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-rose-600 dark:text-rose-400'
+                            }`}
+                          >
+                            {run.outcomeQuality || 'COMPLETED'}
+                          </span>
+                        </div>
+                        <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-1">
+                          {run.taskInput}
+                        </p>
+                        <div className="mt-2 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
+                          <span>{run.taskDomain}</span>
+                          <span>{run.latencyMs}ms · {run.tokensUsed} tokens</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Right Inspector */}
+                  <div className="lg:col-span-2">
+                    <ContextInspector execution={selectedExecution} />
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB 5: RESEARCH */}
+          {activeTab === 'research' && (
+            <div className="space-y-6 anim-fade-in">
+              <div>
+                <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+                  Research Proofs & Theory Sandbox
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Theorem 1 deterministic quarantine bounds and protocol-frozen confirmatory benchmarks.
+                </p>
+              </div>
+
+              <TheoremSandbox />
+              <BenchmarkMatrix />
+            </div>
+          )}
+
+          {/* TAB 6: SETTINGS */}
+          {activeTab === 'settings' && (
+            <div className="space-y-6 anim-fade-in">
+              <div>
+                <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+                  System Settings & Deployment
+                </h2>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                  Inspect persistent storage configurations, backend endpoints, and AEMA hyperparameters.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Supabase Status */}
+                <div className="rounded-2xl border p-5 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-3">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 size={16} className="text-emerald-500" />
+                    <h3 className="text-xs font-mono font-semibold uppercase tracking-wider">
+                      Supabase Cloud Storage
+                    </h3>
+                  </div>
+                  <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1 font-mono">
+                    <div>URL: <code className="text-[#18181B] dark:text-[#F4F4F6]">https://rukqoofrpyzwxfqmhcde.supabase.co</code></div>
+                    <div>Auth Provider: Email + Password & Google OAuth</div>
+                    <div>RLS Engine: Enabled</div>
+                  </div>
+                </div>
+
+                {/* Local Engine */}
+                <div className="rounded-2xl border p-5 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Database size={16} className="text-indigo-600 dark:text-indigo-400" />
+                    <h3 className="text-xs font-mono font-semibold uppercase tracking-wider">
+                      PostgreSQL / pgvector
+                    </h3>
+                  </div>
+                  <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1 font-mono">
+                    <div>Vector Dimension: 384 (all-MiniLM-L6-v2)</div>
+                    <div>Index Algorithm: HNSW (m=16, ef_construction=64)</div>
+                    <div>Distance Metric: Cosine (&lt;=&gt;)</div>
+                  </div>
+                </div>
               </div>
             </div>
-            <div className="text-lg font-display font-bold text-white/40">No experiences yet</div>
-            <div className="text-white/25 text-xs font-mono mt-1">Connect backend to populate</div>
-          </div>
+          )}
+        </main>
+      </div>
 
-          <div className="p-5 rounded-2xl glass border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-white/50 text-xs font-mono uppercase tracking-wider">Mean Trust Score</span>
-              <div className="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-300 flex items-center justify-center">
-                <Shield size={16} />
-              </div>
-            </div>
-            <div className="text-lg font-display font-bold text-white/40">—</div>
-            <div className="text-white/25 text-xs font-mono mt-1">No data yet</div>
-          </div>
-
-          <div className="p-5 rounded-2xl glass border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-white/50 text-xs font-mono uppercase tracking-wider">Retrieval Latency</span>
-              <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-300 flex items-center justify-center">
-                <Clock size={16} />
-              </div>
-            </div>
-            <div className="text-lg font-display font-bold text-white/40">—</div>
-            <div className="text-white/25 text-xs font-mono mt-1">No data yet</div>
-          </div>
-
-          <div className="p-5 rounded-2xl glass border border-white/10">
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-white/50 text-xs font-mono uppercase tracking-wider">Active Model</span>
-              <div className="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-300 flex items-center justify-center">
-                <Activity size={16} />
-              </div>
-            </div>
-            <div className="text-lg font-display font-bold text-white/40">Not configured</div>
-            <div className="text-white/25 text-xs font-mono mt-1">Backend not yet connected</div>
-          </div>
-        </div>
-
-        {/* Recent Experiences — full width, honest empty state */}
-        <div className="p-6 rounded-3xl glass border border-white/10">
-          <h3 className="text-base font-display font-bold text-white mb-4 flex items-center gap-2">
-            <Database size={16} className="text-emerald-400" />
-            <span>Recent Memory Experiences</span>
-          </h3>
-
-          <div className="flex flex-col items-center justify-center py-12 text-center">
-            <Inbox size={32} className="text-white/20 mb-3" />
-            <p className="text-white/40 text-sm font-sans">No experiences recorded yet</p>
-            <p className="text-white/25 text-xs font-mono mt-1">
-              Experiences will appear here once the agent backend is connected.
-            </p>
-          </div>
-        </div>
-      </main>
+      {/* Auth Modal for Switching from Demo */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={() => {
+          setSearchParams({})
+          setIsAuthModalOpen(false)
+        }}
+        initialMode="signup"
+      />
     </div>
   )
 }
