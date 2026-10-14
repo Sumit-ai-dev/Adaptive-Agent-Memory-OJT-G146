@@ -1,7 +1,6 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import type { Experience, TaskExecution, TrustHistoryRecord } from '../types'
 
-// Retrieve environment variables with fallback
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
 
@@ -12,15 +11,7 @@ export const isSupabaseConfigured = Boolean(
   !supabaseAnonKey.includes('your-anon-key')
 )
 
-if (!isSupabaseConfigured) {
-  console.info(
-    '%c[Supabase]%c Credentials not detected in .env. Running with local development storage & demo mode. To connect Supabase, fill VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.',
-    'color: #a855f7; font-weight: bold;',
-    'color: inherit;'
-  )
-}
-
-// Initialize real Supabase client or null
+// Initialize real Supabase client
 export const supabase: SupabaseClient | null = isSupabaseConfigured
   ? createClient(supabaseUrl, supabaseAnonKey, {
       auth: {
@@ -31,50 +22,36 @@ export const supabase: SupabaseClient | null = isSupabaseConfigured
     })
   : null
 
-// ─── Authentication Helpers ──────────────────────────────────────────────────
+// ─── Pure Authentication Methods (No Local/Mock Fallbacks) ───────────────────
 
 export async function signUpWithEmail(email: string, password: string, name?: string) {
   if (!supabase) {
-    // Local mock auth fallback
-    const mockUser = { id: 'mock-user-1', email, user_metadata: { name: name || email.split('@')[0] } }
-    localStorage.setItem('memoryagent_user', JSON.stringify(mockUser))
-    return { data: { user: mockUser, session: { access_token: 'mock-token' } }, error: null }
+    throw new Error('Supabase client is not configured. Real authentication requires VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
   }
   return supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { name },
+      data: { name: name || email.split('@')[0] },
     },
   })
 }
 
 export async function signInWithEmail(email: string, password: string) {
   if (!supabase) {
-    const mockUser = { id: 'mock-user-1', email, user_metadata: { name: email.split('@')[0] } }
-    localStorage.setItem('memoryagent_user', JSON.stringify(mockUser))
-    return { data: { user: mockUser, session: { access_token: 'mock-token' } }, error: null }
+    throw new Error('Supabase client is not configured. Real authentication requires VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.')
   }
   return supabase.auth.signInWithPassword({ email, password })
 }
 
 export async function signInWithGoogle() {
   if (!supabase) {
-    // Google OAuth requires a real Supabase project with Google provider enabled.
-    // Cannot proceed without VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY configured.
-    return {
-      data: null,
-      error: new Error('Google sign-in requires Supabase credentials. Please configure VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file.'),
-    }
+    throw new Error('Google OAuth requires Supabase authentication credentials.')
   }
-
-  // Clear any stale mock/dev session before starting the real OAuth flow
-  localStorage.removeItem('memoryagent_user')
-
   return supabase.auth.signInWithOAuth({
     provider: 'google',
     options: {
-      redirectTo: `${window.location.origin}/`,
+      redirectTo: `${window.location.origin}/dashboard`,
       queryParams: {
         prompt: 'select_account',
       },
@@ -83,7 +60,6 @@ export async function signInWithGoogle() {
 }
 
 export async function signOut() {
-  localStorage.removeItem('memoryagent_user')
   if (!supabase) {
     return { error: null }
   }
@@ -91,130 +67,129 @@ export async function signOut() {
 }
 
 export async function getCurrentSession() {
-  if (supabase) {
-    const { data } = await supabase.auth.getSession()
-    if (data?.session) return data
+  if (!supabase) {
+    return { data: { session: null }, error: null }
   }
-  const saved = localStorage.getItem('memoryagent_user')
-  if (saved) {
-    try {
-      const user = JSON.parse(saved)
-      return { session: { user, access_token: 'mock-token' } }
-    } catch {
-      localStorage.removeItem('memoryagent_user')
-    }
-  }
-  return { session: null }
+  return supabase.auth.getSession()
 }
 
-// ─── Experience Memory Database Helpers ──────────────────────────────────────
-// ARCHITECTURE NOTE (Temporary):
-// These helpers write directly from the frontend to Supabase/PostgreSQL.
-// This is acceptable for the current demo/development phase only.
-//
-// TODO: Once the FastAPI backend is implemented, these write operations
-// (dbSaveExperience, dbRecordTaskExecution, dbRecordTrustUpdate) must be
-// moved server-side. The frontend should POST to FastAPI endpoints, and
-// FastAPI should handle all database writes, experience logic, and trust updates.
-//
-// The intended permanent flow is:
-//   Frontend → FastAPI → PostgreSQL + pgvector
-//
-// dbFetchExperiences may remain as a read-only shortcut if Supabase RLS
-// is correctly configured and no business logic is involved.
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Direct Database Helpers (Supabase PostgreSQL / pgvector) ────────────────
 
 export async function dbFetchExperiences(domain?: string): Promise<Experience[]> {
   if (!supabase) return []
-  let query = supabase.from('experiences').select('*').order('trust_score', { ascending: false })
-  if (domain && domain !== 'all') {
-    query = query.eq('task_domain', domain)
-  }
-  const { data, error } = await query
-  if (error || !data) return []
+  try {
+    let query = supabase.from('experiences').select('*').order('trust_score', { ascending: false })
+    if (domain && domain !== 'all') {
+      query = query.eq('task_domain', domain)
+    }
+    const { data, error } = await query
+    if (error || !data) return []
 
-  return data.map((row) => ({
-    id: row.id,
-    taskDomain: row.task_domain,
-    triggerCondition: row.trigger_condition,
-    strategyLesson: row.strategy_lesson,
-    trustScore: row.trust_score,
-    usesCount: row.uses_count,
-    successesCount: row.successes_count,
-    failuresCount: row.failures_count,
-    status: row.status,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
-  }))
+    return data.map((row) => ({
+      id: row.id,
+      taskDomain: row.task_domain,
+      triggerCondition: row.trigger_condition,
+      strategyLesson: row.strategy_lesson,
+      pitfallWarning: row.pitfall_warning,
+      trustScore: row.trust_score,
+      confidenceScore: row.confidence_score ?? 0.88,
+      usesCount: row.uses_count,
+      successesCount: row.successes_count,
+      failuresCount: row.failures_count,
+      consecutiveFailures: row.consecutive_failures ?? 0,
+      status: row.status,
+      trustTrajectory: Array.isArray(row.trust_trajectory) ? row.trust_trajectory : [row.trust_score],
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
+    }))
+  } catch {
+    return []
+  }
 }
 
 export async function dbSaveExperience(exp: Partial<Experience>) {
   if (!supabase) return null
-  const { data, error } = await supabase
-    .from('experiences')
-    .insert([
-      {
-        task_domain: exp.taskDomain,
-        trigger_condition: exp.triggerCondition,
-        strategy_lesson: exp.strategyLesson,
-        trust_score: exp.trustScore || 0.75,
-        uses_count: exp.usesCount || 0,
-        successes_count: exp.successesCount || 0,
-        failures_count: exp.failuresCount || 0,
-        status: exp.status || 'active',
-      },
-    ])
-    .select()
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from('experiences')
+      .insert([
+        {
+          task_domain: exp.taskDomain,
+          trigger_condition: exp.triggerCondition,
+          strategy_lesson: exp.strategyLesson,
+          pitfall_warning: exp.pitfallWarning,
+          trust_score: exp.trustScore || 0.75,
+          uses_count: exp.usesCount || 0,
+          successes_count: exp.successesCount || 0,
+          failures_count: exp.failuresCount || 0,
+          status: exp.status || 'active',
+        },
+      ])
+      .select()
+      .single()
 
-  if (error) {
-    console.error('Error saving experience to Supabase:', error)
+    if (error) {
+      console.error('Error saving experience to Supabase:', error)
+      return null
+    }
+    return data
+  } catch (err) {
+    console.error('Exception saving experience to Supabase:', err)
     return null
   }
-  return data
 }
 
 export async function dbRecordTaskExecution(exec: Partial<TaskExecution>) {
   if (!supabase) return null
-  const { data, error } = await supabase
-    .from('task_executions')
-    .insert([
-      {
-        task_input: exec.taskInput,
-        task_domain: exec.taskDomain,
-        memory_enabled: exec.memoryEnabled,
-        status: exec.status,
-        final_output: exec.finalOutput,
-        reflection_lesson: exec.reflectionLesson,
-        tokens_used: exec.tokensUsed,
-        latency_ms: exec.latencyMs,
-        outcome_quality: exec.outcomeQuality,
-      },
-    ])
-    .select()
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from('task_executions')
+      .insert([
+        {
+          task_input: exec.taskInput,
+          task_domain: exec.taskDomain,
+          memory_enabled: exec.memoryEnabled,
+          status: exec.status,
+          final_output: exec.finalOutput,
+          reflection_lesson: exec.reflectionLesson,
+          tokens_used: exec.tokensUsed,
+          latency_ms: exec.latencyMs,
+          outcome_quality: exec.outcomeQuality,
+        },
+      ])
+      .select()
+      .single()
 
-  if (error) console.error('Error logging execution to Supabase:', error)
-  return data
+    if (error) console.error('Error logging execution to Supabase:', error)
+    return data
+  } catch (err) {
+    console.error('Exception logging execution to Supabase:', err)
+    return null
+  }
 }
 
 export async function dbRecordTrustUpdate(record: Omit<TrustHistoryRecord, 'id' | 'createdAt'>) {
   if (!supabase) return null
-  const { data, error } = await supabase
-    .from('trust_history')
-    .insert([
-      {
-        experience_id: record.experienceId,
-        execution_id: record.executionId,
-        old_trust: record.oldTrust,
-        new_trust: record.newTrust,
-        delta: record.delta,
-        reason: record.reason,
-      },
-    ])
-    .select()
-    .single()
+  try {
+    const { data, error } = await supabase
+      .from('trust_history')
+      .insert([
+        {
+          experience_id: record.experienceId,
+          execution_id: record.executionId,
+          old_trust: record.oldTrust,
+          new_trust: record.newTrust,
+          delta: record.delta,
+          reason: record.reason,
+        },
+      ])
+      .select()
+      .single()
 
-  if (error) console.error('Error logging trust update to Supabase:', error)
-  return data
+    if (error) console.error('Error logging trust update to Supabase:', error)
+    return data
+  } catch (err) {
+    console.error('Exception logging trust update to Supabase:', err)
+    return null
+  }
 }

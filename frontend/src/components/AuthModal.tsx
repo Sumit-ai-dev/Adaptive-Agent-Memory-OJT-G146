@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { X, Sparkles, Lock, Mail, User as UserIcon, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { X, Lock, Mail, User as UserIcon, ArrowRight, ShieldCheck, AlertCircle } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 interface AuthModalProps {
@@ -9,8 +9,13 @@ interface AuthModalProps {
   initialMode?: 'signin' | 'signup'
 }
 
-export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 'signin' }: AuthModalProps) {
-  const { signIn, signUp, signInWithGoogle } = useAuth()
+export default function AuthModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  initialMode = 'signin',
+}: AuthModalProps) {
+  const { signIn, signUp, signInWithGoogle, isConfigured } = useAuth()
   const [isSignUp, setIsSignUp] = useState(initialMode === 'signup')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -28,15 +33,12 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
     try {
       const { error } = await signInWithGoogle()
       if (error) {
-        // Only show error if Supabase returned one (e.g. not configured, provider disabled)
         setError(error.message)
         setGoogleLoading(false)
       }
-      // If no error: signInWithOAuth has already triggered browser navigation to Google.
-      // Keep the loading state — the page will navigate away momentarily.
-      // Session is restored via onAuthStateChange when the user returns from Google.
+      // Browser will redirect to Google account selector
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Google authentication failed')
+      setError(err instanceof Error ? err.message : 'Google OAuth initialization failed')
       setGoogleLoading(false)
     }
   }
@@ -44,197 +46,238 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError(null)
-    setLoading(true)
+    setSuccessMsg(null)
 
+    if (!email.trim() || !password.trim()) {
+      setError('Please provide both email and password.')
+      return
+    }
+
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
+      return
+    }
+
+    setLoading(true)
     try {
       if (isSignUp) {
-        const { error } = await signUp(email, password, name)
+        const { error } = await signUp(email.trim(), password, name.trim())
         if (error) {
           setError(error.message)
         } else {
-          // Sign up succeeded — Supabase sends a confirmation email.
-          // Do NOT redirect: the user must confirm their email before signing in.
           setSuccessMsg(
-            `We've sent a confirmation link to ${email}. Please check your inbox and click the link, then sign in below.`
+            `Verification email sent to ${email}. Check your inbox to confirm your account, then sign in.`
           )
-          // Switch to sign-in mode and keep the email pre-filled so they can sign in after confirming
           setIsSignUp(false)
-          // Clear the success banner after 5s so the sign-in form is the focus
-          setTimeout(() => setSuccessMsg(''), 5000)
         }
       } else {
-        const { error } = await signIn(email, password)
+        const { error } = await signIn(email.trim(), password)
         if (error) {
-          // Intercept the raw Supabase "Email not confirmed" error with a helpful message
           if (error.message.toLowerCase().includes('email not confirmed')) {
-            setError(
-              'Your email address is not yet confirmed. Please check your inbox for a confirmation email from MemoryAgent and click the link before signing in.'
-            )
+            setError('Email address is not yet confirmed. Please check your inbox.')
           } else {
             setError(error.message)
           }
         } else {
-          setSuccessMsg('Signed in successfully!')
+          setSuccessMsg('Authentication successful.')
           setTimeout(() => {
             onClose()
             onSuccess?.()
-          }, 600)
+          }, 400)
         }
       }
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An unexpected error occurred')
+      setError(err instanceof Error ? err.message : 'Authentication failed')
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md anim-float-up">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm anim-fade-in">
       <div
-        className="w-full max-w-md p-7 rounded-3xl relative overflow-hidden text-white"
-        style={{
-          background: 'rgba(18, 10, 32, 0.95)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 25px 80px rgba(0, 0, 0, 0.8), 0 0 50px rgba(168, 85, 247, 0.15)',
-        }}
+        className="w-full max-w-md rounded-2xl border p-7 shadow-2xl relative transition-all
+          bg-[#FFFFFF] border-[#E6E6E1] text-[#18181B]
+          dark:bg-[#131722] dark:border-[#252B3B] dark:text-[#F4F4F6]"
       >
-        {/* Background glow */}
-        <div className="absolute top-0 right-0 w-48 h-48 bg-purple-600/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-48 h-48 bg-emerald-600/15 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Close button */}
+        {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-5 right-5 text-white/40 hover:text-white transition-colors p-1.5 rounded-full hover:bg-white/10"
+          className="absolute top-5 right-5 p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 transition-colors"
+          aria-label="Close dialog"
         >
           <X size={18} />
         </button>
 
         {/* Modal Header */}
-        <div className="mb-5">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full mb-3 bg-purple-500/15 border border-purple-500/30">
-            <Sparkles size={13} className="text-purple-300" />
-            <span className="text-purple-300 text-xs font-mono font-bold tracking-wider uppercase">
-              MemoryAgent Auth
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 border border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
+              <ShieldCheck size={18} />
+            </div>
+            <span className="text-xs font-mono font-semibold uppercase tracking-wider text-indigo-700 dark:text-indigo-400">
+              AEMA Cloud Console
             </span>
           </div>
-          <h3 className="text-2xl font-display font-bold text-white tracking-tight">
-            {isSignUp ? 'Create your account' : 'Welcome back to MemoryAgent'}
-          </h3>
-          <p className="text-white/50 text-xs font-sans mt-1">
-            Access your persistent experience store, live task runner, and telemetry.
+          <h2 className="text-xl font-semibold tracking-tight text-[#18181B] dark:text-[#F4F4F6]">
+            {isSignUp ? 'Create your workspace' : 'Sign in to your workspace'}
+          </h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+            Reliability-aware experiential memory engine for autonomous AI agents.
           </p>
         </div>
 
-
-        {/* Error / Success Feedback */}
-        {error && (
-          <div className="mb-4 p-3 rounded-xl bg-red-950/40 border border-red-800/50 text-xs text-red-300">
-            {error}
-          </div>
-        )}
-        {successMsg && (
-          <div className="mb-4 p-3 rounded-xl bg-emerald-950/40 border border-emerald-800/50 text-xs text-emerald-300 flex items-center gap-2">
-            <CheckCircle2 size={14} />
-            {successMsg}
+        {/* Supabase Status Check */}
+        {!isConfigured && (
+          <div className="mb-4 p-3 rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30 text-amber-800 dark:text-amber-300 text-xs flex items-start gap-2">
+            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+            <span>
+              Supabase credentials not configured in environment. Authentication requires a live Supabase connection.
+            </span>
           </div>
         )}
 
-        {/* Continue with Google Button */}
-        <div className="mb-4">
+        {/* Mode Switch Tabs */}
+        <div className="grid grid-cols-2 p-1 rounded-xl bg-zinc-100 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B] mb-5">
           <button
             type="button"
-            onClick={handleGoogleSignIn}
-            disabled={loading || googleLoading}
-            className="w-full py-2.5 px-4 rounded-xl font-medium text-sm text-white/90 bg-white/[0.06] hover:bg-white/[0.12] border border-white/15 hover:border-white/30 transition-all flex items-center justify-center gap-3 cursor-pointer shadow-sm hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50"
+            onClick={() => {
+              setIsSignUp(false)
+              setError(null)
+            }}
+            className={`py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+              !isSignUp
+                ? 'bg-white dark:bg-[#131722] text-[#18181B] dark:text-[#F4F4F6] shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+            }`}
           >
-            {googleLoading ? (
-              <span className="inline-block w-4 h-4 border-2 border-purple-400 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                  <path
-                    fill="#4285F4"
-                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  />
-                  <path
-                    fill="#34A853"
-                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  />
-                  <path
-                    fill="#FBBC05"
-                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                  />
-                  <path
-                    fill="#EA4335"
-                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                  />
-                </svg>
-                <span>Continue with Google</span>
-              </>
-            )}
+            Sign In
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setIsSignUp(true)
+              setError(null)
+            }}
+            className={`py-1.5 text-xs font-medium rounded-lg transition-all cursor-pointer ${
+              isSignUp
+                ? 'bg-white dark:bg-[#131722] text-[#18181B] dark:text-[#F4F4F6] shadow-sm'
+                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+            }`}
+          >
+            Create Account
           </button>
         </div>
 
-        {/* Divider */}
-        <div className="relative my-4 flex items-center justify-center">
-          <div className="border-t border-white/10 w-full" />
-          <span className="bg-[#120a20] px-3 text-[11px] font-mono text-white/40 uppercase tracking-wider absolute">
-            or continue with email
-          </span>
+        {/* Google OAuth Button */}
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={googleLoading}
+          className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border text-xs font-medium transition-all mb-4 cursor-pointer
+            bg-white border-[#E6E6E1] text-[#18181B] hover:bg-[#F4F4F0]
+            dark:bg-[#1A1F2C] dark:border-[#252B3B] dark:text-[#F4F4F6] dark:hover:bg-[#252B3B]"
+        >
+          <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+            <path
+              fill="#4285F4"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="#34A853"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="#FBBC05"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+            />
+            <path
+              fill="#EA4335"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+            />
+          </svg>
+          <span>{googleLoading ? 'Connecting to Google...' : 'Continue with Google'}</span>
+        </button>
+
+        <div className="relative my-4">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-[#E6E6E1] dark:border-[#252B3B]" />
+          </div>
+          <div className="relative flex justify-center text-[11px] uppercase tracking-wider font-mono">
+            <span className="px-2 bg-white dark:bg-[#131722] text-zinc-400">or with email</span>
+          </div>
         </div>
 
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+        {/* Feedback Banners */}
+        {error && (
+          <div className="mb-4 p-3 rounded-lg border border-rose-200 bg-rose-50 dark:border-rose-900/60 dark:bg-rose-950/30 text-rose-800 dark:text-rose-300 text-xs flex items-start gap-2">
+            <AlertCircle size={15} className="shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+        {successMsg && (
+          <div className="mb-4 p-3 rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900/60 dark:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300 text-xs flex items-start gap-2">
+            <ShieldCheck size={15} className="shrink-0 mt-0.5" />
+            <span>{successMsg}</span>
+          </div>
+        )}
+
+        {/* Credentials Form */}
+        <form onSubmit={handleSubmit} className="space-y-3.5">
           {isSignUp && (
             <div>
-              <label className="block text-white/50 text-xs font-mono mb-1.5 uppercase tracking-wider">
+              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
                 Full Name
               </label>
               <div className="relative">
-                <UserIcon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+                <UserIcon size={14} className="absolute left-3 top-3 text-zinc-400" />
                 <input
                   type="text"
-                  required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Sumit Das"
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-purple-400 transition-colors"
+                  placeholder="Kasat Sakshi Dattaprasad"
+                  className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border transition-colors outline-none
+                    bg-white border-[#E6E6E1] text-[#18181B] focus:border-indigo-600
+                    dark:bg-[#1A1F2C] dark:border-[#252B3B] dark:text-[#F4F4F6] dark:focus:border-indigo-400"
                 />
               </div>
             </div>
           )}
 
           <div>
-            <label className="block text-white/50 text-xs font-mono mb-1.5 uppercase tracking-wider">
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
               Email Address
             </label>
             <div className="relative">
-              <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+              <Mail size={14} className="absolute left-3 top-3 text-zinc-400" />
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="developer@enterprise.ai"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-purple-400 transition-colors"
+                placeholder="developer@aema.ai"
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border transition-colors outline-none
+                  bg-white border-[#E6E6E1] text-[#18181B] focus:border-indigo-600
+                  dark:bg-[#1A1F2C] dark:border-[#252B3B] dark:text-[#F4F4F6] dark:focus:border-indigo-400"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-white/50 text-xs font-mono mb-1.5 uppercase tracking-wider">
+            <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
               Password
             </label>
             <div className="relative">
-              <Lock size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30" />
+              <Lock size={14} className="absolute left-3 top-3 text-zinc-400" />
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-white placeholder-white/30 text-sm focus:outline-none focus:border-purple-400 transition-colors"
+                placeholder="••••••••••••"
+                className="w-full pl-9 pr-3 py-2 text-xs rounded-xl border transition-colors outline-none
+                  bg-white border-[#E6E6E1] text-[#18181B] focus:border-indigo-600
+                  dark:bg-[#1A1F2C] dark:border-[#252B3B] dark:text-[#F4F4F6] dark:focus:border-indigo-400"
               />
             </div>
           </div>
@@ -242,34 +285,18 @@ export default function AuthModal({ isOpen, onClose, onSuccess, initialMode = 's
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 rounded-xl font-display font-bold text-sm text-white anim-gradient-bg shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-2 cursor-pointer mt-2 disabled:opacity-50"
+            className="w-full mt-2 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl text-xs font-semibold text-white transition-all cursor-pointer
+              bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 shadow-sm"
           >
-            {loading ? (
-              <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <>
-                <span>{isSignUp ? 'Create Free Account' : 'Sign In'}</span>
-                <ArrowRight size={15} />
-              </>
-            )}
+            <span>{loading ? 'Processing...' : isSignUp ? 'Create Workspace' : 'Sign In'}</span>
+            <ArrowRight size={14} />
           </button>
         </form>
 
-        {/* Mode switcher toggle */}
-        <div className="mt-6 pt-4 border-t border-white/10 text-center">
-          <p className="text-white/40 text-xs font-sans">
-            {isSignUp ? 'Already have an account?' : "Don't have an account yet?"}{' '}
-            <button
-              onClick={() => {
-                setIsSignUp(!isSignUp)
-                setError(null)
-                setSuccessMsg(null)
-              }}
-              className="text-purple-300 font-semibold hover:text-white transition-colors cursor-pointer ml-1"
-            >
-              {isSignUp ? 'Sign in instead' : 'Create an account'}
-            </button>
-          </p>
+        <div className="mt-5 text-center">
+          <span className="text-[11px] text-zinc-400">
+            AEMA 0.1.0 · Reliability-Aware Experiential Memory
+          </span>
         </div>
       </div>
     </div>
