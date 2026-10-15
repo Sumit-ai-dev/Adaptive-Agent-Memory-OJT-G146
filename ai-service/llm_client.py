@@ -248,14 +248,14 @@ class UniversalLLMClient:
                 return content, tokens
             except Exception as e:
                 err_msg = str(e)
-                # If Groq fails with 404 on 70B (free tier access restriction), retry with 8B instant
-                if provider == ModelProvider.GROQ and "llama-3.1-8b-instant" not in model and (
-                    "404" in err_msg or "does not exist" in err_msg or "access" in err_msg
+                # If Groq fails with 404/restricted on requested model, retry with active openai/gpt-oss-20b
+                if provider == ModelProvider.GROQ and model != "openai/gpt-oss-20b" and (
+                    "404" in err_msg or "does not exist" in err_msg or "access" in err_msg or "model_not_found" in err_msg or "decommissioned" in err_msg
                 ):
                     try:
-                        logger.info("Groq 70B restricted, retrying with llama-3.1-8b-instant...")
+                        logger.info("Groq model restricted or not found, retrying with openai/gpt-oss-20b...")
                         fallback_kwargs = dict(kwargs)
-                        fallback_kwargs["model"] = "llama-3.1-8b-instant"
+                        fallback_kwargs["model"] = "openai/gpt-oss-20b"
                         response = await client.chat.completions.create(**fallback_kwargs)
                         choice = response.choices[0]
                         content = choice.message.content or ""
@@ -355,6 +355,24 @@ class UniversalLLMClient:
                         text = "".join(p.get("text", "") for p in parts)
                         tokens = data.get("usageMetadata", {}).get("totalTokenCount", len(text.split()) * 2)
                         return text, tokens
+
+                # If requested model not found (404), retry with gemini-flash-latest
+                if res.status_code == 404 and model != "gemini-flash-latest":
+                    try:
+                        logger.info(f"Gemini model '{model}' not found, retrying with gemini-flash-latest...")
+                        fallback_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+                        fallback_res = await client.post(fallback_url, json=payload, headers=headers)
+                        if fallback_res.status_code == 200:
+                            data = fallback_res.json()
+                            candidates = data.get("candidates", [])
+                            if candidates:
+                                parts = candidates[0].get("content", {}).get("parts", [])
+                                text = "".join(p.get("text", "") for p in parts)
+                                tokens = data.get("usageMetadata", {}).get("totalTokenCount", len(text.split()) * 2)
+                                return text, tokens
+                        res = fallback_res
+                    except Exception:
+                        pass
 
                 # Handle HTTP errors with clean explanations
                 err_text = res.text

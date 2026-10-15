@@ -237,7 +237,7 @@ export async function executeAgentTask({
     taskDomain,
     memoryEnabled,
     provider,
-    model: model || (provider === 'gemini' ? 'gemini-1.5-flash' : provider === 'groq' ? 'llama-3.1-8b-instant' : undefined),
+    model: model || (provider === 'gemini' ? 'gemini-flash-latest' : provider === 'groq' ? 'openai/gpt-oss-20b' : undefined),
     apiKey: apiKey || undefined,
   }
 
