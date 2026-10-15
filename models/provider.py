@@ -51,8 +51,8 @@ class ProviderConfig(BaseModel):
         elif provider == ModelProvider.GEMINI:
             return cls(
                 provider=ModelProvider.GEMINI,
-                model="gemini-2.0-flash",
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+                model="gemini-1.5-flash",
+                base_url="https://generativelanguage.googleapis.com/v1beta",
             )
         elif provider == ModelProvider.OPENAI:
             return cls(

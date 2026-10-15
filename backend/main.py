@@ -8,6 +8,11 @@ import logging
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from dotenv import load_dotenv
+
+# Load environment variables from .env if present
+load_dotenv()
+
 from backend.routes.agent import router as agent_router, shared_store
 from backend.routes.memories import router as memories_router
 from backend.routes.telemetry import router as telemetry_router
@@ -24,7 +29,9 @@ logger = logging.getLogger("backend.main")
 async def lifespan(app: FastAPI):
     logger.info("Initializing Adaptive Agent Memory Backend Engine...")
     logger.info(f"Database path: {shared_store.db_path}")
-    logger.info(f"Model Provider Gateway: Llama-3.3-70B / BYOK active")
+    logger.info(f"Groq Provider Key: {'CONFIGURED' if settings.GROQ_API_KEY else 'NOT SET (falls back to mock if empty)'}")
+    logger.info(f"Gemini Provider Key: {'CONFIGURED' if settings.GEMINI_API_KEY else 'NOT SET (falls back to mock if empty)'}")
+    logger.info(f"OpenAI Provider Key: {'CONFIGURED' if settings.OPENAI_API_KEY else 'NOT SET'}")
     yield
     logger.info("Shutting down Adaptive Agent Memory Backend.")
 

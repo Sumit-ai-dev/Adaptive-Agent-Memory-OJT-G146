@@ -8,6 +8,8 @@ Implements Asymmetric Exponential Moving Average (A-EMA):
     - Quarantine (S < 0.35): Automatically deprecates memory to eliminate negative transfer.
 """
 
+from __future__ import annotations
+
 from datetime import datetime, timezone
 import logging
 from typing import Any, Sequence

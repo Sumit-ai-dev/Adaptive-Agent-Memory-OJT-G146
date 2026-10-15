@@ -80,7 +80,7 @@ def resolve_provider_config(state: Dict[str, Any]) -> Tuple[Optional[ProviderCon
     config = ProviderConfig(
         provider=provider,
         model=state.get("model") or defaults.model,
-        api_key=state.get("api_key"),
+        api_key=state.get("api_key") or defaults.api_key,
         temperature=(
             defaults.temperature if requested_temperature is None
             else float(requested_temperature)
@@ -122,19 +122,30 @@ class UniversalLLMClient:
         if provider == ModelProvider.MOCK:
             return None, cfg.model, ModelProvider.MOCK
 
-        api_key = cfg.api_key or getattr(settings, f"{provider.value.upper()}_API_KEY", "dummy-key")
-        base_url = cfg.base_url or ProviderConfig.default_for(provider).base_url
+        default_cfg = ProviderConfig.default_for(provider)
+        api_key = (
+            (cfg.api_key or "").strip()
+            or getattr(settings, f"{provider.value.upper()}_API_KEY", None)
+            or default_cfg.api_key
+        )
+        base_url = cfg.base_url or default_cfg.base_url
+        model = cfg.model or default_cfg.model
+
+        if not api_key:
+            return None, model, provider
 
         if AsyncOpenAI is not None:
+            timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
             client = AsyncOpenAI(
-                api_key=api_key or "dummy-key",
+                api_key=api_key,
                 base_url=base_url,
-                timeout=getattr(settings, "REQUEST_TIMEOUT_SECONDS", 45.0),
-                http_client=httpx.AsyncClient(),
+                timeout=timeout_sec,
+                max_retries=1,
+                http_client=httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)),
             )
-            return client, cfg.model, provider
+            return client, model, provider
 
-        return None, cfg.model, provider
+        return None, model, provider
 
     async def generate(
         self,
@@ -164,7 +175,17 @@ class UniversalLLMClient:
         if provider == ModelProvider.MOCK:
             return self._generate_mock_response(messages, json_mode)
 
-        # 1. Try litellm if installed
+        # 1. Native Google Gemini REST integration (direct to Google, bypassing OpenAI proxy issues)
+        if provider == ModelProvider.GEMINI:
+            return await self._generate_gemini_native(
+                messages=messages,
+                cfg=cfg,
+                json_mode=json_mode,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
+        # 2. Try litellm if installed
         if litellm is not None:
             try:
                 litellm_model = cfg.model
@@ -173,10 +194,16 @@ class UniversalLLMClient:
                 elif provider == ModelProvider.OLLAMA and not litellm_model.startswith("ollama/"):
                     litellm_model = f"ollama/{litellm_model}"
 
+                resolved_key = (
+                    (cfg.api_key or "").strip()
+                    or getattr(settings, f"{provider.value.upper()}_API_KEY", None)
+                    or ProviderConfig.default_for(provider).api_key
+                )
+
                 response = await litellm.acompletion(
                     model=litellm_model,
                     messages=messages,
-                    api_key=cfg.api_key,
+                    api_key=resolved_key,
                     base_url=cfg.base_url,
                     temperature=temperature if temperature is not None else cfg.temperature,
                     max_tokens=max_tokens or cfg.max_tokens,
@@ -188,8 +215,19 @@ class UniversalLLMClient:
             except Exception as e:
                 logger.warning(f"LiteLLM call failed for {provider.value}: {e}. Trying AsyncOpenAI fallback.")
 
-        # 2. OpenAI-compatible Async client fallback
+        # 3. OpenAI-compatible Async client fallback (Groq, Ollama, OpenAI)
         client, model, _ = self._get_client_and_model(cfg)
+        if client is None and provider != ModelProvider.MOCK:
+            raw_ans, tokens = self._generate_mock_response(messages, json_mode)
+            if not json_mode:
+                notice = (
+                    f"[Notice: No {provider.value.upper()} API key configured. "
+                    f"Click 'BYOK Key' in the console to enter your API key or set {provider.value.upper()}_API_KEY in the backend environment. "
+                    f"Offline fallback response generated.]\n\n"
+                )
+                return notice + raw_ans, tokens
+            return raw_ans, tokens
+
         if client is not None:
             try:
                 kwargs: Dict[str, Any] = {
@@ -200,7 +238,6 @@ class UniversalLLMClient:
                 }
                 if json_mode:
                     kwargs["response_format"] = {"type": "json_object"}
-                # S9: only ever sent to providers that honour it (validated above).
                 if effective_seed is not None:
                     kwargs["seed"] = int(effective_seed)
 
@@ -210,10 +247,163 @@ class UniversalLLMClient:
                 tokens = response.usage.total_tokens if response.usage else len(content.split()) * 2
                 return content, tokens
             except Exception as e:
-                logger.warning(f"AsyncOpenAI call failed for {provider.value} ({model}): {e}. Falling back to deterministic response.")
-                return self._generate_mock_response(messages, json_mode)
+                err_msg = str(e)
+                # If Groq fails with 404/restricted on requested model, retry with active openai/gpt-oss-20b
+                if provider == ModelProvider.GROQ and model != "openai/gpt-oss-20b" and (
+                    "404" in err_msg or "does not exist" in err_msg or "access" in err_msg or "model_not_found" in err_msg or "decommissioned" in err_msg
+                ):
+                    try:
+                        logger.info("Groq model restricted or not found, retrying with openai/gpt-oss-20b...")
+                        fallback_kwargs = dict(kwargs)
+                        fallback_kwargs["model"] = "openai/gpt-oss-20b"
+                        response = await client.chat.completions.create(**fallback_kwargs)
+                        choice = response.choices[0]
+                        content = choice.message.content or ""
+                        tokens = response.usage.total_tokens if response.usage else len(content.split()) * 2
+                        return content, tokens
+                    except Exception as fallback_e:
+                        err_msg = str(fallback_e)
+
+                logger.warning(f"AsyncOpenAI call failed for {provider.value} ({model}): {err_msg}. Falling back to deterministic response.")
+                raw_ans, tokens = self._generate_mock_response(messages, json_mode)
+                if not json_mode and provider != ModelProvider.MOCK:
+                    clean_msg = err_msg
+                    if "401" in err_msg or "invalid_api_key" in err_msg:
+                        clean_msg = "Invalid API key. Please check the key in BYOK."
+                    elif "429" in err_msg:
+                        clean_msg = "Rate limit reached. Please wait a moment."
+                    elif "404" in err_msg:
+                        clean_msg = f"Model '{model}' not accessible on this account tier."
+                    notice = (
+                        f"[Notice: {provider.value.upper()} gateway error ({clean_msg}). "
+                        f"Enter a valid API key via BYOK or set {provider.value.upper()}_API_KEY in backend environment. "
+                        f"Offline fallback response generated.]\n\n"
+                    )
+                    return notice + raw_ans, tokens
+                return raw_ans, tokens
 
         return self._generate_mock_response(messages, json_mode)
+
+    async def _generate_gemini_native(
+        self,
+        messages: List[Dict[str, str]],
+        cfg: ProviderConfig,
+        json_mode: bool = False,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> Tuple[str, int]:
+        """
+        Direct, native Google Gemini REST API integration.
+        Bypasses OpenAI-compatible proxy routing issues.
+        """
+        api_key = (cfg.api_key or "").strip() or getattr(settings, "GEMINI_API_KEY", None)
+        if not api_key:
+            raw_ans, tokens = self._generate_mock_response(messages, json_mode)
+            if not json_mode:
+                notice = (
+                    "[Notice: No GEMINI API key configured. "
+                    "Click 'BYOK Key' in the console to enter your key or set GEMINI_API_KEY in the backend. "
+                    "Offline fallback response generated.]\n\n"
+                )
+                return notice + raw_ans, tokens
+            return raw_ans, tokens
+
+        model = (cfg.model or ProviderConfig.default_for(ModelProvider.GEMINI).model).replace("models/", "")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        headers = {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+        }
+
+        contents = []
+        system_instruction = None
+        for m in messages:
+            role = m.get("role", "user")
+            text = m.get("content", "")
+            if role == "system":
+                system_instruction = {"parts": [{"text": text}]}
+            else:
+                gemini_role = "user" if role == "user" else "model"
+                contents.append({"role": gemini_role, "parts": [{"text": text}]})
+
+        if not contents:
+            contents.append({"role": "user", "parts": [{"text": "Hello"}]})
+
+        payload: Dict[str, Any] = {"contents": contents}
+        if system_instruction:
+            payload["systemInstruction"] = system_instruction
+
+        gen_config: Dict[str, Any] = {}
+        if json_mode:
+            gen_config["responseMimeType"] = "application/json"
+        if temperature is not None:
+            gen_config["temperature"] = float(temperature)
+        if max_tokens:
+            gen_config["maxOutputTokens"] = int(max_tokens)
+        if gen_config:
+            payload["generationConfig"] = gen_config
+
+        timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
+                res = await client.post(url, json=payload, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    candidates = data.get("candidates", [])
+                    if candidates:
+                        parts = candidates[0].get("content", {}).get("parts", [])
+                        text = "".join(p.get("text", "") for p in parts)
+                        tokens = data.get("usageMetadata", {}).get("totalTokenCount", len(text.split()) * 2)
+                        return text, tokens
+
+                # If requested model not found (404), retry with gemini-flash-latest
+                if res.status_code == 404 and model != "gemini-flash-latest":
+                    try:
+                        logger.info(f"Gemini model '{model}' not found, retrying with gemini-flash-latest...")
+                        fallback_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+                        fallback_res = await client.post(fallback_url, json=payload, headers=headers)
+                        if fallback_res.status_code == 200:
+                            data = fallback_res.json()
+                            candidates = data.get("candidates", [])
+                            if candidates:
+                                parts = candidates[0].get("content", {}).get("parts", [])
+                                text = "".join(p.get("text", "") for p in parts)
+                                tokens = data.get("usageMetadata", {}).get("totalTokenCount", len(text.split()) * 2)
+                                return text, tokens
+                        res = fallback_res
+                    except Exception:
+                        pass
+
+                # Handle HTTP errors with clean explanations
+                err_text = res.text
+                try:
+                    err_json = res.json()
+                    err_msg = err_json.get("error", {}).get("message", err_text)
+                except Exception:
+                    err_msg = err_text[:120]
+
+                logger.warning(f"Google Gemini native API error ({res.status_code}): {err_msg}")
+                raw_ans, tokens = self._generate_mock_response(messages, json_mode)
+                if not json_mode:
+                    clean_msg = err_msg
+                    if res.status_code == 400 and ("API key not valid" in err_msg or "INVALID_ARGUMENT" in err_msg):
+                        clean_msg = "API key not valid. Please verify your Google AI Studio key in BYOK."
+                    elif res.status_code == 429:
+                        clean_msg = "Rate limit / quota exceeded. Please wait a moment."
+                    elif res.status_code == 503:
+                        clean_msg = "Google Gemini is temporarily experiencing high traffic. Please retry in a few seconds."
+                    notice = f"[Notice: GEMINI gateway error ({clean_msg}). Offline fallback response generated.]\n\n"
+                    return notice + raw_ans, tokens
+                return raw_ans, tokens
+        except Exception as e:
+            err_msg = str(e)
+            logger.warning(f"Google Gemini call failed: {err_msg}")
+            raw_ans, tokens = self._generate_mock_response(messages, json_mode)
+            if not json_mode:
+                clean_msg = "Request timed out" if "timed out" in err_msg.lower() else err_msg[:120]
+                notice = f"[Notice: GEMINI gateway error ({clean_msg}). Offline fallback response generated.]\n\n"
+                return notice + raw_ans, tokens
+            return raw_ans, tokens
 
     def _generate_mock_response(
         self, messages: List[Dict[str, str]], json_mode: bool
