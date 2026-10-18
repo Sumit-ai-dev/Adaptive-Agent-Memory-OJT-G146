@@ -14,6 +14,17 @@ export const BETA_FAILURE = 0.70
 export const QUARANTINE_THRESHOLD = 0.35
 export const CONSECUTIVE_FAILURES_BOUND = 3 // k* = ceil((ln(0.35) - ln(1.0)) / ln(0.70)) = 3
 
+// ─── Centralized Canonical Provider Default Models (Aligned with backend) ────
+export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
+  groq: 'openai/gpt-oss-120b',
+  gemini: 'gemini-1.5-flash',
+  nvidia: 'nvidia/llama-3.1-nemotron-70b-instruct',
+  ollama: 'llama3.2:3b',
+  openai: 'gpt-4o-mini',
+  anthropic: 'claude-3-5-haiku-20241022',
+  mock: 'mock-deterministic-v1',
+}
+
 // ─── Initial Seed Operative Experiences (7-Tuple Structure) ─────────────────
 export const INITIAL_EXPERIENCES: Experience[] = [
   {
@@ -218,7 +229,7 @@ export async function executeAgentTask({
   taskInput,
   taskDomain,
   memoryEnabled,
-  provider = 'gemini',
+  provider = 'groq',
   model,
   apiKey,
   simulateFailure = false,
@@ -229,7 +240,7 @@ export async function executeAgentTask({
   // 1. Stage: RETRIEVAL
   onStageChange?.('retrieval')
 
-  // Prepare live backend payload
+  // Prepare live backend payload with centralized provider default models
   const payload = {
     taskInput: simulateFailure
       ? `${taskInput}\n[CRITICAL FAILURE DIRECTIVE: Purposely trigger negative transfer trap to test quarantine]`
@@ -237,7 +248,7 @@ export async function executeAgentTask({
     taskDomain,
     memoryEnabled,
     provider,
-    model: model || (provider === 'gemini' ? 'gemini-flash-latest' : provider === 'groq' ? 'openai/gpt-oss-20b' : undefined),
+    model: model || PROVIDER_DEFAULT_MODELS[provider] || undefined,
     apiKey: apiKey || undefined,
   }
 
@@ -549,15 +560,38 @@ export function getTelemetryMetrics(): AgentMetricSummary {
   }
 }
 
-export async function clearExecutionsApi(): Promise<boolean> {
+export async function clearExecutionsApi(adminKey?: string): Promise<{ success: boolean; error?: string }> {
   try {
+    const session = await getCurrentSession()
+    const token = (
+      adminKey ||
+      import.meta.env.VITE_ADMIN_API_KEY ||
+      session.data?.session?.access_token ||
+      ''
+    ).trim()
+
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    }
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`
+      headers['X-Admin-Token'] = token
+    }
+
     const res = await fetch(`${API_BASE_URL}/api/agent/executions`, {
       method: 'DELETE',
+      headers,
     })
-    return res.ok
-  } catch (err) {
+
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      const detail = errData.detail || `HTTP ${res.status}: ${res.statusText}`
+      return { success: false, error: detail }
+    }
+    return { success: true }
+  } catch (err: any) {
     console.warn('Could not clear executions on backend:', err)
-    return false
+    return { success: false, error: err?.message || 'Network error' }
   }
 }
 

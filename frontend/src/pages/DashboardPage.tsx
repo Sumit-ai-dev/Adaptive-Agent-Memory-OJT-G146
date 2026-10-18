@@ -398,11 +398,19 @@ export default function DashboardPage() {
                 {recentExecutions.length > 0 && (
                   <button
                     onClick={async () => {
-                      await clearExecutionsApi()
-                      setRecentExecutions([])
-                      setSelectedExecution(null)
-                      const updatedMetrics = await fetchTelemetry()
-                      setMetrics(updatedMetrics)
+                      const adminKey = prompt(
+                        'Enter ADMIN_API_KEY to authorize clearing history (or leave blank if VITE_ADMIN_API_KEY is configured):'
+                      )
+                      if (adminKey === null) return // User cancelled prompt
+                      const res = await clearExecutionsApi(adminKey.trim() || undefined)
+                      if (res.success) {
+                        setRecentExecutions([])
+                        setSelectedExecution(null)
+                        const updatedMetrics = await fetchTelemetry()
+                        setMetrics(updatedMetrics)
+                      } else {
+                        alert(`Authorization Failed: ${res.error || 'Invalid Admin Key'}`)
+                      }
                     }}
                     className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono text-zinc-500 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800 border-zinc-200 dark:border-zinc-800 transition-colors cursor-pointer"
                   >
@@ -510,7 +518,7 @@ export default function DashboardPage() {
                     </h3>
                   </div>
                   <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1 font-mono">
-                    <div>URL: <code className="text-[#18181B] dark:text-[#F4F4F6]">https://rukqoofrpyzwxfqmhcde.supabase.co</code></div>
+                    <div>URL: <code className="text-[#18181B] dark:text-[#F4F4F6]">{import.meta.env.VITE_SUPABASE_URL || 'https://fuwtdoxzfmghdxgferyf.supabase.co'}</code></div>
                     <div>Auth Provider: Email + Password & Google OAuth</div>
                     <div>RLS Engine: Enabled</div>
                   </div>

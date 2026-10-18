@@ -8,6 +8,7 @@ server restarts.
 """
 
 import logging
+import secrets
 import sqlite3
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Header, HTTPException, Query, status
@@ -266,7 +267,13 @@ async def clear_executions(
     Clears task execution history from SQLite and in-memory cache.
     Requires admin authorization token/header to prevent unauthorized trace destruction.
     """
-    admin_key = getattr(settings, "ADMIN_API_KEY", None) or "aema-admin-secret"
+    configured_key = (getattr(settings, "ADMIN_API_KEY", None) or "").strip()
+    if not configured_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ADMIN_API_KEY is not configured on the server. Destructive history deletion is disabled.",
+        )
+
     token = (x_admin_token or "").strip()
     if not token and authorization:
         if authorization.lower().startswith("bearer "):
@@ -274,7 +281,7 @@ async def clear_executions(
         else:
             token = authorization.strip()
 
-    if not token or token != admin_key:
+    if not token or not secrets.compare_digest(token, configured_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Admin authorization required to clear execution history.",

@@ -5,7 +5,7 @@ Supports Groq (free cloud default), NVIDIA NIM, local Ollama, OpenAI, Gemini, An
 
 from enum import Enum
 from typing import Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ModelProvider(str, Enum):
@@ -20,53 +20,36 @@ class ModelProvider(str, Enum):
 
 class ProviderConfig(BaseModel):
     provider: ModelProvider = Field(default=ModelProvider.GROQ)
-    model: str = Field(default="llama-3.3-70b-versatile")
+    model: Optional[str] = Field(default=None)
     api_key: Optional[str] = Field(default=None)
     base_url: Optional[str] = Field(default=None)
     temperature: float = Field(default=0.2, ge=0.0, le=2.0)
     max_tokens: int = Field(default=2048, ge=64, le=16384)
     seed: Optional[int] = Field(default=None, description='S9: only set for seed-capable providers')
 
+    @model_validator(mode="after")
+    def _resolve_defaults(self) -> "ProviderConfig":
+        model_defaults = {
+            ModelProvider.GROQ: ("openai/gpt-oss-120b", "https://api.groq.com/openai/v1", None),
+            ModelProvider.NVIDIA: ("nvidia/llama-3.1-nemotron-70b-instruct", "https://integrate.api.nvidia.com/v1", None),
+            ModelProvider.OLLAMA: ("llama3.2:3b", "http://localhost:11434/v1", "ollama"),
+            ModelProvider.GEMINI: ("gemini-1.5-flash", "https://generativelanguage.googleapis.com/v1beta", None),
+            ModelProvider.OPENAI: ("gpt-4o-mini", "https://api.openai.com/v1", None),
+            ModelProvider.ANTHROPIC: ("claude-3-5-haiku-20241022", "https://api.anthropic.com/v1", None),
+            ModelProvider.MOCK: ("mock-deterministic-v1", "mock://localhost", None),
+        }
+        def_model, def_url, def_key = model_defaults.get(self.provider, ("default", None, None))
+        if self.model is None or not str(self.model).strip():
+            self.model = def_model
+        if self.base_url is None:
+            self.base_url = def_url
+        if self.api_key is None and def_key is not None:
+            self.api_key = def_key
+        return self
+
     @classmethod
     def default_for(cls, provider: ModelProvider) -> "ProviderConfig":
-        if provider == ModelProvider.GROQ:
-            return cls(
-                provider=ModelProvider.GROQ,
-                model="llama-3.3-70b-versatile",
-                base_url="https://api.groq.com/openai/v1",
-            )
-        elif provider == ModelProvider.NVIDIA:
-            return cls(
-                provider=ModelProvider.NVIDIA,
-                model="nvidia/llama-3.1-nemotron-70b-instruct",
-                base_url="https://integrate.api.nvidia.com/v1",
-            )
-        elif provider == ModelProvider.OLLAMA:
-            return cls(
-                provider=ModelProvider.OLLAMA,
-                model="llama3.2:3b",
-                base_url="http://localhost:11434/v1",
-                api_key="ollama",
-            )
-        elif provider == ModelProvider.GEMINI:
-            return cls(
-                provider=ModelProvider.GEMINI,
-                model="gemini-1.5-flash",
-                base_url="https://generativelanguage.googleapis.com/v1beta",
-            )
-        elif provider == ModelProvider.OPENAI:
-            return cls(
-                provider=ModelProvider.OPENAI,
-                model="gpt-4o-mini",
-                base_url="https://api.openai.com/v1",
-            )
-        elif provider == ModelProvider.MOCK:
-            return cls(
-                provider=ModelProvider.MOCK,
-                model="mock-deterministic-v1",
-                base_url="mock://localhost",
-            )
-        return cls(provider=provider, model="default")
+        return cls(provider=provider)
 
 
 # ======================================================================

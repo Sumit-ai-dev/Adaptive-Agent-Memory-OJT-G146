@@ -32,7 +32,7 @@ class AIServiceSettings(BaseSettings):
 
     # Default Provider and Model Selection
     DEFAULT_PROVIDER: ModelProvider = Field(default=ModelProvider.GROQ)
-    DEFAULT_MODEL: str = Field(default="llama-3.3-70b-versatile")
+    DEFAULT_MODEL: str = Field(default="openai/gpt-oss-120b")
     EMBEDDING_MODEL: str = Field(default="sentence-transformers/all-MiniLM-L6-v2")
 
     # Mathematical Trust Dynamics Hyperparameters (Theorem 1)
