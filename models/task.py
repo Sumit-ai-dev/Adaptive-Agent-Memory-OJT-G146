@@ -107,6 +107,11 @@ class EvaluationOutcome(BaseModel):
             )
         return self
 
+    @property
+    def is_success(self) -> bool:
+        """Returns True if task met or exceeded the binarisation threshold."""
+        return self.binary_outcome == 1
+
     @classmethod
     def from_reward(
         cls,
@@ -148,6 +153,7 @@ class AttemptRecord(BaseModel):
     reason: str = Field(default="")
     tokens_used: int = Field(default=0)
     is_terminal: bool = Field(default=False, description="True for the attempt that defines the task outcome")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Evaluator-produced outcome details and diagnostics")
 
 
 class TrustUpdate(BaseModel):
@@ -282,6 +288,7 @@ class TaskExecution(BaseModel):
     outcome_threshold: Optional[float] = Field(default=None, ge=0.0, le=1.0, alias="outcomeThreshold")
     evaluator_name: Optional[EvaluatorName] = Field(default=None, alias="evaluatorName")
     evaluator_version: Optional[str] = Field(default=None, alias="evaluatorVersion")
+    evaluator_details: Dict[str, Any] = Field(default_factory=dict, alias="evaluatorDetails")
 
     # --- F1: attempt-level diagnostics, kept separate from the task-level outcome ---
     attempts: List[AttemptRecord] = Field(default_factory=list)

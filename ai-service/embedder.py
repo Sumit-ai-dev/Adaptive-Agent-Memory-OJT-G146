@@ -39,6 +39,9 @@ class LocalEmbedder:
         """
         Embed a single text string into a normalized 384-dimensional vector.
         """
+        if self._model is None:
+            self._load_model()
+
         if self._model is not None:
             try:
                 vec = self._model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
@@ -52,6 +55,9 @@ class LocalEmbedder:
         """
         Batch embed multiple text strings.
         """
+        if self._model is None:
+            self._load_model()
+
         if self._model is not None:
             try:
                 vecs = self._model.encode(texts, convert_to_numpy=True, normalize_embeddings=True)

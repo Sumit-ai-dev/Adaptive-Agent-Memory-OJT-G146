@@ -4,10 +4,14 @@ Provides CRUD and semantic retrieval operations over stored agent experiences.
 """
 
 import logging
+import secrets
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, Header, HTTPException, Query, status
+from pydantic import BaseModel, Field
 
+from ai_service.config import settings
 from ai_service.embedder import LocalEmbedder
+from ai_service.memory.probation import execute_probationary_probe
 from backend.routes.agent import shared_store
 from models.domain import ExperienceStatus, TaskDomain
 from models.experience import Experience
@@ -16,6 +20,44 @@ logger = logging.getLogger("backend.routes.memories")
 
 router = APIRouter(prefix="/memories", tags=["Experiential Memories"])
 embedder = LocalEmbedder()
+
+
+class RecoveryRequest(BaseModel):
+    reason: str = Field(..., min_length=15, description="Meaningful audit justification for recovery (>= 15 chars)")
+    client_ref: Optional[str] = Field(None, description="Client reference identifier (logged without storing secrets)")
+
+
+class ProbationValidationRequest(BaseModel):
+    task_input: str = Field(..., min_length=1, description="Deterministic task prompt")
+    test_code: str = Field(..., min_length=1, description="Deterministic pytest executable assertions")
+    client_ref: Optional[str] = Field(None, description="Client reference identifier")
+
+
+def verify_admin_auth(
+    authorization: Optional[str] = Header(None, description="Admin authorization header"),
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token", description="Admin authorization token"),
+) -> str:
+    configured_key = (getattr(settings, "ADMIN_API_KEY", None) or "").strip()
+    if not configured_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ADMIN_API_KEY is not configured on the server. Administrative actions are disabled.",
+        )
+
+    token = (x_admin_token or "").strip()
+    if not token and authorization:
+        if authorization.lower().startswith("bearer "):
+            token = authorization[7:].strip()
+        else:
+            token = authorization.strip()
+
+    if not token or not secrets.compare_digest(token, configured_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin authorization required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return "system:admin_api_key"
 
 
 @router.get(
@@ -130,3 +172,94 @@ async def delete_memory(memory_id: str):
         reason="manual_deletion",
     )
     return None
+
+
+@router.post(
+    "/{memory_id}/recover",
+    response_model=Dict[str, Any],
+    summary="Safely Recover Quarantined Memory to CANDIDATE Probation",
+)
+async def recover_memory(
+    memory_id: str,
+    request: RecoveryRequest,
+    authorization: Optional[str] = Header(None),
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+) -> Dict[str, Any]:
+    actor = verify_admin_auth(authorization, x_admin_token)
+
+    exp = await shared_store.get_experience(memory_id)
+    if not exp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Experience '{memory_id}' not found.",
+        )
+
+    if exp.status in (ExperienceStatus.CANDIDATE, ExperienceStatus.ACTIVE):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Experience '{memory_id}' is already in status '{exp.status.value}'. Duplicate recovery rejected.",
+        )
+
+    try:
+        updated = await shared_store.admin_recover_to_probation(
+            experience_id=memory_id,
+            reason=request.reason,
+            actor_id=actor,
+            client_ref=request.client_ref,
+        )
+        return updated.model_dump(by_alias=True)
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        logger.error(f"Error recovering memory: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+@router.post(
+    "/{memory_id}/validate",
+    response_model=Dict[str, Any],
+    summary="Execute Isolated Probationary Validation Probe",
+)
+async def validate_memory_probe(
+    memory_id: str,
+    request: ProbationValidationRequest,
+    authorization: Optional[str] = Header(None),
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token"),
+) -> Dict[str, Any]:
+    actor = verify_admin_auth(authorization, x_admin_token)
+
+    exp = await shared_store.get_experience(memory_id)
+    if not exp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Experience '{memory_id}' not found.",
+        )
+
+    if exp.status != ExperienceStatus.CANDIDATE:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Experience '{memory_id}' is in status '{exp.status.value}'. Only CANDIDATE memories can undergo probationary validation.",
+        )
+
+    try:
+        updated_exp, outcome, record = await execute_probationary_probe(
+            experience_id=memory_id,
+            task_input=request.task_input,
+            test_code=request.test_code,
+            store=shared_store,
+            actor_id=actor,
+            client_ref=request.client_ref,
+        )
+        return {
+            "experience": updated_exp.model_dump(by_alias=True),
+            "outcome": outcome.model_dump(),
+            "trustRecord": record.model_dump() if hasattr(record, "model_dump") else record.__dict__,
+        }
+    except ValueError as ve:
+        err_msg = str(ve)
+        if "Duplicate" in err_msg:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=err_msg)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=err_msg)
+    except Exception as e:
+        logger.error(f"Error during validation probe: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))

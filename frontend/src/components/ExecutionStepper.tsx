@@ -92,14 +92,18 @@ export default function ExecutionStepper({
                 {execution?.memoryEnabled ? (
                   execution?.retrievedExperiences?.length ? (
                     <span className="text-zinc-600 dark:text-zinc-400">
-                      Query matched {execution.retrievedExperiences.length} candidate(s). Top strategy:{' '}
+                      Query matched {execution.retrievedExperiences.length} candidate(s) (ID: {execution.retrievedExperiences.map(e => e.experience.id.slice(0, 8)).join(', ')}). Top strategy:{' '}
                       <strong className="text-emerald-700 dark:text-emerald-300">
                         "{execution.retrievedExperiences[0].experience.strategyLesson.slice(0, 80)}..."
                       </strong>{' '}
-                      (Trust S₀={(execution.retrievedExperiences[0].empiricalTrust * 100).toFixed(1)}%)
+                      (Sim: {execution.retrievedExperiences[0].similarityScore.toFixed(2)}, Trust S₀={(execution.retrievedExperiences[0].empiricalTrust * 100).toFixed(1)}%)
+                    </span>
+                  ) : execution ? (
+                    <span className="text-zinc-500">
+                      Zero prior experiences passed trust and similarity thresholds (similarity &gt; 0.60, trust &ge; 0.35).
                     </span>
                   ) : (
-                    <span className="text-zinc-500">Searching vector index with similarity &gt; 0.70...</span>
+                    <span className="text-zinc-500">Searching vector index with similarity &gt; 0.60...</span>
                   )
                 ) : (
                   <span className="text-zinc-500">
@@ -189,7 +193,7 @@ export default function ExecutionStepper({
                     <div key={i} className="mt-1 p-2 rounded bg-white dark:bg-[#131722] border border-[#E6E6E1] dark:border-[#252B3B]">
                       <div className="flex items-center justify-between">
                         <span className="text-zinc-500">
-                          Formula: <code className="text-indigo-600 dark:text-indigo-400">{tu.formulaApplied}</code>
+                          Memory <code className="text-indigo-600 dark:text-indigo-400 font-semibold">{tu.experienceId.slice(0, 8)}</code>: <code className="text-zinc-600 dark:text-zinc-400">{tu.formulaApplied}</code>
                         </span>
                         <span className="font-bold">
                           {(tu.oldScore * 100).toFixed(1)}% → {(tu.newScore * 100).toFixed(1)}%

@@ -56,6 +56,7 @@ class AgentState(TypedDict, total=False):
     outcome_threshold: float       # explicit binarisation cut-point
     evaluator_name: str
     evaluator_version: str
+    evaluator_details: Optional[Dict[str, Any]]
 
     # F1: per-attempt diagnostics. Copy-appended by evaluate_node on every retry
     # iteration (same convention as `trajectory`). The TERMINAL entry defines the

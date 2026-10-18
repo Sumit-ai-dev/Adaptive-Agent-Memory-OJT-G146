@@ -348,7 +348,7 @@ export async function executeAgentTask({
         memoryEnabled,
         status: data.status === 'failed' ? 'failed' : 'completed',
         retrievedExperiences: retrieved,
-        finalOutput: data.finalOutput || data.final_answer || 'No output produced',
+        finalOutput: data.finalAnswer || data.finalOutput || data.final_answer || 'No output produced',
         reflectionLesson: reflectionText,
         trustUpdates,
         tokensUsed: data.tokensUsed ?? data.tokens_used ?? 120,
@@ -448,9 +448,9 @@ export async function executeAgentTask({
 
   const finalOutput = memoryEnabled && activeExp
     ? isSuccess
-      ? `[AEMA Reliability-Aware Execution]\n\nTask: ${taskInput}\n\nApplied Verified Strategy:\n"${activeExp.strategyLesson}"\n\nOutcome:\nTask resolved successfully with 0 policy violations. Verification assertions satisfied.\n\nEmpirical Trust: ${(activeExp.trustScore * 100).toFixed(1)}%`
-      : `[AEMA Failure Trap Simulation]\n\nTask: ${taskInput}\n\nOutcome: Negative transfer failure mode triggered.\nPenalty applied via Asymmetric EMA (beta = ${BETA_FAILURE}).\nConsecutive Failures: ${activeExp.consecutiveFailures}/${CONSECUTIVE_FAILURES_BOUND}.\n${activeExp.status === 'quarantined' ? 'Theorem 1 Quarantine: Memory isolated from future retrievals.' : ''}`
-    : `[Baseline Execution (Memory Disabled)]\n\nTask: ${taskInput}\n\nExecution completed from base model weights only. No experiential memory or historical lesson retrieval applied.`
+      ? `[Demo Sandbox - Offline Simulation (Backend Port 8000 Offline)]\n\nTask: ${taskInput}\n\nNote: The backend server is unreachable. Run './run_demo.sh' or 'python3 -m uvicorn backend.main:app --port 8000' with your GROQ_API_KEY to generate real LLM responses.\n\nApplied Offline Benchmark Strategy:\n"${activeExp.strategyLesson}"\n\nOutcome:\nSimulated in sandbox with 0 policy violations.\n\nEmpirical Trust: ${(activeExp.trustScore * 100).toFixed(1)}%`
+      : `[Demo Sandbox - Failure Trap Simulation (Backend Port 8000 Offline)]\n\nTask: ${taskInput}\n\nOutcome: Negative transfer failure mode triggered.\nPenalty applied via Asymmetric EMA (beta = ${BETA_FAILURE}).\nConsecutive Failures: ${activeExp.consecutiveFailures}/${CONSECUTIVE_FAILURES_BOUND}.\n${activeExp.status === 'quarantined' ? 'Theorem 1 Quarantine: Memory isolated from future retrievals.' : ''}`
+    : `[Demo Sandbox - Baseline Execution (Memory Disabled, Backend Offline)]\n\nTask: ${taskInput}\n\nExecution simulated without experiential memory retrieval.`
 
   const fallbackExec: TaskExecution = {
     id: `exec-${Date.now()}`,

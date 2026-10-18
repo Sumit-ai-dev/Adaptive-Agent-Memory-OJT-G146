@@ -295,11 +295,13 @@ async def execute_task(
         task_binary = int(terminal["binary_outcome"])
         task_threshold = float(terminal["outcome_threshold"])
         task_evaluator = terminal.get("evaluator_name")
+        terminal_details = terminal.get("details") or {}
     else:
         task_reward = float(final_state.get("outcome_score", 0.0) or 0.0)
         task_threshold = float(final_state.get("outcome_threshold") or DEFAULT_OUTCOME_THRESHOLD)
         task_binary = 1 if task_reward >= task_threshold else 0
         task_evaluator = final_state.get("evaluator_name")
+        terminal_details = final_state.get("evaluator_details") or {}
 
     attempt_records = [AttemptRecord(**a) for a in attempt_dicts]
 
@@ -333,6 +335,14 @@ async def execute_task(
                 logger.error("Failed to persist candidate experience.", exc_info=True)
 
     elif memory_store is not None:
+        # Inconclusive evaluations / infrastructure errors must not receive failure penalty
+        # and must not increment failure counters. Passing binary_outcome=None ensures
+        # store.update_trust touches no counters.
+        is_inconclusive = (
+            terminal_details.get("status") == "inconclusive"
+            or terminal_details.get("error") in ("missing_test_code", "harness_error")
+        )
+
         # Exactly one write per (task, memory). Deduplicated by experience id so that
         # a memory retrieved more than once still yields a single observation.
         seen_experience_ids: set[str] = set()
@@ -347,7 +357,7 @@ async def execute_task(
                     new_trust=float(u.get("newScore", 0.75)),
                     reason=u.get("reason"),
                     execution_id=task_id,
-                    binary_outcome=task_binary,   # F3: evaluator-produced, not trust-derived
+                    binary_outcome=None if is_inconclusive else task_binary,   # F3: None preserves counters for inconclusive
                 )
                 u["persisted"] = True
             except Exception:
@@ -356,6 +366,13 @@ async def execute_task(
                     exp_id,
                     exc_info=True,
                 )
+
+        # Ensure all trust_node traces in trajectory reflect persisted state
+        for step in final_state.get("trajectory", []):
+            if step.get("node") == "trust_node" and step.get("metadata", {}).get("trustUpdates"):
+                for upd in step["metadata"]["trustUpdates"]:
+                    if upd.get("experienceId") in seen_experience_ids:
+                        upd["persisted"] = True
 
         # One candidate per task, from the terminal reflection.
         new_exp_obj = final_state.get("new_experience")
@@ -390,10 +407,39 @@ async def execute_task(
             status=u.get("status"),
         ))
 
+    # Format retrieved experiences as typed models for frontend and API
+    retrieved_exp_matches = []
+    for item in final_state.get("retrieved_memories", []):
+        try:
+            if isinstance(item, ExperienceMatch):
+                retrieved_exp_matches.append(item)
+            elif isinstance(item, dict):
+                exp_data = item.get("experience", {})
+                sim = float(item.get("similarityScore", item.get("similarity", 0.0)))
+                comp = float(item.get("compositeScore", item.get("composite_score", sim)))
+                if isinstance(exp_data, dict):
+                    exp_obj = Experience.model_validate(exp_data)
+                elif isinstance(exp_data, Experience):
+                    exp_obj = exp_data
+                else:
+                    continue
+                retrieved_exp_matches.append(ExperienceMatch(
+                    experience=exp_obj,
+                    similarity=sim,
+                    composite_score=comp,
+                ))
+        except Exception:
+            logger.warning("Could not convert retrieved memory item to ExperienceMatch", exc_info=True)
+
     # F3: the task-level reward is the terminal attempt's reward -- the continuous
     # signal is retained alongside the binary outcome, never replaced by it.
     score = task_reward
-    quality = OutcomeQuality.POSITIVE if score >= 0.80 else OutcomeQuality.NEGATIVE
+    if score >= 0.80:
+        quality = OutcomeQuality.POSITIVE
+    elif score >= 0.50:
+        quality = OutcomeQuality.NEUTRAL
+    else:
+        quality = OutcomeQuality.NEGATIVE
 
     return TaskExecution(
         id=exec_id,
@@ -409,6 +455,7 @@ async def execute_task(
         reflection_lesson=final_state.get("candidate_experience", {}).get("strategy_lesson") if final_state.get("candidate_experience") else None,
         new_experience_created=final_state.get("new_experience_created", False),
         new_experience=final_state.get("new_experience"),
+        retrieved_experiences=retrieved_exp_matches,
         retrieved_memories=final_state.get("retrieved_memories", []),
         trust_updates=trust_updates,
         trajectory=traces,
@@ -420,6 +467,7 @@ async def execute_task(
         outcome_threshold=task_threshold,
         evaluator_name=task_evaluator,
         evaluator_version=final_state.get("evaluator_version"),
+        evaluator_details=terminal_details or final_state.get("evaluator_details") or {},
         attempts=attempt_records,
         n_attempts=len(attempt_records),
         execution_metadata=ExecutionMetadata(

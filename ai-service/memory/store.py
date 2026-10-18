@@ -25,6 +25,8 @@ except ImportError:
     HAS_POSTGRES = False
 
 from ai_service.config import settings
+from ai_service.tools.evaluator import EvaluationOutcome
+from ai_service.trust_math import calculate_probation_quota, should_quarantine
 from models.domain import ExperienceStatus, TaskDomain
 from models.experience import Experience, TrustHistoryRecord, utc_now_iso
 
@@ -65,6 +67,36 @@ class BaseMemoryStore(ABC):
         pass
 
     @abstractmethod
+    async def admin_recover_to_probation(
+        self,
+        experience_id: str,
+        reason: str,
+        actor_id: str = "system:admin_api_key",
+        client_ref: Optional[str] = None,
+    ) -> Experience:
+        """
+        Safely transitions an experience from DEPRECATED to CANDIDATE probation.
+        Preserves all historical failure, success, and uses counters.
+        """
+        pass
+
+    @abstractmethod
+    async def record_probationary_probe(
+        self,
+        experience_id: str,
+        outcome: EvaluationOutcome,
+        execution_id: str,
+        task_fingerprint: str,
+        actor_id: str = "system:admin_api_key",
+        client_ref: Optional[str] = None,
+    ) -> Tuple[Experience, TrustHistoryRecord]:
+        """
+        Atomically evaluates and persists an isolated probationary validation probe.
+        Enforces fingerprint and execution-id idempotency.
+        """
+        pass
+
+    @abstractmethod
     async def list_experiences(
         self,
         domain: Optional[TaskDomain] = None,
@@ -100,6 +132,13 @@ class SQLiteMemoryStore(BaseMemoryStore):
         conn.row_factory = sqlite3.Row
         return conn
 
+    def _get_write_connection(self) -> sqlite3.Connection:
+        conn = sqlite3.connect(self.db_path, isolation_level=None, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout = 30000")
+        conn.execute("PRAGMA journal_mode = WAL")
+        return conn
+
     def _init_tables(self) -> None:
         with self._get_connection() as conn:
             cursor = conn.cursor()
@@ -116,6 +155,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
                     uses_count INTEGER NOT NULL DEFAULT 0,
                     successes_count INTEGER NOT NULL DEFAULT 0,
                     failures_count INTEGER NOT NULL DEFAULT 0,
+                    probation_successes INTEGER NOT NULL DEFAULT 0,
                     status TEXT NOT NULL DEFAULT 'active',
                     embedding TEXT,
                     source_task_id TEXT,
@@ -136,8 +176,32 @@ class SQLiteMemoryStore(BaseMemoryStore):
                     FOREIGN KEY(experience_id) REFERENCES experiences(id)
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS probation_task_fingerprints (
+                    id TEXT PRIMARY KEY,
+                    experience_id TEXT NOT NULL,
+                    execution_id TEXT NOT NULL UNIQUE,
+                    fingerprint TEXT NOT NULL,
+                    outcome_reward REAL NOT NULL,
+                    is_success INTEGER NOT NULL,
+                    actor_id TEXT NOT NULL,
+                    client_ref TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY(experience_id) REFERENCES experiences(id),
+                    UNIQUE(experience_id, fingerprint)
+                )
+            """)
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_domain_status ON experiences(task_domain, status)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_exp_trust ON experiences(trust_score DESC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_probation_fp ON probation_task_fingerprints(experience_id, fingerprint)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_probation_exec ON probation_task_fingerprints(execution_id)")
+
+            # Idempotent migration for existing SQLite databases
+            cursor.execute("PRAGMA table_info(experiences)")
+            columns = [col[1] for col in cursor.fetchall()]
+            if "probation_successes" not in columns:
+                cursor.execute("ALTER TABLE experiences ADD COLUMN probation_successes INTEGER NOT NULL DEFAULT 0")
+
             conn.commit()
             if self.auto_seed:
                 self._seed_default_experiences(conn)
@@ -203,8 +267,8 @@ class SQLiteMemoryStore(BaseMemoryStore):
                 INSERT OR IGNORE INTO experiences (
                     id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
                     confidence, trust_score, uses_count, successes_count, failures_count,
-                    status, embedding, source_task_id, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    probation_successes, status, embedding, source_task_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
             """, (id_, uid, domain, trig, strat, pit, conf, trust, uses, succ, fail, stat, emb, src, cat, uat))
         conn.commit()
 
@@ -222,16 +286,18 @@ class SQLiteMemoryStore(BaseMemoryStore):
         with self._get_connection() as conn:
             cursor = conn.cursor()
             embedding_json = json.dumps(exp.embedding) if exp.embedding is not None else None
+            prob_successes = getattr(exp, "probation_successes", 0)
             cursor.execute("""
                 INSERT OR REPLACE INTO experiences (
                     id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
                     confidence, trust_score, uses_count, successes_count, failures_count,
-                    status, embedding, source_task_id, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    probation_successes, status, embedding, source_task_id, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 exp.id, exp.user_id, exp.task_domain.value if isinstance(exp.task_domain, TaskDomain) else exp.task_domain,
                 exp.trigger_condition, exp.strategy_lesson, exp.pitfall,
                 exp.confidence, exp.trust_score, exp.uses_count, exp.successes_count, exp.failures_count,
+                prob_successes,
                 exp.status.value if isinstance(exp.status, ExperienceStatus) else exp.status,
                 embedding_json, exp.source_task_id, exp.created_at, exp.updated_at,
             ))
@@ -258,37 +324,61 @@ class SQLiteMemoryStore(BaseMemoryStore):
     ) -> TrustHistoryRecord:
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT trust_score, successes_count, failures_count, uses_count, status FROM experiences WHERE id = ?", (experience_id,))
+            cursor.execute("SELECT trust_score, successes_count, failures_count, uses_count, status, probation_successes FROM experiences WHERE id = ?", (experience_id,))
             row = cursor.fetchone()
             if not row:
                 raise ValueError(f"Experience '{experience_id}' not found.")
 
             old_trust = float(row["trust_score"])
             delta = float(new_trust - old_trust)
+            current_status = row["status"]
 
             if status is not None:
                 new_status = status
             elif new_trust < settings.THETA_CUTOFF:
                 new_status = ExperienceStatus.DEPRECATED.value
-            elif row["status"] == ExperienceStatus.CANDIDATE.value and new_trust >= settings.RELIABILITY_THRESHOLD:
-                new_status = ExperienceStatus.ACTIVE.value
+            elif current_status == ExperienceStatus.CANDIDATE.value and new_trust >= settings.RELIABILITY_THRESHOLD:
+                quota = calculate_probation_quota(int(row["failures_count"]))
+                cur_probation = int(row["probation_successes"]) if "probation_successes" in row.keys() else 0
+                calc_successes = int(row["successes_count"]) + (1 if binary_outcome == 1 else 0)
+                calc_failures = int(row["failures_count"]) + (1 if binary_outcome == 0 else 0)
+                if (cur_probation >= quota and
+                    not should_quarantine(calc_successes, calc_failures, gamma=settings.QUARANTINE_GAMMA, threshold=settings.RELIABILITY_THRESHOLD)):
+                    new_status = ExperienceStatus.ACTIVE.value
+                else:
+                    new_status = ExperienceStatus.CANDIDATE.value
             else:
-                new_status = row["status"]
+                new_status = current_status
 
-            # F3: evidence counters are driven by the EVALUATOR-produced outcome, never
-            # by the sign of the trust delta.
-            #
-            # The previous rule was `success_inc = 1 if delta >= 0 else 0`. Under A-EMA's
-            # neutral branch delta = 0.20*(R - S), so "success" meant "the reward exceeded
-            # the memory's own current trust score" -- a self-referential, moving target.
-            # It also scored delta == 0 as a success, and it coupled the Bernoulli record
-            # to the trust mechanism, which would make any later mechanism swap silently
-            # reinterpret all historical counters.
-            #
-            # binary_outcome is None  -> administrative adjustment, not an observation:
-            #                            trust/status change only, no counter touched.
-            # binary_outcome in {0,1} -> exactly one task-level observation.
-            #                            Guarantees successes + failures == uses.
+            # Enforce state machine transitions:
+            # 1. Reject direct DEPRECATED -> ACTIVE transitions
+            if current_status == ExperienceStatus.DEPRECATED.value and new_status == ExperienceStatus.ACTIVE.value:
+                raise ValueError(
+                    f"Invalid state transition: Cannot transition directly from {current_status} to {new_status}. "
+                    f"DEPRECATED experiences must transition through CANDIDATE probation first."
+                )
+
+            # 2. Promote candidate only when quota is met, trust >= 0.70, and quarantine permits retrieval
+            if current_status == ExperienceStatus.CANDIDATE.value and new_status == ExperienceStatus.ACTIVE.value:
+                quota = calculate_probation_quota(int(row["failures_count"]))
+                cur_probation = int(row["probation_successes"]) if "probation_successes" in row.keys() else 0
+                calc_successes = int(row["successes_count"]) + (1 if binary_outcome == 1 else 0)
+                calc_failures = int(row["failures_count"]) + (1 if binary_outcome == 0 else 0)
+                if cur_probation < quota:
+                    raise ValueError(
+                        f"Cannot promote CANDIDATE '{experience_id}' to ACTIVE: probation quota not met "
+                        f"({cur_probation}/{quota} verified probationary successes)."
+                    )
+                if new_trust < settings.RELIABILITY_THRESHOLD:
+                    raise ValueError(
+                        f"Cannot promote CANDIDATE '{experience_id}' to ACTIVE: trust score {new_trust:.4f} "
+                        f"is below reliability threshold {settings.RELIABILITY_THRESHOLD:.2f}."
+                    )
+                if should_quarantine(calc_successes, calc_failures, gamma=settings.QUARANTINE_GAMMA, threshold=settings.RELIABILITY_THRESHOLD):
+                    raise ValueError(
+                        f"Cannot promote CANDIDATE '{experience_id}' to ACTIVE: Bayesian quarantine policy forbids promotion."
+                    )
+
             if binary_outcome is None:
                 uses_inc = 0
                 success_inc = 0
@@ -335,6 +425,247 @@ class SQLiteMemoryStore(BaseMemoryStore):
             conn.commit()
             return record
 
+    async def admin_recover_to_probation(
+        self,
+        experience_id: str,
+        reason: str,
+        actor_id: str = "system:admin_api_key",
+        client_ref: Optional[str] = None,
+    ) -> Experience:
+        if not reason or len(reason.strip()) < 15:
+            raise ValueError("A meaningful audit reason of at least 15 characters is required for recovery.")
+
+        conn = self._get_write_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM experiences WHERE id = ?", (experience_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Experience '{experience_id}' not found.")
+
+            current_status = row["status"]
+            if current_status != ExperienceStatus.DEPRECATED.value:
+                raise ValueError(
+                    f"Experience '{experience_id}' is in status '{current_status}'. "
+                    f"Only DEPRECATED memories can be recovered to CANDIDATE probation."
+                )
+
+            now = utc_now_iso()
+            cursor.execute("""
+                UPDATE experiences SET
+                    status = ?,
+                    probation_successes = 0,
+                    updated_at = ?
+                WHERE id = ?
+            """, (ExperienceStatus.CANDIDATE.value, now, experience_id))
+
+            old_trust = float(row["trust_score"])
+            audit_reason = f"Administrative recovery to probation by {actor_id}: {reason.strip()}"
+            if client_ref:
+                audit_reason += f" [CLIENT_REF: {client_ref.strip()}]"
+
+            rec_id = str(uuid4())
+            cursor.execute("""
+                INSERT INTO trust_history (id, experience_id, execution_id, old_trust, new_trust, delta, reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (rec_id, experience_id, f"admin_rec_{uuid4().hex[:8]}", old_trust, old_trust, 0.0, audit_reason, now))
+
+            cursor.execute("SELECT * FROM experiences WHERE id = ?", (experience_id,))
+            updated_row = cursor.fetchone()
+            result_exp = self._row_to_experience(updated_row)
+            conn.execute("COMMIT")
+            return result_exp
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except Exception as rb_err:
+                logger.warning(f"Rollback failed: {rb_err}")
+            raise
+        finally:
+            conn.close()
+
+    async def record_probationary_probe(
+        self,
+        experience_id: str,
+        outcome: EvaluationOutcome,
+        execution_id: str,
+        task_fingerprint: str,
+        actor_id: str = "system:admin_api_key",
+        client_ref: Optional[str] = None,
+    ) -> Tuple[Experience, TrustHistoryRecord]:
+        conn = self._get_write_connection()
+        try:
+            conn.execute("BEGIN IMMEDIATE")
+            cursor = conn.cursor()
+
+            # 1. Idempotency checks
+            cursor.execute("SELECT id FROM probation_task_fingerprints WHERE execution_id = ?", (execution_id,))
+            if cursor.fetchone():
+                raise ValueError(f"Duplicate execution ID '{execution_id}': cannot process probe twice.")
+
+            cursor.execute("SELECT id FROM trust_history WHERE execution_id = ?", (execution_id,))
+            if cursor.fetchone():
+                raise ValueError(f"Duplicate execution ID '{execution_id}': cannot process probe twice.")
+
+            cursor.execute(
+                "SELECT id FROM probation_task_fingerprints WHERE experience_id = ? AND fingerprint = ?",
+                (experience_id, task_fingerprint),
+            )
+            if cursor.fetchone():
+                raise ValueError(
+                    f"Duplicate task fingerprint '{task_fingerprint}' for experience '{experience_id}'. "
+                    f"Repeated probe cannot mutate counters or increment probation quota."
+                )
+
+            # 2. Fetch experience
+            cursor.execute("SELECT * FROM experiences WHERE id = ?", (experience_id,))
+            row = cursor.fetchone()
+            if not row:
+                raise ValueError(f"Experience '{experience_id}' not found.")
+
+            if row["status"] != ExperienceStatus.CANDIDATE.value:
+                raise ValueError(
+                    f"Experience '{experience_id}' is in status '{row['status']}'. "
+                    f"Only CANDIDATE memories can undergo probationary validation."
+                )
+
+            old_trust = float(row["trust_score"])
+            cur_uses = int(row["uses_count"])
+            cur_successes = int(row["successes_count"])
+            cur_failures = int(row["failures_count"])
+            cur_probation = int(row["probation_successes"]) if "probation_successes" in row.keys() else 0
+
+            # 3. Classify outcome
+            details = outcome.details or {}
+            is_inconclusive = (
+                details.get("status") == "inconclusive"
+                or details.get("error") in ("missing_test_code", "harness_error", "infrastructure_error", "invalid_setup")
+                or (bool(outcome.reason) and outcome.reason.strip().lower().startswith("inconclusive"))
+            )
+
+            now = utc_now_iso()
+            if is_inconclusive:
+                new_trust = old_trust
+                delta = 0.0
+                new_status = ExperienceStatus.CANDIDATE.value
+                uses_inc = 0
+                success_inc = 0
+                failure_inc = 0
+                prob_inc = 0
+                audit_reason = f"Inconclusive probe evaluation ({details.get('error', 'unverified')}): trust and counters preserved"
+            elif outcome.is_success:
+                new_trust = round((settings.ALPHA_SUCCESS * old_trust) + ((1.0 - settings.ALPHA_SUCCESS) * 1.0), 4)
+                delta = round(new_trust - old_trust, 4)
+                uses_inc = 1
+                success_inc = 1
+                failure_inc = 0
+                prob_inc = 1
+                new_probation = cur_probation + prob_inc
+                new_successes = cur_successes + success_inc
+
+                quota = calculate_probation_quota(cur_failures)
+                is_quota_met = new_probation >= quota
+                is_trust_admissible = new_trust >= settings.RELIABILITY_THRESHOLD
+                is_quarantine_permitted = not should_quarantine(
+                    new_successes,
+                    cur_failures,
+                    gamma=settings.QUARANTINE_GAMMA,
+                    threshold=settings.RELIABILITY_THRESHOLD,
+                )
+
+                if is_quota_met and is_trust_admissible and is_quarantine_permitted:
+                    new_status = ExperienceStatus.ACTIVE.value
+                    audit_reason = (
+                        f"Probation verified success (R={outcome.reward:.2f}): promoted to ACTIVE "
+                        f"(quota {new_probation}/{quota} met, trust {new_trust:.4f} >= {settings.RELIABILITY_THRESHOLD:.2f})"
+                    )
+                else:
+                    new_status = ExperienceStatus.CANDIDATE.value
+                    reasons = []
+                    if not is_quota_met:
+                        reasons.append(f"quota {new_probation}/{quota}")
+                    if not is_trust_admissible:
+                        reasons.append(f"trust {new_trust:.4f} < {settings.RELIABILITY_THRESHOLD:.2f}")
+                    if not is_quarantine_permitted:
+                        reasons.append("quarantine policy")
+                    audit_reason = (
+                        f"Probation verified success (R={outcome.reward:.2f}): retained in CANDIDATE "
+                        f"({', '.join(reasons)})"
+                    )
+            else:
+                new_trust = round(settings.BETA_FAILURE * old_trust, 4)
+                delta = round(new_trust - old_trust, 4)
+                new_status = ExperienceStatus.DEPRECATED.value
+                uses_inc = 1
+                success_inc = 0
+                failure_inc = 1
+                prob_inc = 0
+                audit_reason = f"Probation verified failure ({outcome.reason}): revoked to DEPRECATED"
+
+            if client_ref:
+                audit_reason += f" [CLIENT_REF: {client_ref.strip()}]"
+
+            # 4. Atomically persist experience updates
+            cursor.execute("""
+                UPDATE experiences SET
+                    trust_score = ?,
+                    status = ?,
+                    uses_count = uses_count + ?,
+                    successes_count = successes_count + ?,
+                    failures_count = failures_count + ?,
+                    probation_successes = probation_successes + ?,
+                    updated_at = ?
+                WHERE id = ?
+            """, (new_trust, new_status, uses_inc, success_inc, failure_inc, prob_inc, now, experience_id))
+
+            # 5. Idempotently record fingerprint for verified observations (success or failure)
+            if not is_inconclusive:
+                fp_id = str(uuid4())
+                cursor.execute("""
+                    INSERT INTO probation_task_fingerprints (
+                        id, experience_id, execution_id, fingerprint, outcome_reward,
+                        is_success, actor_id, client_ref, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (
+                    fp_id, experience_id, execution_id, task_fingerprint,
+                    float(outcome.reward), 1 if outcome.is_success else 0,
+                    actor_id, client_ref, now
+                ))
+
+            # 6. Append trust history ledger
+            history_record = TrustHistoryRecord(
+                experience_id=experience_id,
+                execution_id=execution_id,
+                old_trust=old_trust,
+                new_trust=new_trust,
+                delta=delta,
+                reason=audit_reason,
+                created_at=now,
+            )
+            cursor.execute("""
+                INSERT INTO trust_history (id, experience_id, execution_id, old_trust, new_trust, delta, reason, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                history_record.id, history_record.experience_id, history_record.execution_id,
+                history_record.old_trust, history_record.new_trust, history_record.delta,
+                history_record.reason, history_record.created_at
+            ))
+
+            cursor.execute("SELECT * FROM experiences WHERE id = ?", (experience_id,))
+            updated_exp_row = cursor.fetchone()
+            result_exp = self._row_to_experience(updated_exp_row)
+            conn.execute("COMMIT")
+            return result_exp, history_record
+        except Exception:
+            try:
+                conn.execute("ROLLBACK")
+            except Exception as rb_err:
+                logger.warning(f"Rollback failed: {rb_err}")
+            raise
+        finally:
+            conn.close()
+
     async def list_experiences(
         self,
         domain: Optional[TaskDomain] = None,
@@ -366,6 +697,8 @@ class SQLiteMemoryStore(BaseMemoryStore):
         if not experiences:
             return []
 
+        from ai_service.embedder import local_embedder
+
         q_vec = np.array(query_embedding, dtype=np.float32)
         q_norm = np.linalg.norm(q_vec)
         if q_norm < 1e-6:
@@ -374,8 +707,27 @@ class SQLiteMemoryStore(BaseMemoryStore):
         scored: List[Tuple[Experience, float]] = []
         for exp in experiences:
             if not exp.embedding:
-                scored.append((exp, 0.0))
-                continue
+                try:
+                    exp.embedding = local_embedder.embed_text(exp.trigger_condition or "")
+                    with self._get_connection() as conn:
+                        conn.execute("UPDATE experiences SET embedding = ? WHERE id = ?", (json.dumps(exp.embedding), exp.id))
+                        conn.commit()
+                except Exception:
+                    scored.append((exp, 0.0))
+                    continue
+
+            # Self-healing: if neural model is active but memory has offline hash embedding, re-align
+            if local_embedder._model is not None and exp.trigger_condition:
+                try:
+                    h_vec = np.array(local_embedder._deterministic_hash_vector(exp.trigger_condition), dtype=np.float32)
+                    if np.linalg.norm(np.array(exp.embedding, dtype=np.float32) - h_vec) < 1e-4:
+                        exp.embedding = local_embedder.embed_text(exp.trigger_condition)
+                        with self._get_connection() as conn:
+                            conn.execute("UPDATE experiences SET embedding = ? WHERE id = ?", (json.dumps(exp.embedding), exp.id))
+                            conn.commit()
+                except Exception:
+                    pass
+
             e_vec = np.array(exp.embedding, dtype=np.float32)
             e_norm = np.linalg.norm(e_vec)
             if e_norm < 1e-6:
@@ -389,6 +741,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
 
     def _row_to_experience(self, row: sqlite3.Row) -> Experience:
         embedding = json.loads(row["embedding"]) if row["embedding"] else None
+        prob_successes = int(row["probation_successes"]) if "probation_successes" in row.keys() else 0
         return Experience(
             id=row["id"],
             user_id=row["user_id"],
@@ -401,6 +754,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
             uses_count=int(row["uses_count"]),
             successes_count=int(row["successes_count"]),
             failures_count=int(row["failures_count"]),
+            probation_successes=prob_successes,
             status=ExperienceStatus(row["status"]) if row["status"] in [s.value for s in ExperienceStatus] else ExperienceStatus.ACTIVE,
             embedding=embedding,
             source_task_id=row["source_task_id"],
@@ -470,6 +824,7 @@ class PostgresMemoryStore(BaseMemoryStore):
                     uses_count INTEGER NOT NULL DEFAULT 0,
                     successes_count INTEGER NOT NULL DEFAULT 0,
                     failures_count INTEGER NOT NULL DEFAULT 0,
+                    probation_successes INTEGER NOT NULL DEFAULT 0,
                     status TEXT NOT NULL DEFAULT 'active',
                     embedding vector(384),
                     source_task_id TEXT,
@@ -489,8 +844,28 @@ class PostgresMemoryStore(BaseMemoryStore):
                     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
                 );
             """)
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS probation_task_fingerprints (
+                    id TEXT PRIMARY KEY,
+                    experience_id TEXT NOT NULL REFERENCES experiences(id) ON DELETE CASCADE,
+                    execution_id TEXT NOT NULL UNIQUE,
+                    fingerprint TEXT NOT NULL,
+                    outcome_reward DOUBLE PRECISION NOT NULL,
+                    is_success INTEGER NOT NULL,
+                    actor_id TEXT NOT NULL,
+                    client_ref TEXT,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    UNIQUE(experience_id, fingerprint)
+                );
+            """)
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_exp_domain_status ON experiences(task_domain, status);")
             await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_exp_trust ON experiences(trust_score DESC);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_probation_fp ON probation_task_fingerprints(experience_id, fingerprint);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_probation_exec ON probation_task_fingerprints(execution_id);")
+
+            # Idempotent migration for existing PostgreSQL databases
+            await conn.execute("ALTER TABLE experiences ADD COLUMN IF NOT EXISTS probation_successes INTEGER NOT NULL DEFAULT 0;")
+
             try:
                 await conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_pg_exp_embedding ON experiences
@@ -563,8 +938,8 @@ class PostgresMemoryStore(BaseMemoryStore):
                 INSERT INTO experiences (
                     id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
                     confidence, trust_score, uses_count, successes_count, failures_count,
-                    status, embedding, source_task_id, created_at, updated_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                    probation_successes, status, embedding, source_task_id, created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, $12, $13, $14, $15, $16)
                 ON CONFLICT (id) DO NOTHING;
             """, id_, uid, domain, trig, strat, pit, conf, trust, uses, succ, fail, stat, emb, src, now, now)
 
@@ -581,6 +956,8 @@ class PostgresMemoryStore(BaseMemoryStore):
             else:
                 emb_list = list(emb)
 
+        prob_successes = int(row["probation_successes"]) if "probation_successes" in row else 0
+
         return Experience(
             id=row["id"],
             user_id=row["user_id"],
@@ -593,6 +970,7 @@ class PostgresMemoryStore(BaseMemoryStore):
             uses_count=int(row["uses_count"]),
             successes_count=int(row["successes_count"]),
             failures_count=int(row["failures_count"]),
+            probation_successes=prob_successes,
             status=ExperienceStatus(row["status"]) if row["status"] in [s.value for s in ExperienceStatus] else ExperienceStatus.ACTIVE,
             embedding=emb_list,
             source_task_id=row["source_task_id"],
@@ -610,27 +988,29 @@ class PostgresMemoryStore(BaseMemoryStore):
         status_val = exp.status.value if isinstance(exp.status, ExperienceStatus) else str(exp.status)
         created_at = exp.created_at if isinstance(exp.created_at, datetime) else datetime.now(timezone.utc)
         updated_at = exp.updated_at if isinstance(exp.updated_at, datetime) else datetime.now(timezone.utc)
+        prob_successes = getattr(exp, "probation_successes", 0)
 
         async with pool.acquire() as conn:
             await conn.execute("""
                 INSERT INTO experiences (
                     id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
                     confidence, trust_score, uses_count, successes_count, failures_count,
-                    status, embedding, source_task_id, created_at, updated_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+                    probation_successes, status, embedding, source_task_id, created_at, updated_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
                 ON CONFLICT (id) DO UPDATE SET
                     trigger_condition = EXCLUDED.trigger_condition,
                     strategy_lesson = EXCLUDED.strategy_lesson,
                     pitfall = EXCLUDED.pitfall,
                     confidence = EXCLUDED.confidence,
                     trust_score = EXCLUDED.trust_score,
+                    probation_successes = EXCLUDED.probation_successes,
                     status = EXCLUDED.status,
                     embedding = EXCLUDED.embedding,
                     updated_at = EXCLUDED.updated_at;
             """,
                 exp.id, exp.user_id, domain_val, exp.trigger_condition, exp.strategy_lesson, exp.pitfall,
                 float(exp.confidence), float(exp.trust_score), int(exp.uses_count), int(exp.successes_count),
-                int(exp.failures_count), status_val, exp.embedding, exp.source_task_id, created_at, updated_at
+                int(exp.failures_count), prob_successes, status_val, exp.embedding, exp.source_task_id, created_at, updated_at
             )
         return exp.id
 
@@ -655,7 +1035,7 @@ class PostgresMemoryStore(BaseMemoryStore):
         async with pool.acquire() as conn:
             async with conn.transaction():
                 row = await conn.fetchrow(
-                    "SELECT trust_score, status, uses_count, successes_count, failures_count FROM experiences WHERE id = $1 FOR UPDATE",
+                    "SELECT trust_score, status, uses_count, successes_count, failures_count, probation_successes FROM experiences WHERE id = $1 FOR UPDATE",
                     experience_id
                 )
                 if not row:
@@ -664,7 +1044,35 @@ class PostgresMemoryStore(BaseMemoryStore):
                 old_trust = float(row["trust_score"])
                 new_trust = max(0.0, min(1.0, float(new_trust)))
                 delta = new_trust - old_trust
-                new_status = status or row["status"]
+                current_status = row["status"]
+                new_status = status or current_status
+
+                # Enforce state machine transitions:
+                # 1. Reject direct DEPRECATED -> ACTIVE transitions
+                if current_status == ExperienceStatus.DEPRECATED.value and new_status == ExperienceStatus.ACTIVE.value:
+                    raise ValueError(
+                        f"Invalid state transition: Cannot transition directly from {current_status} to {new_status}. "
+                        f"DEPRECATED experiences must transition through CANDIDATE probation first."
+                    )
+
+                # 2. Promote candidate only when quota is met, trust >= 0.70, and quarantine permits retrieval
+                if current_status == ExperienceStatus.CANDIDATE.value and new_status == ExperienceStatus.ACTIVE.value:
+                    quota = calculate_probation_quota(int(row["failures_count"]))
+                    cur_probation = int(row["probation_successes"]) if "probation_successes" in row else 0
+                    calc_successes = int(row["successes_count"]) + (1 if binary_outcome == 1 else 0)
+                    calc_failures = int(row["failures_count"]) + (1 if binary_outcome == 0 else 0)
+                    if cur_probation < quota:
+                        raise ValueError(
+                            f"Cannot promote CANDIDATE '{experience_id}' to ACTIVE: probation quota not met ({cur_probation}/{quota})."
+                        )
+                    if new_trust < settings.RELIABILITY_THRESHOLD:
+                        raise ValueError(
+                            f"Cannot promote CANDIDATE '{experience_id}' to ACTIVE: trust score {new_trust:.4f} < {settings.RELIABILITY_THRESHOLD:.2f}."
+                        )
+                    if should_quarantine(calc_successes, calc_failures, gamma=settings.QUARANTINE_GAMMA, threshold=settings.RELIABILITY_THRESHOLD):
+                        raise ValueError(
+                            f"Cannot promote CANDIDATE '{experience_id}' to ACTIVE: Bayesian quarantine policy forbids promotion."
+                        )
 
                 uses_inc = 1 if binary_outcome is not None else 0
                 success_inc = 1 if binary_outcome == 1 else 0
@@ -697,6 +1105,226 @@ class PostgresMemoryStore(BaseMemoryStore):
                     reason=reason,
                     created_at=now.isoformat(),
                 )
+
+    async def admin_recover_to_probation(
+        self,
+        experience_id: str,
+        reason: str,
+        actor_id: str = "system:admin_api_key",
+        client_ref: Optional[str] = None,
+    ) -> Experience:
+        if not reason or len(reason.strip()) < 15:
+            raise ValueError("A meaningful audit reason of at least 15 characters is required for recovery.")
+
+        pool = await self._get_pool()
+        now = datetime.now(timezone.utc)
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                row = await conn.fetchrow(
+                    "SELECT * FROM experiences WHERE id = $1 FOR UPDATE",
+                    experience_id,
+                )
+                if not row:
+                    raise ValueError(f"Experience '{experience_id}' not found.")
+
+                current_status = row["status"]
+                if current_status != ExperienceStatus.DEPRECATED.value:
+                    raise ValueError(
+                        f"Experience '{experience_id}' is in status '{current_status}'. "
+                        f"Only DEPRECATED memories can be recovered to CANDIDATE probation."
+                    )
+
+                await conn.execute("""
+                    UPDATE experiences SET
+                        status = $1,
+                        probation_successes = 0,
+                        updated_at = $2
+                    WHERE id = $3
+                """, ExperienceStatus.CANDIDATE.value, now, experience_id)
+
+                old_trust = float(row["trust_score"])
+                audit_reason = f"Administrative recovery to probation by {actor_id}: {reason.strip()}"
+                if client_ref:
+                    audit_reason += f" [CLIENT_REF: {client_ref.strip()}]"
+
+                rec_id = str(uuid4())
+                await conn.execute("""
+                    INSERT INTO trust_history (id, experience_id, execution_id, old_trust, new_trust, delta, reason, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                """, rec_id, experience_id, f"admin_rec_{uuid4().hex[:8]}", old_trust, old_trust, 0.0, audit_reason, now)
+
+                updated_row = await conn.fetchrow("SELECT * FROM experiences WHERE id = $1", experience_id)
+                return self._record_to_experience(updated_row)
+
+    async def record_probationary_probe(
+        self,
+        experience_id: str,
+        outcome: EvaluationOutcome,
+        execution_id: str,
+        task_fingerprint: str,
+        actor_id: str = "system:admin_api_key",
+        client_ref: Optional[str] = None,
+    ) -> Tuple[Experience, TrustHistoryRecord]:
+        pool = await self._get_pool()
+        now = datetime.now(timezone.utc)
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                # 1. Idempotency checks
+                existing_exec = await conn.fetchrow(
+                    "SELECT id FROM probation_task_fingerprints WHERE execution_id = $1",
+                    execution_id,
+                )
+                if existing_exec:
+                    raise ValueError(f"Duplicate execution ID '{execution_id}': cannot process probe twice.")
+
+                existing_hist = await conn.fetchrow(
+                    "SELECT id FROM trust_history WHERE execution_id = $1",
+                    execution_id,
+                )
+                if existing_hist:
+                    raise ValueError(f"Duplicate execution ID '{execution_id}': cannot process probe twice.")
+
+                existing_fp = await conn.fetchrow(
+                    "SELECT id FROM probation_task_fingerprints WHERE experience_id = $1 AND fingerprint = $2",
+                    experience_id, task_fingerprint,
+                )
+                if existing_fp:
+                    raise ValueError(
+                        f"Duplicate task fingerprint '{task_fingerprint}' for experience '{experience_id}'. "
+                        f"Repeated probe cannot mutate counters or increment probation quota."
+                    )
+
+                # 2. Row locking
+                row = await conn.fetchrow(
+                    "SELECT * FROM experiences WHERE id = $1 FOR UPDATE",
+                    experience_id,
+                )
+                if not row:
+                    raise ValueError(f"Experience '{experience_id}' not found.")
+
+                if row["status"] != ExperienceStatus.CANDIDATE.value:
+                    raise ValueError(
+                        f"Experience '{experience_id}' is in status '{row['status']}'. "
+                        f"Only CANDIDATE memories can undergo probationary validation."
+                    )
+
+                old_trust = float(row["trust_score"])
+                cur_uses = int(row["uses_count"])
+                cur_successes = int(row["successes_count"])
+                cur_failures = int(row["failures_count"])
+                cur_probation = int(row.get("probation_successes") or 0)
+
+                # 3. Classify outcome
+                details = outcome.details or {}
+                is_inconclusive = (
+                    details.get("status") == "inconclusive"
+                    or details.get("error") in ("missing_test_code", "harness_error", "infrastructure_error", "invalid_setup")
+                    or (bool(outcome.reason) and outcome.reason.strip().lower().startswith("inconclusive"))
+                )
+
+                if is_inconclusive:
+                    new_trust = old_trust
+                    delta = 0.0
+                    new_status = ExperienceStatus.CANDIDATE.value
+                    uses_inc = 0
+                    success_inc = 0
+                    failure_inc = 0
+                    prob_inc = 0
+                    audit_reason = f"Inconclusive probe evaluation ({details.get('error', 'unverified')}): trust and counters preserved"
+                elif outcome.is_success:
+                    new_trust = round((settings.ALPHA_SUCCESS * old_trust) + ((1.0 - settings.ALPHA_SUCCESS) * 1.0), 4)
+                    delta = round(new_trust - old_trust, 4)
+                    uses_inc = 1
+                    success_inc = 1
+                    failure_inc = 0
+                    prob_inc = 1
+                    new_probation = cur_probation + prob_inc
+                    new_successes = cur_successes + success_inc
+
+                    quota = calculate_probation_quota(cur_failures)
+                    is_quota_met = new_probation >= quota
+                    is_trust_admissible = new_trust >= settings.RELIABILITY_THRESHOLD
+                    is_quarantine_permitted = not should_quarantine(
+                        new_successes,
+                        cur_failures,
+                        gamma=settings.QUARANTINE_GAMMA,
+                        threshold=settings.RELIABILITY_THRESHOLD,
+                    )
+
+                    if is_quota_met and is_trust_admissible and is_quarantine_permitted:
+                        new_status = ExperienceStatus.ACTIVE.value
+                        audit_reason = (
+                            f"Probation verified success (R={outcome.reward:.2f}): promoted to ACTIVE "
+                            f"(quota {new_probation}/{quota} met, trust {new_trust:.4f} >= {settings.RELIABILITY_THRESHOLD:.2f})"
+                        )
+                    else:
+                        new_status = ExperienceStatus.CANDIDATE.value
+                        reasons = []
+                        if not is_quota_met:
+                            reasons.append(f"quota {new_probation}/{quota}")
+                        if not is_trust_admissible:
+                            reasons.append(f"trust {new_trust:.4f} < {settings.RELIABILITY_THRESHOLD:.2f}")
+                        if not is_quarantine_permitted:
+                            reasons.append("quarantine policy")
+                        audit_reason = (
+                            f"Probation verified success (R={outcome.reward:.2f}): retained in CANDIDATE "
+                            f"({', '.join(reasons)})"
+                        )
+                else:
+                    new_trust = round(settings.BETA_FAILURE * old_trust, 4)
+                    delta = round(new_trust - old_trust, 4)
+                    new_status = ExperienceStatus.DEPRECATED.value
+                    uses_inc = 1
+                    success_inc = 0
+                    failure_inc = 1
+                    prob_inc = 0
+                    audit_reason = f"Probation verified failure ({outcome.reason}): revoked to DEPRECATED"
+
+                if client_ref:
+                    audit_reason += f" [CLIENT_REF: {client_ref.strip()}]"
+
+                # 4. Update experiences
+                await conn.execute("""
+                    UPDATE experiences SET
+                        trust_score = $1,
+                        status = $2,
+                        uses_count = uses_count + $3,
+                        successes_count = successes_count + $4,
+                        failures_count = failures_count + $5,
+                        probation_successes = probation_successes + $6,
+                        updated_at = $7
+                    WHERE id = $8
+                """, new_trust, new_status, uses_inc, success_inc, failure_inc, prob_inc, now, experience_id)
+
+                # 5. Idempotently record fingerprint
+                if not is_inconclusive:
+                    fp_id = str(uuid4())
+                    await conn.execute("""
+                        INSERT INTO probation_task_fingerprints (
+                            id, experience_id, execution_id, fingerprint, outcome_reward,
+                            is_success, actor_id, client_ref, created_at
+                        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+                    """, fp_id, experience_id, execution_id, task_fingerprint, float(outcome.reward), 1 if outcome.is_success else 0, actor_id, client_ref, now)
+
+                # 6. Append trust history
+                rec_id = str(uuid4())
+                await conn.execute("""
+                    INSERT INTO trust_history (id, experience_id, execution_id, old_trust, new_trust, delta, reason, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                """, rec_id, experience_id, execution_id, old_trust, new_trust, delta, audit_reason, now)
+
+                updated_row = await conn.fetchrow("SELECT * FROM experiences WHERE id = $1", experience_id)
+                rec = TrustHistoryRecord(
+                    id=rec_id,
+                    experience_id=experience_id,
+                    execution_id=execution_id,
+                    old_trust=old_trust,
+                    new_trust=new_trust,
+                    delta=delta,
+                    reason=audit_reason,
+                    created_at=now.isoformat(),
+                )
+                return self._record_to_experience(updated_row), rec
 
     async def list_experiences(
         self,
@@ -881,6 +1509,45 @@ class SupabaseMemoryStore(BaseMemoryStore):
             })
             return rec
 
+    async def admin_recover_to_probation(
+        self,
+        experience_id: str,
+        reason: str,
+        actor_id: str = "system:admin_api_key",
+        client_ref: Optional[str] = None,
+    ) -> Experience:
+        exp = await self.get_experience(experience_id)
+        if not exp:
+            raise ValueError(f"Experience '{experience_id}' not found.")
+        if exp.status != ExperienceStatus.DEPRECATED:
+            raise ValueError(
+                f"Experience '{experience_id}' is in status '{exp.status.value}'. "
+                f"Only DEPRECATED memories can be recovered to CANDIDATE probation."
+            )
+        audit_reason = f"Administrative recovery to probation by {actor_id}: {reason.strip()}"
+        if client_ref:
+            audit_reason += f" [CLIENT_REF: {client_ref.strip()}]"
+
+        await self.update_trust(
+            experience_id=experience_id,
+            new_trust=exp.trust_score,
+            status=ExperienceStatus.CANDIDATE.value,
+            reason=audit_reason,
+        )
+        updated = await self.get_experience(experience_id)
+        return updated or exp
+
+    async def record_probationary_probe(
+        self,
+        experience_id: str,
+        outcome: EvaluationOutcome,
+        execution_id: str,
+        task_fingerprint: str,
+        actor_id: str = "system:admin_api_key",
+        client_ref: Optional[str] = None,
+    ) -> Tuple[Experience, TrustHistoryRecord]:
+        raise NotImplementedError("Probationary probes on Supabase require server-side RPC transaction.")
+
     async def list_experiences(
         self,
         domain: Optional[TaskDomain] = None,
@@ -960,6 +1627,7 @@ class SupabaseMemoryStore(BaseMemoryStore):
             uses_count=int(d.get("uses_count", 0)),
             successes_count=int(d.get("successes_count", 0)),
             failures_count=int(d.get("failures_count", 0)),
+            probation_successes=int(d.get("probation_successes", 0)),
             status=ExperienceStatus(d.get("status", "active")),
             embedding=d.get("embedding"),
             source_task_id=d.get("source_task_id"),

@@ -11,6 +11,7 @@ import logging
 import math
 from typing import Any, Optional, Sequence
 
+from ai_service.config import settings
 from models.domain import TaskDomain
 from models.experience import Experience, ExperienceMatch, ExperienceStatus
 
@@ -38,7 +39,7 @@ def retrieve_experiences(
     query_embedding: Optional[Sequence[float]],
     candidates: Sequence[Experience],
     filter_domain: Optional[TaskDomain] = None,
-    min_similarity: float = 0.70,
+    min_similarity: float = 0.60,
     min_trust: float = 0.35,
     top_k: int = 3,
     weight_similarity: float = 0.70,
@@ -52,8 +53,8 @@ def retrieve_experiences(
     matches: list[ExperienceMatch] = []
 
     for exp in candidates:
-        # 1. Filter by active status
-        if exp.status != ExperienceStatus.ACTIVE:
+        # 1. Filter out deprecated/quarantined experiences (Theorem 1 quarantine)
+        if exp.status == ExperienceStatus.DEPRECATED:
             continue
 
         # 2. Filter by domain (allow domain match or general)
@@ -109,7 +110,7 @@ def retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
         query_embedding=query_embedding,
         candidates=candidates,
         filter_domain=filter_domain,
-        min_similarity=0.70,
+        min_similarity=settings.SIMILARITY_THRESHOLD,
         min_trust=0.35 if memory_mode == "adaptive" else 0.0,  # naive RAG ignores trust cutoff
         top_k=3,
     )
@@ -168,12 +169,20 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
             mode = MemoryMode(mode_str)
             custom_store = state.get("memory_store")
             active_retriever = MemoryRetriever(store=custom_store) if custom_store else memory_retriever
-            retrieved_models = await active_retriever.retrieve(
-                query=task_input,
-                domain=domain,
-                mode=mode,
-                top_k=2,
-            )
+            if hasattr(active_retriever, "retrieve_with_diagnostics"):
+                retrieved_models, retrieval_diagnostics = await active_retriever.retrieve_with_diagnostics(
+                    query=task_input,
+                    domain=domain,
+                    mode=mode,
+                    top_k=2,
+                )
+            else:
+                retrieved_models = await active_retriever.retrieve(
+                    query=task_input,
+                    domain=domain,
+                    mode=mode,
+                    top_k=2,
+                )
             for m in retrieved_models:
                 exp_dict = m.experience.model_dump(by_alias=True)
                 retrieved.append({
@@ -205,10 +214,17 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
                 query_embedding=state.get("query_embedding"),
                 candidates=candidates,
                 filter_domain=domain,
-                min_similarity=0.70,
+                min_similarity=settings.SIMILARITY_THRESHOLD,
                 min_trust=0.35 if mode_str == "adaptive" else 0.0,
                 top_k=2,
             )
+            retrieval_diagnostics = {
+                "candidate_count": len(candidates),
+                "admissible_count": len(matches),
+                "gate_reasons": {},
+                "ranker": f"fallback_{mode_str}",
+                "policy": "aema" if mode_str == "adaptive" else mode_str,
+            }
             for m in matches:
                 retrieved.append({
                     "experience": m.experience.model_dump(by_alias=True),
@@ -222,6 +238,13 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
         top_exp = retrieved[0]["experience"]
         positive_strategy = top_exp.get("strategyLesson") or top_exp.get("strategy_lesson")
         negative_pitfall = top_exp.get("pitfall")
+
+    # Invariant: candidateCount >= admissibleCount >= retrievedCount
+    if retrieved:
+        if retrieval_diagnostics.get("candidate_count", 0) < len(retrieved):
+            retrieval_diagnostics["candidate_count"] = max(retrieval_diagnostics.get("candidate_count", 0), len(retrieved))
+        if retrieval_diagnostics.get("admissible_count", 0) < len(retrieved):
+            retrieval_diagnostics["admissible_count"] = max(retrieval_diagnostics.get("admissible_count", 0), len(retrieved))
 
     duration_ms = int((time.time() - start_ts) * 1000)
 
