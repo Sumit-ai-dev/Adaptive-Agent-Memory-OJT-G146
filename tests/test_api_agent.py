@@ -3,8 +3,9 @@ Integration tests for Agent Execution API endpoint (/api/v1/agent/execute).
 Verifies full end-to-end execution of the 5-node LangGraph StateGraph via HTTP.
 """
 
+from unittest.mock import patch
 from fastapi.testclient import TestClient
-from backend.app.main import app
+from backend.main import app
 
 client = TestClient(app)
 
@@ -61,3 +62,33 @@ def test_agent_executions_list_and_detail():
     detail_res = client.get(f"/api/v1/agent/executions/{exec_id}")
     assert detail_res.status_code == 200
     assert detail_res.json()["id"] == exec_id
+
+
+def test_agent_executions_clear_fail_closed_when_unconfigured():
+    """Verify DELETE /api/agent/executions fails closed with 503 when ADMIN_API_KEY is unset."""
+    with patch("backend.routes.agent.settings.ADMIN_API_KEY", None):
+        res = client.delete("/api/agent/executions", headers={"X-Admin-Token": "some-token"})
+        assert res.status_code == 503
+        assert "not configured" in res.json()["detail"].lower()
+
+
+def test_agent_executions_clear_authorized_and_unauthorized():
+    """Verify DELETE /api/agent/executions requires valid ADMIN_API_KEY."""
+    with patch("backend.routes.agent.settings.ADMIN_API_KEY", "secret-test-admin-key"):
+        # 1. Missing token -> 401
+        res_missing = client.delete("/api/agent/executions")
+        assert res_missing.status_code == 401
+
+        # 2. Invalid token -> 401
+        res_invalid = client.delete("/api/agent/executions", headers={"X-Admin-Token": "wrong-key"})
+        assert res_invalid.status_code == 401
+
+        # 3. Valid token via X-Admin-Token -> 200
+        res_valid = client.delete("/api/agent/executions", headers={"X-Admin-Token": "secret-test-admin-key"})
+        assert res_valid.status_code == 200
+        assert res_valid.json()["status"] == "success"
+
+        # 4. Valid token via Bearer -> 200
+        res_bearer = client.delete("/api/agent/executions", headers={"Authorization": "Bearer secret-test-admin-key"})
+        assert res_bearer.status_code == 200
+

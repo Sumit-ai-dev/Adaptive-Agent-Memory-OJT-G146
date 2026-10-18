@@ -75,8 +75,8 @@ def cli():
               help="Task domain: coding, research, reasoning, general")
 @click.option("--provider", default="groq", show_default=True,
               help="LLM provider: groq, ollama, gemini")
-@click.option("--model", default="llama-3.3-70b-versatile", show_default=True,
-              help="Model identifier")
+@click.option("--model", default=None, show_default="provider default",
+              help="Model identifier (falls back to provider canonical default if omitted)")
 @click.option("--api-key", envvar="AEMA_API_KEY", default=None,
               help="BYOK API key (or set AEMA_API_KEY env var)")
 @click.option("--temperature", default=0.0, show_default=True, type=float,

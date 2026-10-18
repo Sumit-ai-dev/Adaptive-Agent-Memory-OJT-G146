@@ -248,14 +248,35 @@ class UniversalLLMClient:
                 return content, tokens
             except Exception as e:
                 err_msg = str(e)
-                # If Groq fails with 404/restricted on requested model, retry with active openai/gpt-oss-20b
-                if provider == ModelProvider.GROQ and model != "openai/gpt-oss-20b" and (
+                # If custom BYOK key failed with 401, retry with backend environment key if configured
+                if ("401" in err_msg or "invalid_api_key" in err_msg) and cfg.api_key:
+                    env_key = getattr(settings, f"{provider.value.upper()}_API_KEY", None)
+                    if env_key and env_key.strip() and env_key.strip() != (cfg.api_key or "").strip():
+                        try:
+                            logger.info(f"Custom BYOK key failed for {provider.value}; retrying with backend environment key...")
+                            env_client = AsyncOpenAI(
+                                api_key=env_key.strip(),
+                                base_url=cfg.base_url or ProviderConfig.default_for(provider).base_url,
+                                timeout=float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0)),
+                                max_retries=1,
+                                http_client=httpx.AsyncClient(timeout=httpx.Timeout(float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0)), connect=5.0)),
+                            )
+                            response = await env_client.chat.completions.create(**kwargs)
+                            choice = response.choices[0]
+                            content = choice.message.content or ""
+                            tokens = response.usage.total_tokens if response.usage else len(content.split()) * 2
+                            return content, tokens
+                        except Exception as env_e:
+                            err_msg = str(env_e)
+
+                # If Groq fails with 404/restricted on requested model, retry with active openai/gpt-oss-120b
+                if provider == ModelProvider.GROQ and model != "openai/gpt-oss-120b" and (
                     "404" in err_msg or "does not exist" in err_msg or "access" in err_msg or "model_not_found" in err_msg or "decommissioned" in err_msg
                 ):
                     try:
-                        logger.info("Groq model restricted or not found, retrying with openai/gpt-oss-20b...")
+                        logger.info("Groq model restricted or not found, retrying with openai/gpt-oss-120b...")
                         fallback_kwargs = dict(kwargs)
-                        fallback_kwargs["model"] = "openai/gpt-oss-20b"
+                        fallback_kwargs["model"] = "openai/gpt-oss-120b"
                         response = await client.chat.completions.create(**fallback_kwargs)
                         choice = response.choices[0]
                         content = choice.message.content or ""

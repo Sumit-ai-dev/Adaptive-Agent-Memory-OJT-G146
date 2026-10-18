@@ -41,19 +41,34 @@ if [ ! -d "$REPO_ROOT/frontend/node_modules" ]; then
     (cd "$REPO_ROOT/frontend" && npm install)
 fi
 
-# 3. Clean up any stale processes on ports 8000 and 5173
-cleanup_port() {
+# 3. Check port availability safely without terminating unrelated processes
+ensure_port_available() {
     local port=$1
+    local expected_pattern=$2
     local pids=$(lsof -ti tcp:$port 2>/dev/null || true)
+
     if [ -n "$pids" ]; then
-        echo -e "${YELLOW}[CLEANUP] Releasing occupied port :$port (PID: $pids)...${NC}"
-        kill -9 $pids 2>/dev/null || true
-        sleep 0.5
+        for pid in $pids; do
+            local cmd=$(ps -p "$pid" -o command= 2>/dev/null || true)
+            if echo "$cmd" | grep -E -q "$expected_pattern"; then
+                echo -e "${YELLOW}[CLEANUP] Stopping previous AEMA instance on port :$port (PID: $pid)...${NC}"
+                kill "$pid" 2>/dev/null || true
+                sleep 0.8
+                if kill -0 "$pid" 2>/dev/null; then
+                    kill -9 "$pid" 2>/dev/null || true
+                fi
+            else
+                echo -e "${RED}[ERROR] Port :$port is in use by an unrelated process!${NC}"
+                echo -e "${RED}PID: $pid | Command: $cmd${NC}"
+                echo -e "${YELLOW}AEMA will not terminate unrelated workloads. Please stop this process or free port :$port before running the demo.${NC}"
+                exit 1
+            fi
+        done
     fi
 }
 
-cleanup_port 8000
-cleanup_port 5173
+ensure_port_available 8000 "backend.main:app|uvicorn.*8000"
+ensure_port_available 5173 "vite|node.*5173|adaptive-agent-frontend"
 
 # Trap SIGINT, SIGTERM, and EXIT to kill child processes cleanly
 BACKEND_PID=""
@@ -68,8 +83,6 @@ shutdown() {
     if [ -n "$FRONTEND_PID" ]; then
         kill "$FRONTEND_PID" 2>/dev/null || true
     fi
-    cleanup_port 8000
-    cleanup_port 5173
     echo -e "${GREEN}[SHUTDOWN] All services stopped cleanly.${NC}"
     exit 0
 }
