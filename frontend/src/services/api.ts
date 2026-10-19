@@ -181,7 +181,7 @@ export async function fetchExperiences(
     }
 
     // Try Supabase if backend API not reachable
-    const dbResults = await dbFetchExperiences(domain)
+    const dbResults = await dbFetchExperiences(domain, status)
     if (dbResults && dbResults.length > 0) {
       return dbResults
     }
@@ -189,8 +189,21 @@ export async function fetchExperiences(
     // Fall through to memory store cache
   }
 
-  if (!domain || domain === 'all') return localExperiences
-  return localExperiences.filter((e) => e.taskDomain === domain)
+  let result = localExperiences
+  if (domain && domain !== 'all') {
+    result = result.filter((e) => e.taskDomain === domain)
+  }
+  if (status && status !== 'all') {
+    const s = String(status).toLowerCase().trim()
+    if (s === 'candidate' || s === 'provisional') {
+      result = result.filter((e) => e.status === 'candidate' || e.status === 'provisional')
+    } else if (s === 'deprecated' || s === 'quarantined') {
+      result = result.filter((e) => e.status === 'deprecated' || e.status === 'quarantined')
+    } else {
+      result = result.filter((e) => e.status === s)
+    }
+  }
+  return result
 }
 
 // ─── Save New Experience ────────────────────────────────────────────────────

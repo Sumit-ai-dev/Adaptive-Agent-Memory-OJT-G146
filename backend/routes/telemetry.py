@@ -76,22 +76,24 @@ async def get_telemetry() -> Dict[str, Any]:
         logger.warning(f"Could not compute execution metrics from SQLite: {exc}")
 
     return {
-        # ── Memory store (always real) ─────────────────────────────────────
+        # -- Memory store (always real) -------------------------------------
         "totalMemories": len(all_exps),
         "activeMemories": len(active_exps),
         "candidateMemories": len(candidate_exps),
         "quarantinedMemories": len(quarantined_exps),
         "meanTrustScore": round(sum(e.trust_score for e in all_exps) / len(all_exps), 4) if all_exps else 0.75,
-        # ── Execution history (persisted to SQLite) ────────────────────────
+        # -- Execution history (persisted to SQLite) ------------------------
         "totalExecutions": total_executions,
+        "totalTasks": total_executions,
+        "totalTaskExecutions": total_executions,
         "executionsWithMemoryHit": executions_with_memory_hit,
         "memoryHitRate": memory_hit_rate,
-        # ── Trust system constants (informational, always truthful) ────────
+        # -- Trust system constants (informational, always truthful) --------
         "quarantineThreshold": 0.35,
         "trustDecayBeta": 0.70,
         "trustBoostAlpha": 0.85,
         "initialTrustScore": 0.75,
-        # ── Benchmark results (populated only when Phase 9 runs) ───────────
+        # -- Benchmark results (populated only when Phase 9 runs) -----------
         "latestBenchmarks": _load_benchmark_summary(),
     }
 

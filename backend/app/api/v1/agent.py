@@ -17,9 +17,12 @@ logger = logging.getLogger("backend.app.api.v1.agent")
 
 router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 
-# Global shared memory store for API server — auto_seed ensures the 5 canonical
-# seed experiences exist on every fresh CI run (idempotent: skipped if already present).
-shared_store: BaseMemoryStore = get_memory_store(auto_seed=True)
+# Shared memory store instance: re-use canonical store from backend.routes.agent
+# to ensure unified state across both router suites.
+try:
+    from backend.routes.agent import shared_store
+except ImportError:
+    from routes.agent import shared_store
 
 # In-memory execution history cache and unbounded lifetime execution counter
 _execution_history: List[TaskExecution] = []

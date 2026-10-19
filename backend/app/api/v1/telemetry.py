@@ -46,6 +46,7 @@ async def get_telemetry():
     return {
         "totalTasks": task_count,
         "totalTaskExecutions": task_count,
+        "totalExecutions": task_count,
         "activeMemories": len(active),
         "candidateMemories": len(candidate),
         "deprecatedMemories": len(deprecated),

@@ -1,4 +1,4 @@
-eveer"""
+"""
 End-to-End Integration Verification: Real Execution Path and Evaluator Integrity.
 Tests the real backend pipeline without simulated fallbacks, validating:
 1. Semantic relevance gates (unrelated PostgreSQL memory is NOT retrieved for factorial task).
@@ -250,6 +250,10 @@ async def test_trust_update_and_persistence_across_reopen(temp_sqlite_store):
     assert persisted.failures_count == 0
 
 
+@pytest.mark.skipif(
+    not os.getenv("RUN_REAL_PROVIDER_TESTS") or not os.getenv("GROQ_API_KEY"),
+    reason="Real-provider integration test requires RUN_REAL_PROVIDER_TESTS=1 and GROQ_API_KEY",
+)
 @pytest.mark.asyncio
 async def test_end_to_end_factorial_task_with_real_backend(temp_sqlite_store):
     """

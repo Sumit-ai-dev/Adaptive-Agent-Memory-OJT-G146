@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
+  AlertTriangle,
   ArrowRight,
   CheckCircle2,
   Database,
@@ -33,6 +34,7 @@ export default function LandingPage() {
   const [previewRunning, setPreviewRunning] = useState(false)
   const [previewStage, setPreviewStage] = useState<'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'idle' | 'complete'>('idle')
   const [previewExecution, setPreviewExecution] = useState<TaskExecution | null>(null)
+  const [previewError, setPreviewError] = useState<string | null>(null)
 
   // Copy States
   const [copiedPypi, setCopiedPypi] = useState(false)
@@ -52,15 +54,22 @@ export default function LandingPage() {
   }) => {
     setPreviewRunning(true)
     setPreviewStage('retrieval')
+    setPreviewError(null)
     try {
       const exec = await executeAgentTask({
         taskInput: params.prompt,
         taskDomain: params.domain,
         memoryEnabled: params.memoryEnabled,
         simulateFailure: params.simulateFailure,
+        isExplicitDemo: true,
         onStageChange: (stage) => setPreviewStage(stage),
       })
       setPreviewExecution(exec)
+      setPreviewStage('complete')
+    } catch (err: any) {
+      console.error('Public preview execution error:', err)
+      setPreviewError(err?.message || 'Public preview execution encountered an error.')
+      setPreviewStage('idle')
     } finally {
       setPreviewRunning(false)
     }
@@ -409,6 +418,25 @@ safe_memories = manager.get_active_memories()`
           </div>
 
           <div className="rounded-2xl border p-6 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-5">
+            {previewError && (
+              <div className="rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-4 text-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-semibold">
+                    <AlertTriangle size={16} />
+                    <span>Public Preview Execution Failed</span>
+                  </div>
+                  <button
+                    onClick={() => setPreviewError(null)}
+                    className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-mono"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+                <p className="text-rose-800 dark:text-rose-300 font-mono text-[11px] break-all">
+                  {previewError}
+                </p>
+              </div>
+            )}
             <PromptConsole onRunTask={handleRunHeroPreview} isRunning={previewRunning} />
             {previewStage !== 'idle' && (
               <ExecutionStepper currentStage={previewStage} execution={previewExecution} />
@@ -417,7 +445,7 @@ safe_memories = manager.get_active_memories()`
         </div>
       </section>
 
-      {/* ─── 04 / RESEARCH: THEOREM 1 & BENCHMARKS ──────────────────────────── */}
+      {/* --- 04 / RESEARCH: THEOREM 1 & BENCHMARKS ---------------------------- */}
       <section id="research" className="py-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832]">
         <div className="max-w-7xl mx-auto space-y-12">
           <div className="space-y-2">
