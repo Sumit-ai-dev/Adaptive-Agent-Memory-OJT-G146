@@ -42,6 +42,11 @@ def should_loop_or_finish(state: AgentState) -> str:
     Cyclical routing decision:
     If the task failed (R < 0.80) and we haven't reached loop limit, re-execute with new constraints!
     """
+    # If the execution encountered an infrastructure/provider error or is inconclusive, do not loop
+    eval_details = state.get("evaluator_details") or {}
+    if eval_details.get("status") == "inconclusive" or eval_details.get("error") in ("missing_test_code", "harness_error", "provider_error"):
+        return END
+
     score = state.get("outcome_score", 1.0)
     loop_count = state.get("loop_count", 1)
     max_loops = state.get("max_loops", settings.MAX_CYCLICAL_LOOPS)
@@ -349,7 +354,7 @@ async def execute_task(
         # store.update_trust touches no counters.
         is_inconclusive = (
             terminal_details.get("status") == "inconclusive"
-            or terminal_details.get("error") in ("missing_test_code", "harness_error")
+            or terminal_details.get("error") in ("missing_test_code", "harness_error", "provider_error")
         )
 
         # Exactly one write per (task, memory). Deduplicated by experience id so that

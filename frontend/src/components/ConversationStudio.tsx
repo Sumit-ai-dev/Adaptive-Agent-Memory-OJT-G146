@@ -193,9 +193,14 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
     textareaRef.current?.focus()
   }
 
-  const handleSendMessage = async (customPrompt?: string) => {
+  const handleSendMessage = async (customPrompt?: string, overrideDomain?: TaskDomain) => {
     const promptToSend = (customPrompt || inputText).trim()
     if (!promptToSend || isExecuting) return
+
+    const effectiveDomain = overrideDomain || domain
+    if (overrideDomain && overrideDomain !== domain) {
+      setDomain(overrideDomain)
+    }
 
     setInputText('')
     setIsExecuting(true)
@@ -228,7 +233,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
       const activeKey = apiKeys[provider] || undefined
       const exec = await executeAgentTask({
         taskInput: promptToSend,
-        taskDomain: domain,
+        taskDomain: effectiveDomain,
         memoryEnabled,
         provider,
         apiKey: activeKey,
@@ -512,7 +517,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                     key={i}
                     onClick={() => {
                       setDomain(starter.domain)
-                      handleSendMessage(starter.prompt)
+                      handleSendMessage(starter.prompt, starter.domain)
                     }}
                     className="p-3.5 rounded-xl border border-[#E6E6E1] dark:border-[#252B3B] bg-[#FAFAFA] dark:bg-[#181D29] hover:border-indigo-400 dark:hover:border-indigo-600 cursor-pointer transition-all group"
                   >
@@ -583,14 +588,16 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                           {/* Outcome Quality Badge */}
                           <span
                             className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase ${
-                              exec.outcomeScore && exec.outcomeScore >= 0.8
+                              typeof exec.outcomeScore === 'number' && exec.outcomeScore >= 0.8
                                 ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400'
-                                : exec.outcomeScore && exec.outcomeScore <= 0.3
+                                : typeof exec.outcomeScore === 'number' && exec.outcomeScore <= 0.3
                                 ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-400'
-                                : 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400'
+                                : typeof exec.outcomeScore === 'number'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400'
+                                : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
                             }`}
                           >
-                            R: {typeof exec.outcomeScore === 'number' ? exec.outcomeScore.toFixed(2) : '1.00'}
+                            R: {typeof exec.outcomeScore === 'number' ? exec.outcomeScore.toFixed(2) : 'N/A'}
                           </span>
 
                           {/* Memory Count */}

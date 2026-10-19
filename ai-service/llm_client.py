@@ -218,15 +218,10 @@ class UniversalLLMClient:
         # 3. OpenAI-compatible Async client fallback (Groq, Ollama, OpenAI)
         client, model, _ = self._get_client_and_model(cfg)
         if client is None and provider != ModelProvider.MOCK:
-            raw_ans, tokens = self._generate_mock_response(messages, json_mode)
-            if not json_mode:
-                notice = (
-                    f"[Notice: No {provider.value.upper()} API key configured. "
-                    f"Click 'BYOK Key' in the console to enter your API key or set {provider.value.upper()}_API_KEY in the backend environment. "
-                    f"Offline fallback response generated.]\n\n"
-                )
-                return notice + raw_ans, tokens
-            return raw_ans, tokens
+            raise RuntimeError(
+                f"No API key configured for provider '{provider.value}'. "
+                f"Click 'BYOK Key' in the console to enter your API key or set {provider.value.upper()}_API_KEY in the backend environment."
+            )
 
         if client is not None:
             try:
@@ -285,9 +280,7 @@ class UniversalLLMClient:
                     except Exception as fallback_e:
                         err_msg = str(fallback_e)
 
-                logger.warning(f"AsyncOpenAI call failed for {provider.value} ({model}): {err_msg}. Falling back to deterministic response.")
-                raw_ans, tokens = self._generate_mock_response(messages, json_mode)
-                if not json_mode and provider != ModelProvider.MOCK:
+                if provider != ModelProvider.MOCK:
                     clean_msg = err_msg
                     if "401" in err_msg or "invalid_api_key" in err_msg:
                         clean_msg = "Invalid API key. Please check the key in BYOK."
@@ -295,12 +288,11 @@ class UniversalLLMClient:
                         clean_msg = "Rate limit reached. Please wait a moment."
                     elif "404" in err_msg:
                         clean_msg = f"Model '{model}' not accessible on this account tier."
-                    notice = (
-                        f"[Notice: {provider.value.upper()} gateway error ({clean_msg}). "
-                        f"Enter a valid API key via BYOK or set {provider.value.upper()}_API_KEY in backend environment. "
-                        f"Offline fallback response generated.]\n\n"
-                    )
-                    return notice + raw_ans, tokens
+                    logger.error(f"Provider '{provider.value}' execution failed ({model}): {clean_msg}")
+                    raise RuntimeError(f"Provider '{provider.value}' execution failed ({model}): {clean_msg}")
+
+                logger.warning(f"AsyncOpenAI call failed for {provider.value} ({model}): {err_msg}. Falling back to deterministic response.")
+                raw_ans, tokens = self._generate_mock_response(messages, json_mode)
                 return raw_ans, tokens
 
         return self._generate_mock_response(messages, json_mode)
@@ -319,15 +311,10 @@ class UniversalLLMClient:
         """
         api_key = (cfg.api_key or "").strip() or getattr(settings, "GEMINI_API_KEY", None)
         if not api_key:
-            raw_ans, tokens = self._generate_mock_response(messages, json_mode)
-            if not json_mode:
-                notice = (
-                    "[Notice: No GEMINI API key configured. "
-                    "Click 'BYOK Key' in the console to enter your key or set GEMINI_API_KEY in the backend. "
-                    "Offline fallback response generated.]\n\n"
-                )
-                return notice + raw_ans, tokens
-            return raw_ans, tokens
+            raise RuntimeError(
+                "No GEMINI API key configured. "
+                "Provide an API key via BYOK or set GEMINI_API_KEY in the backend environment."
+            )
 
         model = (cfg.model or ProviderConfig.default_for(ModelProvider.GEMINI).model).replace("models/", "")
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
@@ -403,28 +390,22 @@ class UniversalLLMClient:
                 except Exception:
                     err_msg = err_text[:120]
 
-                logger.warning(f"Google Gemini native API error ({res.status_code}): {err_msg}")
-                raw_ans, tokens = self._generate_mock_response(messages, json_mode)
-                if not json_mode:
-                    clean_msg = err_msg
-                    if res.status_code == 400 and ("API key not valid" in err_msg or "INVALID_ARGUMENT" in err_msg):
-                        clean_msg = "API key not valid. Please verify your Google AI Studio key in BYOK."
-                    elif res.status_code == 429:
-                        clean_msg = "Rate limit / quota exceeded. Please wait a moment."
-                    elif res.status_code == 503:
-                        clean_msg = "Google Gemini is temporarily experiencing high traffic. Please retry in a few seconds."
-                    notice = f"[Notice: GEMINI gateway error ({clean_msg}). Offline fallback response generated.]\n\n"
-                    return notice + raw_ans, tokens
-                return raw_ans, tokens
+                clean_msg = err_msg
+                if res.status_code == 400 and ("API key not valid" in err_msg or "INVALID_ARGUMENT" in err_msg):
+                    clean_msg = "API key not valid. Please verify your Google AI Studio key in BYOK."
+                elif res.status_code == 429:
+                    clean_msg = "Rate limit / quota exceeded. Please wait a moment."
+                elif res.status_code == 503:
+                    clean_msg = "Google Gemini is temporarily experiencing high traffic. Please retry in a few seconds."
+                logger.error(f"Google Gemini native API error ({res.status_code}): {clean_msg}")
+                raise RuntimeError(f"Google Gemini provider execution failed ({res.status_code}): {clean_msg}")
         except Exception as e:
+            if isinstance(e, RuntimeError):
+                raise
             err_msg = str(e)
-            logger.warning(f"Google Gemini call failed: {err_msg}")
-            raw_ans, tokens = self._generate_mock_response(messages, json_mode)
-            if not json_mode:
-                clean_msg = "Request timed out" if "timed out" in err_msg.lower() else err_msg[:120]
-                notice = f"[Notice: GEMINI gateway error ({clean_msg}). Offline fallback response generated.]\n\n"
-                return notice + raw_ans, tokens
-            return raw_ans, tokens
+            logger.error(f"Google Gemini call failed: {err_msg}")
+            clean_msg = "Request timed out" if "timed out" in err_msg.lower() else err_msg[:120]
+            raise RuntimeError(f"Google Gemini provider execution failed: {clean_msg}")
 
     def _generate_mock_response(
         self, messages: List[Dict[str, str]], json_mode: bool

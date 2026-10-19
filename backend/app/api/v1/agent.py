@@ -18,11 +18,23 @@ from models.task import TaskExecuteRequest, TaskExecution
 
 logger = logging.getLogger("backend.app.api.v1.agent")
 
+import sqlite3
+
 router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 
-# Global shared memory store for API server: auto_seed ensures the 5 canonical
-# seed experiences exist on every fresh CI run (idempotent: skipped if already present).
-shared_store: BaseMemoryStore = get_memory_store(auto_seed=True)
+# Re-use canonical shared_store and persistence helpers from backend.routes.agent
+try:
+    from backend.routes.agent import (
+        shared_store,
+        _save_execution_to_db,
+        _load_executions_from_db,
+    )
+except ImportError:
+    from routes.agent import (
+        shared_store,
+        _save_execution_to_db,
+        _load_executions_from_db,
+    )
 
 # In-memory execution history cache and unbounded lifetime execution counter
 _execution_history: List[TaskExecution] = []
@@ -52,6 +64,9 @@ async def run_agent_task(request: TaskExecuteRequest) -> TaskExecution:
         execution_result = await execute_task(request, memory_store=shared_store)
         _total_task_executions += 1
 
+        # Durable execution persistence in SQLite (survives restarts)
+        _save_execution_to_db(execution_result)
+
         # Store in historical cache (keep latest 100)
         _execution_history.insert(0, execution_result)
         if len(_execution_history) > 100:
@@ -79,6 +94,22 @@ async def list_executions(
     offset: int = Query(0, ge=0),
 ) -> Dict[str, Any]:
     """Lists historical task execution records with optional filtering and pagination."""
+    try:
+        total, items = _load_executions_from_db(
+            domain=domain,
+            memory_mode=memory_mode,
+            session_id=session_id,
+            limit=limit,
+            offset=offset,
+        )
+        if total > 0 or not _execution_history:
+            return {
+                "total": total,
+                "items": [item.model_dump(by_alias=True) for item in items],
+            }
+    except Exception as exc:
+        logger.warning(f"Failed to query SQLite execution store: {exc}")
+
     filtered = _execution_history
     if domain and domain != "all":
         filtered = [e for e in filtered if e.task_domain.value == domain]
@@ -104,7 +135,35 @@ async def list_executions(
 async def list_sessions(
     limit: int = Query(50, ge=1, le=100),
 ) -> List[Dict[str, Any]]:
-    """Lists unique recent conversation sessions."""
+    """Lists unique recent conversation sessions persisted in SQLite."""
+    try:
+        conn = sqlite3.connect(shared_store.db_path)
+        rows = conn.execute(
+            """
+            SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+            FROM task_executions
+            WHERE session_id IS NOT NULL AND session_id != ''
+            GROUP BY session_id
+            ORDER BY last_active DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        conn.close()
+
+        if rows:
+            sessions = []
+            for row in rows:
+                sessions.append({
+                    "sessionId": row[0],
+                    "title": (row[1] or "New Conversation")[:60],
+                    "lastActive": row[2],
+                    "turnCount": row[3],
+                })
+            return sessions
+    except Exception as exc:
+        logger.warning(f"Could not load sessions from SQLite: {exc}")
+
     seen: Dict[str, Dict[str, Any]] = {}
     for item in _execution_history:
         sid = getattr(item, "session_id", None)

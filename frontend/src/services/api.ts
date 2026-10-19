@@ -212,97 +212,105 @@ export async function fetchExperiences(
 
 // ─── Save New Experience ────────────────────────────────────────────────────
 
-export async function createExperience(exp: Partial<Experience>): Promise<Experience> {
-  try {
-    const session = await getCurrentSession()
-    const token = session.data?.session?.access_token
-
-    const res = await fetch(`${API_BASE_URL}/api/v1/memories`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify({
-        taskDomain: exp.taskDomain || 'general',
-        triggerCondition: exp.triggerCondition || '',
-        strategyLesson: exp.strategyLesson || '',
-        pitfall: exp.pitfallWarning || null,
-        trustScore: exp.trustScore || 0.50,
-        confidence: exp.confidenceScore || 0.85,
-      }),
-    })
-
-    if (res.ok) {
-      const data = await res.json()
-      const created: Experience = {
-        id: data.id,
-        taskDomain: data.taskDomain || data.task_domain,
-        triggerCondition: data.triggerCondition || data.trigger_condition,
-        strategyLesson: data.strategyLesson || data.strategy_lesson,
-        pitfallWarning: data.pitfallWarning || data.pitfall_warning || data.pitfall,
-        trustScore: data.trustScore !== undefined ? data.trustScore : data.trust_score,
-        confidenceScore: data.confidenceScore || 0.85,
-        usesCount: data.usesCount !== undefined ? data.usesCount : data.uses_count,
-        successesCount: data.successesCount !== undefined ? data.successesCount : data.successes_count,
-        failuresCount: data.failuresCount !== undefined ? data.failuresCount : data.failures_count,
-        consecutiveFailures: data.consecutiveFailures ?? data.consecutive_failures ?? 0,
-        status: data.status || 'candidate',
-        trustTrajectory: Array.isArray(data.trust_trajectory) ? data.trust_trajectory : [data.trust_score || 0.5],
-        createdAt: data.createdAt || data.created_at || new Date().toISOString(),
-        updatedAt: data.updatedAt || data.updated_at || new Date().toISOString(),
-      }
-      localExperiences = [created, ...localExperiences]
-      return created
+export async function createExperience(
+  exp: Partial<Experience>,
+  isDemo = false
+): Promise<Experience> {
+  // Prevent demo actions from mutating production memories
+  if (isDemo) {
+    const newExp: Experience = {
+      id: `exp-demo-${String(localExperiences.length + 1).padStart(3, '0')}`,
+      taskDomain: exp.taskDomain || 'general',
+      triggerCondition: exp.triggerCondition || '',
+      strategyLesson: exp.strategyLesson || '',
+      pitfallWarning: exp.pitfallWarning,
+      trustScore: exp.trustScore || 0.75,
+      confidenceScore: exp.confidenceScore || 0.85,
+      usesCount: 1,
+      successesCount: 1,
+      failuresCount: 0,
+      consecutiveFailures: 0,
+      status: exp.status === 'provisional' ? 'candidate' : (exp.status || 'candidate'),
+      trustTrajectory: [exp.trustScore || 0.75],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
-  } catch (err) {
-    console.warn('Backend createMemory failed, falling back to local memory store:', err)
+    localExperiences = [newExp, ...localExperiences]
+    return newExp
   }
 
-  const newExp: Experience = {
-    id: `exp-${String(localExperiences.length + 1).padStart(3, '0')}`,
-    taskDomain: exp.taskDomain || 'general',
-    triggerCondition: exp.triggerCondition || '',
-    strategyLesson: exp.strategyLesson || '',
-    pitfallWarning: exp.pitfallWarning,
-    trustScore: exp.trustScore || 0.75,
-    confidenceScore: exp.confidenceScore || 0.85,
-    usesCount: 1,
-    successesCount: 1,
-    failuresCount: 0,
-    consecutiveFailures: 0,
-    status: exp.status || 'active',
-    trustTrajectory: [exp.trustScore || 0.75],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+  const session = await getCurrentSession()
+  const token = session.data?.session?.access_token
+  const statusMapped = exp.status === 'provisional' ? 'candidate' : (exp.status || 'candidate')
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/memories`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      taskDomain: exp.taskDomain || 'general',
+      triggerCondition: exp.triggerCondition || '',
+      strategyLesson: exp.strategyLesson || '',
+      pitfall: exp.pitfallWarning || null,
+      trustScore: exp.trustScore || 0.50,
+      confidence: exp.confidenceScore || 0.85,
+      status: statusMapped,
+    }),
+  })
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}))
+    throw new Error(errData.detail || `Backend memory creation failed (HTTP ${res.status})`)
   }
 
-  localExperiences = [newExp, ...localExperiences]
-  return newExp
+  const data = await res.json()
+  const created: Experience = {
+    id: data.id,
+    taskDomain: data.taskDomain || data.task_domain,
+    triggerCondition: data.triggerCondition || data.trigger_condition,
+    strategyLesson: data.strategyLesson || data.strategy_lesson,
+    pitfallWarning: data.pitfallWarning || data.pitfall_warning || data.pitfall,
+    trustScore: data.trustScore !== undefined ? data.trustScore : data.trust_score,
+    confidenceScore: data.confidenceScore || 0.85,
+    usesCount: data.usesCount !== undefined ? data.usesCount : data.uses_count,
+    successesCount: data.successesCount !== undefined ? data.successesCount : data.successes_count,
+    failuresCount: data.failuresCount !== undefined ? data.failuresCount : data.failures_count,
+    consecutiveFailures: data.consecutiveFailures ?? data.consecutive_failures ?? 0,
+    status: data.status || statusMapped,
+    trustTrajectory: Array.isArray(data.trust_trajectory) ? data.trust_trajectory : [data.trust_score || 0.5],
+    createdAt: data.createdAt || data.created_at || new Date().toISOString(),
+    updatedAt: data.updatedAt || data.updated_at || new Date().toISOString(),
+  }
+  localExperiences = [created, ...localExperiences]
+  return created
 }
 
 // ─── Delete / Quarantine Experience ──────────────────────────────────────────
 
-export async function deleteExperienceApi(id: string): Promise<boolean> {
-  try {
-    const session = await getCurrentSession()
-    const token = session.data?.session?.access_token
-
-    const res = await fetch(`${API_BASE_URL}/api/v1/memories/${id}`, {
-      method: 'DELETE',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    })
-    if (res.ok || res.status === 204) {
-      localExperiences = localExperiences.filter((e) => e.id !== id)
-      return true
-    }
-  } catch (err) {
-    console.warn('Backend deleteMemory failed:', err)
+export async function deleteExperienceApi(id: string, isDemo = false): Promise<boolean> {
+  // Prevent demo actions from mutating production memories
+  if (isDemo) {
+    localExperiences = localExperiences.filter((e) => e.id !== id)
+    return true
   }
-  localExperiences = localExperiences.filter((e) => e.id !== id)
-  return true
+
+  const session = await getCurrentSession()
+  const token = session.data?.session?.access_token
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/memories/${id}`, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+  if (res.ok || res.status === 204) {
+    localExperiences = localExperiences.filter((e) => e.id !== id)
+    return true
+  }
+  const errData = await res.json().catch(() => ({}))
+  throw new Error(errData.detail || `Backend memory quarantine/deletion failed (HTTP ${res.status})`)
 }
 
 // ─── Task Execution Service with Live Backend & Exact A-EMA ─────────────────

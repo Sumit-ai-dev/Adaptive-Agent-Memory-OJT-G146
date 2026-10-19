@@ -17,7 +17,11 @@ that reaches a memory's evidence counters -- that selection happens once, in
 import time
 from typing import Any, Dict
 
-from ai_service.tools.evaluator import deterministic_evaluator
+from ai_service.tools.evaluator import (
+    EvaluationOutcome,
+    EvaluatorName,
+    deterministic_evaluator,
+)
 from models.state import AgentState
 from models.task import DEFAULT_OUTCOME_THRESHOLD, OutcomeQuality
 
@@ -31,18 +35,27 @@ async def evaluate_node(state: AgentState) -> Dict[str, Any]:
     task_input = state.get("task_input", "")
     threshold = float(state.get("outcome_threshold") or DEFAULT_OUTCOME_THRESHOLD)
 
-    # Evaluator comes from explicit selection, directives, or task domain
-    outcome = deterministic_evaluator.evaluate(
-        final_answer=final_answer,
-        evaluator=state.get("evaluator"),
-        evaluator_config=state.get("evaluator_config") or {},
-        tool_calls=tool_calls,
-        negative_pitfall=negative_pitfall,
-        positive_strategy=positive_strategy,
-        task_input=task_input,
-        task_domain=state.get("task_domain"),
-        outcome_threshold=threshold,
-    )
+    if final_answer.startswith("Execution encountered a model provider error:"):
+        outcome = EvaluationOutcome.from_reward(
+            reward=0.50,
+            evaluator_name=EvaluatorName.HEURISTIC_RUBRIC,
+            reason=f"Inconclusive: Model provider execution failed ({final_answer[:120]}). Trust preserved.",
+            outcome_threshold=threshold,
+            details={"status": "inconclusive", "error": "provider_error"},
+        )
+    else:
+        # Evaluator comes from explicit selection, directives, or task domain
+        outcome = deterministic_evaluator.evaluate(
+            final_answer=final_answer,
+            evaluator=state.get("evaluator"),
+            evaluator_config=state.get("evaluator_config") or {},
+            tool_calls=tool_calls,
+            negative_pitfall=negative_pitfall,
+            positive_strategy=positive_strategy,
+            task_input=task_input,
+            task_domain=state.get("task_domain"),
+            outcome_threshold=threshold,
+        )
 
     score = outcome.reward
     reason = outcome.reason

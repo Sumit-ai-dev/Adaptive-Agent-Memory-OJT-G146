@@ -314,6 +314,17 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
           {renderInlineFormatting(paraLines.join(' '))}
         </p>
       )
+    } else {
+      // Fallback: prevent infinite loop if a line was skipped by all block recognizers
+      blocks.push(
+        <p
+          key={`p-fallback-${lineIdx}`}
+          className="my-2 leading-relaxed text-zinc-700 dark:text-zinc-300 font-sans text-xs"
+        >
+          {renderInlineFormatting(line)}
+        </p>
+      )
+      lineIdx++
     }
   }
 
