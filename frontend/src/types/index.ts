@@ -46,9 +46,24 @@ export interface ExecutionStepTrace {
   metadata?: Record<string, unknown>
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  timestamp?: string
+  executionId?: string
+}
+
+export interface SessionSummary {
+  sessionId: string
+  title: string
+  turnCount: number
+  lastActive: string
+}
+
 export interface TaskExecution {
   id: string
   userId?: string
+  sessionId?: string
   taskInput: string
   taskDomain: TaskDomain
   memoryEnabled: boolean
@@ -60,6 +75,7 @@ export interface TaskExecution {
     combinedRankScore: number
   }[]
   finalOutput?: string
+  finalAnswer?: string
   reflectionLesson?: string
   trustUpdates: {
     experienceId: string
@@ -72,7 +88,9 @@ export interface TaskExecution {
   tokensUsed: number
   latencyMs: number
   outcomeQuality?: 'positive' | 'negative' | 'neutral'
+  outcomeScore?: number
   trajectory?: ExecutionStepTrace[]
+  messages?: ChatMessage[]
   createdAt: string
 }
 

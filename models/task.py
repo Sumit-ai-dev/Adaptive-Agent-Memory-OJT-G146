@@ -9,7 +9,7 @@ import re
 from typing import Any, Dict, List, Optional, Union
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from models.domain import MemoryMode, TaskDomain
 from models.experience import Experience, ExperienceMatch
@@ -185,6 +185,26 @@ class ExecutionStepTrace(BaseModel):
     metadata: Optional[Dict[str, Any]] = None
 
 
+class ChatMessage(BaseModel):
+    """Single turn message in a multi-turn conversational session."""
+    model_config = ConfigDict(
+        alias_generator=to_camel,
+        populate_by_name=True,
+        extra="ignore",
+    )
+
+    role: str = Field(..., description="Message role: 'user', 'assistant', or 'system'")
+    content: str = Field(..., min_length=1, max_length=32000, description="Text content of the message")
+
+    @field_validator("role")
+    @classmethod
+    def validate_role(cls, v: str) -> str:
+        role_clean = (v or "").strip().lower()
+        if role_clean not in {"user", "assistant", "system"}:
+            raise ValueError(f"Invalid message role '{v}'. Allowed roles: 'user', 'assistant', 'system'")
+        return role_clean
+
+
 class TaskExecuteRequest(BaseModel):
     """Incoming request to execute an agent task."""
     model_config = ConfigDict(
@@ -194,6 +214,15 @@ class TaskExecuteRequest(BaseModel):
     )
 
     task_input: str = Field(..., min_length=1, description="The user prompt or task specification", alias="taskInput")
+    session_id: Optional[str] = Field(
+        default=None,
+        alias="sessionId",
+        description="Optional session ID for grouping multi-turn conversation executions",
+    )
+    messages: Optional[List[ChatMessage]] = Field(
+        default=None,
+        description="Prior conversation history turns for continuous dialogue context",
+    )
     task_domain: TaskDomain = Field(default=TaskDomain.GENERAL, alias="taskDomain")
     domain_alias: Optional[TaskDomain] = Field(default=None, alias="domain")
     memory_enabled: bool = Field(default=True, alias="memoryEnabled")
@@ -226,6 +255,31 @@ class TaskExecuteRequest(BaseModel):
         alias="outcomeThreshold",
         description="F3: explicit binarisation cut-point, recorded on every outcome",
     )
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return None
+        if len(v) > 128:
+            raise ValueError("session_id must not exceed 128 characters")
+        if not re.match(r"^[a-zA-Z0-9_\-.:]+$", v):
+            raise ValueError("session_id contains invalid characters. Use alphanumeric, hyphens, underscores, dots, or colons.")
+        return v
+
+    @field_validator("messages")
+    @classmethod
+    def validate_messages(cls, v: Optional[List[ChatMessage]]) -> Optional[List[ChatMessage]]:
+        if v is None:
+            return None
+        # Enforce reasonable context budget (retain up to last 50 turns)
+        MAX_MESSAGES = 50
+        if len(v) > MAX_MESSAGES:
+            v = v[-MAX_MESSAGES:]
+        return v
 
     @model_validator(mode="before")
     @classmethod
@@ -261,6 +315,8 @@ class TaskExecution(BaseModel):
     id: str = Field(default_factory=lambda: f"exec_{uuid.uuid4().hex[:8]}")
     execution_id: Optional[str] = None
     task_id: Optional[str] = None
+    session_id: Optional[str] = Field(default=None, alias="sessionId")
+    messages: List[ChatMessage] = Field(default_factory=list, alias="messages")
     user_id: Optional[str] = None
     task_input: str = Field(..., alias="taskInput")
     task_domain: TaskDomain = Field(default=TaskDomain.GENERAL, alias="taskDomain")

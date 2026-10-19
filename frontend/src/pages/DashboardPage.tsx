@@ -16,6 +16,7 @@ import MemoryExplorer from '../components/MemoryExplorer'
 import PromptConsole from '../components/PromptConsole'
 import ExecutionStepper from '../components/ExecutionStepper'
 import ContextInspector from '../components/ContextInspector'
+import ConversationStudio from '../components/ConversationStudio'
 import TheoremSandbox from '../components/TheoremSandbox'
 import BenchmarkMatrix from '../components/BenchmarkMatrix'
 import AuthModal from '../components/AuthModal'
@@ -341,21 +342,29 @@ export default function DashboardPage() {
 
           {/* TAB 2: STUDIO */}
           {activeTab === 'studio' && (
-            <div className="space-y-6 anim-fade-in">
+            <div className="space-y-4 anim-fade-in">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
                     Execution Studio
                   </h2>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Visibly track: Retrieve → Execute → Evaluate → Reflect → Trust Update.
+                    Conversational agent with multi-turn context and per-turn AEMA 5-node cognitive traces.
                   </p>
                 </div>
               </div>
 
-              <PromptConsole onRunTask={handleRunTask} isRunning={isExecuting} />
-              <ExecutionStepper currentStage={currentStage} execution={activeExecution} />
-              <ContextInspector execution={activeExecution} />
+              <ConversationStudio
+                onExecutionComplete={async (exec) => {
+                  setActiveExecution(exec)
+                  setSelectedExecution(exec)
+                  setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
+                  const updatedExps = await fetchExperiences()
+                  setExperiences(updatedExps)
+                  const updatedMetrics = await fetchTelemetry()
+                  setMetrics(updatedMetrics)
+                }}
+              />
             </div>
           )}
 
@@ -398,11 +407,8 @@ export default function DashboardPage() {
                 {recentExecutions.length > 0 && (
                   <button
                     onClick={async () => {
-                      const adminKey = prompt(
-                        'Enter ADMIN_API_KEY to authorize clearing history (or leave blank if VITE_ADMIN_API_KEY is configured):'
-                      )
-                      if (adminKey === null) return // User cancelled prompt
-                      const res = await clearExecutionsApi(adminKey.trim() || undefined)
+                      if (!window.confirm('Clear all historical execution runs and traces?')) return
+                      const res = await clearExecutionsApi()
                       if (res.success) {
                         setRecentExecutions([])
                         setSelectedExecution(null)

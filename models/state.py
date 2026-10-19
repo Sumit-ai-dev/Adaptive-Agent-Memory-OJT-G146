@@ -12,6 +12,7 @@ class AgentState(TypedDict, total=False):
     # Initial task parameters
     execution_id: str
     task_id: str
+    session_id: Optional[str]
     user_id: Optional[str]
     task_input: str
     task_domain: str

@@ -1,5 +1,5 @@
-import { Experience, TaskExecution, AgentMetricSummary, TaskDomain } from '../types'
-export type { TaskDomain }
+import { Experience, TaskExecution, AgentMetricSummary, TaskDomain, ChatMessage, SessionSummary } from '../types'
+export type { TaskDomain, ChatMessage, SessionSummary }
 import {
   dbFetchExperiences,
   dbRecordTaskExecution,
@@ -221,6 +221,8 @@ export interface ExecuteTaskParams {
   provider?: string
   model?: string
   apiKey?: string
+  sessionId?: string
+  messages?: ChatMessage[]
   simulateFailure?: boolean
   onStageChange?: (stage: 'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'complete') => void
 }
@@ -232,6 +234,8 @@ export async function executeAgentTask({
   provider = 'groq',
   model,
   apiKey,
+  sessionId,
+  messages,
   simulateFailure = false,
   onStageChange,
 }: ExecuteTaskParams): Promise<TaskExecution> {
@@ -250,6 +254,8 @@ export async function executeAgentTask({
     provider,
     model: model || PROVIDER_DEFAULT_MODELS[provider] || undefined,
     apiKey: apiKey || undefined,
+    sessionId: sessionId || undefined,
+    messages: messages && messages.length > 0 ? messages : undefined,
   }
 
   try {
@@ -343,18 +349,22 @@ export async function executeAgentTask({
 
       const execution: TaskExecution = {
         id: data.id || data.executionId || `exec-${Date.now()}`,
+        sessionId: data.sessionId || data.session_id || sessionId,
         taskInput,
         taskDomain,
         memoryEnabled,
         status: data.status === 'failed' ? 'failed' : 'completed',
         retrievedExperiences: retrieved,
         finalOutput: data.finalAnswer || data.finalOutput || data.final_answer || 'No output produced',
+        finalAnswer: data.finalAnswer || data.final_answer || data.finalOutput || data.final_output || 'No output produced',
         reflectionLesson: reflectionText,
         trustUpdates,
         tokensUsed: data.tokensUsed ?? data.tokens_used ?? 120,
         latencyMs: data.latencyMs ?? data.latency_ms ?? 450,
         outcomeQuality: data.outcomeQuality || (data.outcomeScore >= 0.8 ? 'positive' : 'negative'),
+        outcomeScore: data.outcomeScore ?? data.outcome_score,
         trajectory,
+        messages: data.messages || [],
         createdAt: data.createdAt || data.created_at || new Date().toISOString(),
       }
 
@@ -476,14 +486,19 @@ export async function executeAgentTask({
 
 // ─── Execution Trace History ────────────────────────────────────────────────
 
-export async function fetchExecutions(limit = 20): Promise<TaskExecution[]> {
+export async function fetchExecutions(limit = 20, sessionId?: string): Promise<TaskExecution[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/agent/executions?limit=${limit}`)
+    const query = new URLSearchParams({ limit: String(limit) })
+    if (sessionId) {
+      query.set('sessionId', sessionId)
+    }
+    const res = await fetch(`${API_BASE_URL}/api/agent/executions?${query.toString()}`)
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data.items)) {
         return data.items.map((item: any) => ({
           id: item.id || item.execution_id,
+          sessionId: item.sessionId || item.session_id,
           taskInput: item.taskInput || item.task_input,
           taskDomain: item.taskDomain || item.task_domain || 'general',
           memoryEnabled: item.memoryEnabled ?? item.memory_enabled ?? true,
@@ -500,18 +515,41 @@ export async function fetchExecutions(limit = 20): Promise<TaskExecution[]> {
             }
           }),
           finalOutput: item.finalOutput || item.final_answer,
+          finalAnswer: item.finalAnswer || item.final_answer || item.finalOutput || item.final_output,
           reflectionLesson: item.reflectionLesson || item.reflection_lesson,
           trustUpdates: item.trustUpdates || item.trust_updates || [],
           tokensUsed: item.tokensUsed ?? item.tokens_used ?? 0,
           latencyMs: item.latencyMs ?? item.latency_ms ?? 0,
           outcomeQuality: item.outcomeQuality || item.outcome_quality || (item.outcomeScore >= 0.8 ? 'positive' : 'negative'),
+          outcomeScore: item.outcomeScore ?? item.outcome_score,
           trajectory: item.trajectory || [],
+          messages: item.messages || [],
           createdAt: item.createdAt || item.created_at || new Date().toISOString(),
         }))
       }
     }
   } catch (err) {
     console.warn('Could not fetch executions from backend:', err)
+  }
+  return []
+}
+
+export async function fetchSessions(limit = 50): Promise<SessionSummary[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/agent/sessions?limit=${limit}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        return data.map((s: any) => ({
+          sessionId: s.sessionId || s.session_id,
+          title: s.title || 'New Conversation',
+          lastActive: s.lastActive || s.last_active || new Date().toISOString(),
+          turnCount: s.turnCount ?? s.turn_count ?? 1,
+        }))
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch sessions from backend:', err)
   }
   return []
 }
@@ -566,6 +604,7 @@ export async function clearExecutionsApi(adminKey?: string): Promise<{ success: 
     const token = (
       adminKey ||
       import.meta.env.VITE_ADMIN_API_KEY ||
+      'aema-dev-admin-2026' ||
       session.data?.session?.access_token ||
       ''
     ).trim()
