@@ -78,6 +78,21 @@ async def list_memories(
     Supports domain filtering, trust thresholds, and semantic similarity search.
     """
     try:
+        resolved_status: Optional[ExperienceStatus] = None
+        if status_filter and status_filter.lower() != "all":
+            sf = status_filter.lower().strip()
+            if sf in ("candidate", "provisional"):
+                resolved_status = ExperienceStatus.CANDIDATE
+            elif sf in ("deprecated", "quarantined"):
+                resolved_status = ExperienceStatus.DEPRECATED
+            elif sf == "active":
+                resolved_status = ExperienceStatus.ACTIVE
+            else:
+                try:
+                    resolved_status = ExperienceStatus(sf)
+                except ValueError:
+                    resolved_status = None
+
         if search:
             # P0-6: `LocalEmbedder` exposes `embed_text` / `embed_batch`; there is no
             # `embed`. The AttributeError was absorbed by the handler below and surfaced
@@ -90,6 +105,8 @@ async def list_memories(
             )
             out = []
             for exp, sim in results:
+                if resolved_status is not None and exp.status != resolved_status:
+                    continue
                 if exp.trust_score >= min_trust:
                     d = exp.model_dump(by_alias=True)
                     d["similarityScore"] = round(sim, 3)
@@ -100,7 +117,7 @@ async def list_memories(
         # Non-semantic listing
         all_exps = await shared_store.list_experiences(
             domain=TaskDomain(domain) if domain and domain != "all" else None,
-            status=ExperienceStatus(status_filter) if status_filter and status_filter != "all" else None,
+            status=resolved_status,
             min_trust=min_trust,
         )
 

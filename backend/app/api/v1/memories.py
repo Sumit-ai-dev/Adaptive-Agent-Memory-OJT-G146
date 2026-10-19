@@ -60,11 +60,22 @@ class MemoryFeedbackRequest(BaseModel):
 @router.get("", response_model=list[Experience], summary="List stored memories")
 async def list_memories(
     domain: Optional[TaskDomain] = Query(default=None, description="Filter by domain"),
-    status: Optional[ExperienceStatus] = Query(default=None, description="Filter by status (active, candidate, deprecated)"),
+    status: Optional[str] = Query(default=None, description="Filter by status (all, active, candidate/provisional, deprecated/quarantined)"),
     min_trust: float = Query(default=0.0, ge=0.0, le=1.0, description="Minimum trust score"),
 ):
     """Returns persistent experiences stored in SQLite matching optional query filters."""
-    return await shared_store.list_experiences(domain=domain, status=status, min_trust=min_trust)
+    status_filter: Optional[ExperienceStatus] = None
+    if status and status.lower() != "all":
+        s = status.lower()
+        if s in ("candidate", "provisional"):
+            status_filter = ExperienceStatus.CANDIDATE
+        elif s in ("deprecated", "quarantined"):
+            status_filter = ExperienceStatus.DEPRECATED
+        elif s == "active":
+            status_filter = ExperienceStatus.ACTIVE
+        else:
+            return []
+    return await shared_store.list_experiences(domain=domain, status=status_filter, min_trust=min_trust)
 
 
 @router.get("/{experience_id}", response_model=Experience, summary="Get single memory by ID")

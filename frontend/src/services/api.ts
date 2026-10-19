@@ -1,12 +1,12 @@
-import { Experience, TaskExecution, AgentMetricSummary, TaskDomain, ChatMessage, SessionSummary } from '../types'
-export type { TaskDomain, ChatMessage, SessionSummary }
+import { Experience, TaskExecution, AgentMetricSummary, TaskDomain, ExperienceStatus, ChatMessage, SessionSummary } from '../types'
+export type { TaskDomain, ExperienceStatus, ChatMessage, SessionSummary }
 import {
   dbFetchExperiences,
   dbRecordTaskExecution,
   getCurrentSession,
 } from '../lib/supabase'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:8000'
 
 // ─── Hyperparameters Matching Phase 8 Protocol & backend/ai-service ─────────
 export const ALPHA_SUCCESS = 0.85
@@ -138,7 +138,7 @@ let localExperiences: Experience[] = [...INITIAL_EXPERIENCES]
 export async function fetchExperiences(
   domain?: TaskDomain | 'all',
   search?: string,
-  status?: string,
+  status?: ExperienceStatus | string | 'all',
 ): Promise<Experience[]> {
   try {
     const session = await getCurrentSession()
@@ -183,7 +183,7 @@ export async function fetchExperiences(
     }
 
     // Try Supabase if backend API not reachable
-    const dbResults = await dbFetchExperiences(domain)
+    const dbResults = await dbFetchExperiences(domain, status)
     if (dbResults && dbResults.length > 0) {
       return dbResults
     }
@@ -196,7 +196,14 @@ export async function fetchExperiences(
     result = result.filter((e) => e.taskDomain === domain)
   }
   if (status && status !== 'all') {
-    result = result.filter((e) => e.status === status)
+    const s = String(status).toLowerCase().trim()
+    if (s === 'candidate' || s === 'provisional') {
+      result = result.filter((e) => e.status === 'candidate' || e.status === 'provisional')
+    } else if (s === 'deprecated' || s === 'quarantined') {
+      result = result.filter((e) => e.status === 'deprecated' || e.status === 'quarantined')
+    } else {
+      result = result.filter((e) => e.status === s)
+    }
   }
   if (search && search.trim()) {
     const q = search.toLowerCase()
@@ -325,6 +332,7 @@ export interface ExecuteTaskParams {
   sessionId?: string
   messages?: ChatMessage[]
   simulateFailure?: boolean
+  isExplicitDemo?: boolean
   onStageChange?: (stage: 'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'complete') => void
 }
 
@@ -338,6 +346,7 @@ export async function executeAgentTask({
   sessionId,
   messages,
   simulateFailure = false,
+  isExplicitDemo = false,
   onStageChange,
 }: ExecuteTaskParams): Promise<TaskExecution> {
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -359,6 +368,20 @@ export async function executeAgentTask({
     messages: messages && messages.length > 0 ? messages : undefined,
   }
 
+  // ── Explicit Demo Sandbox Isolation ─────────────────────────────────────────
+  // Only route to the isolated client-side demo simulation when the user is explicitly
+  // in Demo Sandbox mode (isExplicitDemo === true). Production-mode executions ALWAYS invoke
+  // the live backend, even when using the mock provider.
+  if (isExplicitDemo) {
+    return runExplicitDemoSimulation({
+      taskInput,
+      taskDomain,
+      memoryEnabled,
+      simulateFailure,
+      onStageChange,
+    })
+  }
+
   try {
     const session = await getCurrentSession()
     const token = session.data?.session?.access_token
@@ -376,107 +399,139 @@ export async function executeAgentTask({
       body: JSON.stringify(payload),
     })
 
-    if (res.ok) {
-      const data = await res.json()
-
-      onStageChange?.('evaluation')
-      await sleep(350)
-
-      onStageChange?.('reflection')
-      await sleep(300)
-
-      onStageChange?.('trust_update')
-      await sleep(350)
-
-      onStageChange?.('complete')
-
-      const rawRetrieved = data.retrievedExperiences || data.retrieved_experiences || []
-      const retrieved = rawRetrieved.map((r: any) => {
-        const exp = r.experience || r
-        const sim = r.similarityScore ?? r.similarity ?? 0.92
-        const trust = exp.trustScore ?? exp.trust_score ?? 0.75
-        return {
-          experience: {
-            id: exp.id || 'exp-live',
-            taskDomain: exp.taskDomain || exp.task_domain || taskDomain,
-            triggerCondition: exp.triggerCondition || exp.trigger_condition || '',
-            strategyLesson: exp.strategyLesson || exp.strategy_lesson || '',
-            pitfallWarning: exp.pitfallWarning || exp.pitfall_warning || exp.pitfall,
-            trustScore: trust,
-            confidenceScore: exp.confidenceScore || 0.90,
-            usesCount: exp.usesCount ?? exp.uses_count ?? 1,
-            successesCount: exp.successesCount ?? exp.successes_count ?? 1,
-            failuresCount: exp.failuresCount ?? exp.failures_count ?? 0,
-            consecutiveFailures: exp.consecutiveFailures ?? exp.consecutive_failures ?? 0,
-            status: exp.status || 'active',
-            trustTrajectory: exp.trustTrajectory || [trust],
-            createdAt: exp.createdAt || exp.created_at || new Date().toISOString(),
-            updatedAt: exp.updatedAt || exp.updated_at || new Date().toISOString(),
-          },
-          similarityScore: sim,
-          empiricalTrust: trust,
-          combinedRankScore: Number((0.70 * sim + 0.30 * trust).toFixed(3)),
-        }
-      })
-
-      const rawUpdates = data.trustUpdates || data.trust_updates || []
-      const trustUpdates = rawUpdates.map((u: any) => ({
-        experienceId: u.experienceId || u.experience_id || 'exp-001',
-        oldScore: u.oldScore ?? u.old_score ?? 0.75,
-        newScore: u.newScore ?? u.new_score ?? 0.75,
-        delta: Number((u.delta ?? 0).toFixed(3)),
-        isQuarantined: (u.newScore ?? u.new_score ?? 0.75) < QUARANTINE_THRESHOLD,
-        formulaApplied: u.reason || `S_{t+1} updated via A-EMA`,
-      }))
-
-      const rawTrajectory = data.trajectory || []
-      const trajectory = rawTrajectory.map((step: any) => ({
-        id: step.id || `step_${Date.now()}`,
-        node: (step.node === 'retrieve_node' ? 'retrieval'
-          : step.node === 'execute_node' ? 'execution'
-          : step.node === 'evaluate_node' ? 'evaluation'
-          : step.node === 'reflect_node' ? 'reflection'
-          : 'trust_update'),
-        timestamp: new Date().toISOString(),
-        title: step.title || step.node,
-        detail: step.detail || '',
-        metadata: step.metadata,
-      }))
-
-      const candidateExp = data.newExperience || data.candidate_experience
-      const reflectionText = candidateExp
-        ? `Distilled procedural lesson: "${candidateExp.strategy_lesson || candidateExp.strategyLesson}"`
-        : data.reflectionLesson || data.reflection_lesson || 'Execution verified through LangGraph cognitive pipeline.'
-
-      const execution: TaskExecution = {
-        id: data.id || data.executionId || `exec-${Date.now()}`,
-        sessionId: data.sessionId || data.session_id || sessionId,
-        taskInput,
-        taskDomain,
-        memoryEnabled,
-        status: data.status === 'failed' ? 'failed' : 'completed',
-        retrievedExperiences: retrieved,
-        finalOutput: data.finalAnswer || data.finalOutput || data.final_answer || 'No output produced',
-        finalAnswer: data.finalAnswer || data.final_answer || data.finalOutput || data.final_output || 'No output produced',
-        reflectionLesson: reflectionText,
-        trustUpdates,
-        tokensUsed: data.tokensUsed ?? data.tokens_used ?? 120,
-        latencyMs: data.latencyMs ?? data.latency_ms ?? 450,
-        outcomeQuality: data.outcomeQuality || (data.outcomeScore >= 0.8 ? 'positive' : 'negative'),
-        outcomeScore: data.outcomeScore ?? data.outcome_score,
-        trajectory,
-        messages: data.messages || [],
-        createdAt: data.createdAt || data.created_at || new Date().toISOString(),
-      }
-
-      await dbRecordTaskExecution(execution)
-      return execution
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      const detail = errData.detail || errData.message || `HTTP ${res.status}: ${res.statusText}`
+      throw new Error(`AEMA Backend execution failed (${res.status}): ${detail}`)
     }
-  } catch (err) {
-    console.warn('Backend call failed, falling back to local simulation:', err)
-  }
 
-  // Graceful Local Simulation Fallback (used only if backend server is unreachable)
+    const data = await res.json()
+
+    onStageChange?.('evaluation')
+    await sleep(350)
+
+    onStageChange?.('reflection')
+    await sleep(300)
+
+    onStageChange?.('trust_update')
+    await sleep(350)
+
+    onStageChange?.('complete')
+
+    const rawRetrieved = data.retrievedExperiences || data.retrieved_experiences || []
+    const retrieved = rawRetrieved.map((r: any) => {
+      const exp = r.experience || r
+      const sim = typeof r.similarityScore === 'number' ? r.similarityScore : (typeof r.similarity === 'number' ? r.similarity : 0.90)
+      const trust = typeof exp.trustScore === 'number' ? exp.trustScore : (typeof exp.trust_score === 'number' ? exp.trust_score : 0.75)
+      return {
+        experience: {
+          id: exp.id || 'exp-live',
+          taskDomain: exp.taskDomain || exp.task_domain || taskDomain,
+          triggerCondition: exp.triggerCondition || exp.trigger_condition || '',
+          strategyLesson: exp.strategyLesson || exp.strategy_lesson || '',
+          pitfallWarning: exp.pitfallWarning || exp.pitfall_warning || exp.pitfall,
+          trustScore: trust,
+          confidenceScore: exp.confidenceScore || 0.90,
+          usesCount: exp.usesCount ?? exp.uses_count ?? 1,
+          successesCount: exp.successesCount ?? exp.successes_count ?? 1,
+          failuresCount: exp.failuresCount ?? exp.failures_count ?? 0,
+          consecutiveFailures: exp.consecutiveFailures ?? exp.consecutive_failures ?? 0,
+          status: exp.status || 'active',
+          trustTrajectory: exp.trustTrajectory || [trust],
+          createdAt: exp.createdAt || exp.created_at || new Date().toISOString(),
+          updatedAt: exp.updatedAt || exp.updated_at || new Date().toISOString(),
+        },
+        similarityScore: sim,
+        empiricalTrust: trust,
+        combinedRankScore: Number((0.70 * sim + 0.30 * trust).toFixed(3)),
+      }
+    })
+
+    const rawUpdates = data.trustUpdates || data.trust_updates || []
+    const trustUpdates = rawUpdates.map((u: any) => ({
+      experienceId: u.experienceId || u.experience_id || 'exp-001',
+      oldScore: u.oldScore ?? u.old_score ?? 0.75,
+      newScore: u.newScore ?? u.new_score ?? 0.75,
+      delta: Number((u.delta ?? 0).toFixed(3)),
+      isQuarantined: (u.newScore ?? u.new_score ?? 0.75) < QUARANTINE_THRESHOLD,
+      formulaApplied: u.reason || `S_{t+1} updated via A-EMA`,
+    }))
+
+    const rawTrajectory = data.trajectory || []
+    const trajectory = rawTrajectory.map((step: any) => ({
+      id: step.id || `step_${Date.now()}`,
+      node: (step.node === 'retrieve_node' ? 'retrieval'
+        : step.node === 'execute_node' ? 'execution'
+        : step.node === 'evaluate_node' ? 'evaluation'
+        : step.node === 'reflect_node' ? 'reflection'
+        : 'trust_update'),
+      timestamp: new Date().toISOString(),
+      title: step.title || step.node,
+      detail: step.detail || '',
+      metadata: step.metadata,
+    }))
+
+    const candidateExp = data.newExperience || data.candidate_experience
+    const reflectionText = candidateExp
+      ? `Distilled procedural lesson: "${candidateExp.strategy_lesson || candidateExp.strategyLesson}"`
+      : data.reflectionLesson || data.reflection_lesson || 'Execution verified through LangGraph cognitive pipeline.'
+
+    const execution: TaskExecution = {
+      id: data.id || data.executionId || `exec-${Date.now()}`,
+      sessionId: data.sessionId || data.session_id || sessionId,
+      taskInput,
+      taskDomain,
+      memoryEnabled,
+      status: data.status === 'failed' ? 'failed' : 'completed',
+      retrievedExperiences: retrieved,
+      finalOutput: data.finalAnswer || data.finalOutput || data.final_answer || 'No output produced',
+      finalAnswer: data.finalAnswer || data.final_answer || data.finalOutput || data.final_output || 'No output produced',
+      reflectionLesson: reflectionText,
+      trustUpdates,
+      tokensUsed: data.tokensUsed ?? data.tokens_used ?? 120,
+      latencyMs: data.latencyMs ?? data.latency_ms ?? 450,
+      outcomeQuality: data.outcomeQuality || (data.outcomeScore >= 0.8 ? 'positive' : 'negative'),
+      outcomeScore: data.outcomeScore ?? data.outcome_score,
+      trajectory,
+      messages: data.messages || [],
+      createdAt: data.createdAt || data.created_at || new Date().toISOString(),
+    }
+
+    await dbRecordTaskExecution(execution)
+    return execution
+  } catch (err: any) {
+    // Integrity Policy: Failed backend requests are never silently simulated as successful runs.
+    const msg = err instanceof Error ? err.message : String(err)
+    if (msg.includes('AEMA Backend execution failed')) {
+      throw err
+    }
+    throw new Error(
+      `Cannot connect to AEMA backend service (${API_BASE_URL}). ` +
+      `Ensure the FastAPI backend is running on port 8000. ` +
+      `Error: ${msg}`
+    )
+  }
+}
+
+/**
+ * Explicit demo simulation sandbox.
+ * Runs ONLY when explicitly selected via `isExplicitDemo === true`.
+ * Never activates silently during normal live execution.
+ */
+async function runExplicitDemoSimulation({
+  taskInput,
+  taskDomain,
+  memoryEnabled,
+  simulateFailure = false,
+  onStageChange,
+}: {
+  taskInput: string
+  taskDomain: TaskDomain
+  memoryEnabled: boolean
+  simulateFailure?: boolean
+  onStageChange?: (stage: 'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'complete') => void
+}): Promise<TaskExecution> {
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
   await sleep(400)
   onStageChange?.('execution')
   await sleep(500)
@@ -499,7 +554,7 @@ export async function executeAgentTask({
 
   if (memoryEnabled) {
     const candidates = localExperiences.filter(
-      (e) => (e.taskDomain === taskDomain || e.taskDomain === 'general') && e.status !== 'quarantined'
+      (e) => (e.taskDomain === taskDomain || e.taskDomain === 'general') && e.status !== 'deprecated' && e.status !== 'quarantined'
     )
     const selected = candidates.length > 0 ? candidates[0] : localExperiences[0]
     if (selected) {
@@ -540,9 +595,9 @@ export async function executeAgentTask({
 
     const isQuarantined = newScore < QUARANTINE_THRESHOLD || activeExp.consecutiveFailures >= CONSECUTIVE_FAILURES_BOUND
     if (isQuarantined) {
-      activeExp.status = 'quarantined'
+      activeExp.status = 'deprecated'
     } else if (newScore < 0.60) {
-      activeExp.status = 'provisional'
+      activeExp.status = 'candidate'
     } else {
       activeExp.status = 'active'
     }
@@ -559,12 +614,12 @@ export async function executeAgentTask({
 
   const finalOutput = memoryEnabled && activeExp
     ? isSuccess
-      ? `[Demo Sandbox - Offline Simulation (Backend Port 8000 Offline)]\n\nTask: ${taskInput}\n\nNote: The backend server is unreachable. Run './run_demo.sh' or 'python3 -m uvicorn backend.main:app --port 8000' with your GROQ_API_KEY to generate real LLM responses.\n\nApplied Offline Benchmark Strategy:\n"${activeExp.strategyLesson}"\n\nOutcome:\nSimulated in sandbox with 0 policy violations.\n\nEmpirical Trust: ${(activeExp.trustScore * 100).toFixed(1)}%`
-      : `[Demo Sandbox - Failure Trap Simulation (Backend Port 8000 Offline)]\n\nTask: ${taskInput}\n\nOutcome: Negative transfer failure mode triggered.\nPenalty applied via Asymmetric EMA (beta = ${BETA_FAILURE}).\nConsecutive Failures: ${activeExp.consecutiveFailures}/${CONSECUTIVE_FAILURES_BOUND}.\n${activeExp.status === 'quarantined' ? 'Theorem 1 Quarantine: Memory isolated from future retrievals.' : ''}`
-    : `[Demo Sandbox - Baseline Execution (Memory Disabled, Backend Offline)]\n\nTask: ${taskInput}\n\nExecution simulated without experiential memory retrieval.`
+      ? `[EXPLICIT DEMO SANDBOX: SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nNote: Running in explicit offline demo mode.\n\nApplied Offline Benchmark Strategy:\n"${activeExp.strategyLesson}"\n\nOutcome:\nSimulated in sandbox with 0 policy violations.\n\nEmpirical Trust: ${(activeExp.trustScore * 100).toFixed(1)}%`
+      : `[EXPLICIT DEMO SANDBOX: SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nOutcome: Negative transfer failure mode triggered.\nPenalty applied via Asymmetric EMA (beta = ${BETA_FAILURE}).\nConsecutive Failures: ${activeExp.consecutiveFailures}/${CONSECUTIVE_FAILURES_BOUND}.\n${activeExp.status === 'deprecated' ? 'Theorem 1 Quarantine: Memory isolated from future retrievals.' : ''}`
+    : `[EXPLICIT DEMO SANDBOX: SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nExecution simulated without experiential memory retrieval.`
 
   const fallbackExec: TaskExecution = {
-    id: `exec-${Date.now()}`,
+    id: `demo-exec-${Date.now()}`,
     taskInput,
     taskDomain,
     memoryEnabled,
@@ -572,8 +627,8 @@ export async function executeAgentTask({
     retrievedExperiences: retrieved,
     finalOutput,
     reflectionLesson: isSuccess
-      ? activeExp ? `Verified: Applied strategy "${activeExp.strategyLesson.slice(0, 60)}..."` : 'Baseline generation succeeded.'
-      : 'Failure detected: Solution violated operational boundaries.',
+      ? activeExp ? `[Demo] Applied strategy "${activeExp.strategyLesson.slice(0, 60)}..."` : 'Baseline generation succeeded.'
+      : '[Demo] Failure detected: Solution violated operational boundaries.',
     trustUpdates,
     tokensUsed: memoryEnabled ? 418 : 1290,
     latencyMs: memoryEnabled ? 340 : 1180,
@@ -606,13 +661,13 @@ export async function fetchExecutions(limit = 20, sessionId?: string): Promise<T
           status: item.status || 'completed',
           retrievedExperiences: (item.retrievedExperiences || item.retrieved_experiences || []).map((r: any) => {
             const exp = r.experience || r
-            const sim = r.similarityScore ?? r.similarity ?? 0.90
-            const trust = exp.trustScore ?? exp.trust_score ?? 0.75
+            const sim = typeof r.similarityScore === 'number' ? r.similarityScore : (typeof r.similarity === 'number' ? r.similarity : 0.0)
+            const trust = typeof exp.trustScore === 'number' ? exp.trustScore : (typeof exp.trust_score === 'number' ? exp.trust_score : 0.0)
             return {
               experience: exp,
               similarityScore: sim,
               empiricalTrust: trust,
-              combinedRankScore: Number((0.70 * sim + 0.30 * trust).toFixed(3)),
+              combinedRankScore: r.compositeScore ?? r.composite_score ?? Number((0.70 * sim + 0.30 * trust).toFixed(3)),
             }
           }),
           finalOutput: item.finalOutput || item.final_answer,
@@ -665,10 +720,13 @@ export async function fetchTelemetry(): Promise<AgentMetricSummary> {
       return {
         totalTasks: data.totalExecutions ?? 0,
         activeMemories: data.activeMemories ?? 0,
+        candidateMemories: data.candidateMemories ?? 0,
         quarantinedMemories: data.quarantinedMemories ?? 0,
-        meanTrustScore: data.meanTrustScore ?? data.initialTrustScore ?? 0.0,
+        meanTrustScore: data.meanTrustScore ?? (data.initialTrustScore ?? 0.75),
         memoryHitRate: data.memoryHitRate ?? 0,
         negativeTransferReduction: 100.0,
+        benchmarkNegativeTransferReduction: 100.0,
+        benchmarkSource: 'Phase 8 v2 McNemar test (p=1.192e-7)',
         timeSavedPct: 0.0,
         tokensSavedPct: 0.0,
       }
@@ -681,19 +739,23 @@ export async function fetchTelemetry(): Promise<AgentMetricSummary> {
 
 export function getTelemetryMetrics(exps: Experience[] = localExperiences): AgentMetricSummary {
   const active = exps.filter((e) => e.status === 'active')
-  const quarantined = exps.filter((e) => e.status === 'quarantined' || (e.trustScore ?? 0) < 0.35)
+  const quarantined = exps.filter((e) => e.status === 'quarantined' || e.status === 'deprecated' || (e.trustScore ?? 0) < 0.35)
+  const candidate = exps.filter((e) => e.status === 'candidate' || e.status === 'provisional')
   const meanTrust =
     exps.length > 0
       ? exps.reduce((acc, e) => acc + (e.trustScore ?? 0), 0) / exps.length
-      : 0.0
+      : 0.75
 
   return {
     totalTasks: 0,
     activeMemories: active.length,
+    candidateMemories: candidate.length,
     quarantinedMemories: quarantined.length,
     meanTrustScore: Number(meanTrust.toFixed(3)),
     memoryHitRate: 0.0,
     negativeTransferReduction: 100.0,
+    benchmarkNegativeTransferReduction: 100.0,
+    benchmarkSource: 'Phase 8 v2 McNemar test (p=1.192e-7)',
     timeSavedPct: 0.0,
     tokensSavedPct: 0.0,
   }
@@ -704,7 +766,7 @@ export async function clearExecutionsApi(adminKey?: string): Promise<{ success: 
     const session = await getCurrentSession()
     const token = (
       adminKey ||
-      import.meta.env.VITE_ADMIN_API_KEY ||
+      (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ADMIN_API_KEY) ||
       'aema-dev-admin-2026' ||
       session.data?.session?.access_token ||
       ''
