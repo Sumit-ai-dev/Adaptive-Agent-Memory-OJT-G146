@@ -189,3 +189,22 @@ def symmetric_ema_update(
     """Symmetric Exponential Moving Average (Ablation Condition C: Reflexion baseline)."""
     updated = (alpha_symmetric * old_trust) + ((1.0 - alpha_symmetric) * outcome_score)
     return float(max(0.0, min(1.0, round(updated, 4))))
+
+
+def calculate_probation_quota(failures_count: int) -> int:
+    """
+    Computes the required probationary success quota N_req(k) for a candidate memory
+    with k historical failures:
+        N_req(k) = max(2, ceil(k / 2) + 1)
+
+    Evaluations for k = 0..6:
+      k=0: max(2, ceil(0/2) + 1) = max(2, 0 + 1) = 2
+      k=1: max(2, ceil(1/2) + 1) = max(2, 1 + 1) = 2
+      k=2: max(2, ceil(2/2) + 1) = max(2, 1 + 1) = 2
+      k=3: max(2, ceil(3/2) + 1) = max(2, 2 + 1) = 3
+      k=4: max(2, ceil(4/2) + 1) = max(2, 2 + 1) = 3
+      k=5: max(2, ceil(5/2) + 1) = max(2, 3 + 1) = 4
+      k=6: max(2, ceil(6/2) + 1) = max(2, 3 + 1) = 4
+    """
+    k = max(0, int(failures_count))
+    return max(2, math.ceil(k / 2.0) + 1)

@@ -63,7 +63,7 @@ export default function BenchmarkMatrix() {
 
         <div className="flex items-center gap-2">
           <a
-            href="https://www.kaggle.com/datasets/sumitaidev/agent-memory-confirmatory-benchmark"
+            href="https://www.kaggle.com/datasets/sumitdevai/agent-memory-resilience-benchmark"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-medium text-zinc-600 hover:text-indigo-600 dark:text-zinc-300 dark:hover:text-indigo-400 border-[#E6E6E1] dark:border-[#252B3B] transition-colors"
@@ -72,7 +72,7 @@ export default function BenchmarkMatrix() {
             <ExternalLink size={12} />
           </a>
           <a
-            href="https://huggingface.co/spaces/sumitaidev/adaptive-agent-memory"
+            href="https://huggingface.co/spaces/sumitaidev/adaptive-agent-memory-playground"
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono font-medium text-zinc-600 hover:text-indigo-600 dark:text-zinc-300 dark:hover:text-indigo-400 border-[#E6E6E1] dark:border-[#252B3B] transition-colors"

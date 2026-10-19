@@ -94,7 +94,7 @@ export default function Footer() {
             <ul className="space-y-2 text-xs">
               <li>
                 <a
-                  href="https://huggingface.co/spaces/sumitaidev/adaptive-agent-memory"
+                  href="https://huggingface.co/spaces/sumitaidev/adaptive-agent-memory-playground"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors"
@@ -105,12 +105,23 @@ export default function Footer() {
               </li>
               <li>
                 <a
-                  href="https://www.kaggle.com/datasets/sumitaidev/agent-memory-confirmatory-benchmark"
+                  href="https://www.kaggle.com/datasets/sumitdevai/agent-memory-resilience-benchmark"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors"
                 >
                   <span>Kaggle Benchmark Dataset</span>
+                  <ExternalLink size={11} />
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://huggingface.co/datasets/sumitaidev/agent-memory-resilience-benchmark"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-zinc-600 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors"
+                >
+                  <span>Hugging Face Dataset</span>
                   <ExternalLink size={11} />
                 </a>
               </li>

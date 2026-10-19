@@ -43,6 +43,7 @@ class Experience(BaseModel):
     uses_count: int = Field(default=0, ge=0, alias="usesCount")
     successes_count: int = Field(default=0, ge=0, alias="successesCount")
     failures_count: int = Field(default=0, ge=0, alias="failuresCount")
+    probation_successes: int = Field(default=0, ge=0, alias="probationSuccesses")
     status: ExperienceStatus = Field(default=ExperienceStatus.ACTIVE)
     embedding: Optional[list[float]] = Field(default=None, description="384-dimensional vector embedding")
     source_task_id: Optional[str] = Field(default=None, alias="sourceTaskId")

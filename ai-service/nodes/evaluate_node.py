@@ -31,8 +31,7 @@ async def evaluate_node(state: AgentState) -> Dict[str, Any]:
     task_input = state.get("task_input", "")
     threshold = float(state.get("outcome_threshold") or DEFAULT_OUTCOME_THRESHOLD)
 
-    # F2: evaluator comes from explicit task-level selection, or from directives
-    # embedded in task_input. `task_domain` is deliberately not consulted.
+    # Evaluator comes from explicit selection, directives, or task domain
     outcome = deterministic_evaluator.evaluate(
         final_answer=final_answer,
         evaluator=state.get("evaluator"),
@@ -41,6 +40,7 @@ async def evaluate_node(state: AgentState) -> Dict[str, Any]:
         negative_pitfall=negative_pitfall,
         positive_strategy=positive_strategy,
         task_input=task_input,
+        task_domain=state.get("task_domain"),
         outcome_threshold=threshold,
     )
 
@@ -68,6 +68,7 @@ async def evaluate_node(state: AgentState) -> Dict[str, Any]:
         "reason": reason,
         "tokens_used": int(state.get("tokens_used", 0) or 0),
         "is_terminal": False,  # resolved once, in execute_task, after the cycle ends
+        "details": outcome.details or {},
     })
 
     trace = {
@@ -88,6 +89,7 @@ async def evaluate_node(state: AgentState) -> Dict[str, Any]:
             "outcomeQuality": quality,
             "evaluator": outcome.evaluator_name.value,
             "evaluatorVersion": outcome.evaluator_version,
+            "evaluatorDetails": outcome.details or {},
         },
     }
 
@@ -102,6 +104,7 @@ async def evaluate_node(state: AgentState) -> Dict[str, Any]:
         "outcome_threshold": outcome.outcome_threshold,
         "evaluator_name": outcome.evaluator_name.value,
         "evaluator_version": outcome.evaluator_version,
+        "evaluator_details": outcome.details or {},
         "attempts": attempts,
         "trajectory": trajectory,
         "status": "reflecting",

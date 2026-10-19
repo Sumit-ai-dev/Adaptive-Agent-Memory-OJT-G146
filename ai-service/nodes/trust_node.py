@@ -34,12 +34,29 @@ QUARANTINE_THRESHOLD = 0.35
 def compute_next_trust(
     current_trust: float,
     outcome_score: float,
+    evaluator_details: dict[str, Any] | None = None,
 ) -> tuple[float, str]:
     """
     Computes updated trust score using Asymmetric EMA.
     Returns (new_trust_score, update_reason).
+
+    Policy:
+    - Genuine verified success (R >= 0.80): S_{new} = 0.85 * S_{old} + 0.15 (alpha = 0.85)
+    - Genuine verified failure (R <= 0.30): S_{new} = 0.70 * S_{old} (beta = 0.70)
+    - Inconclusive / Evaluator infrastructure errors: Trust is preserved (S_{new} = S_{old}).
+      Missing test suites and harness failures cannot verify candidate correctness,
+      so they must not receive the ordinary verified-failure trust penalty.
+    - Invalid generated code (syntax error, watchdog timeout, failed assertion): S_{new} = 0.70 * S_{old}.
     """
     old_trust = max(0.0, min(1.0, float(current_trust)))
+    details = evaluator_details or {}
+
+    # Explicitly inconclusive outcomes and infrastructure failures:
+    # Do not penalize memory for missing test code or harness crash.
+    if details.get("status") == "inconclusive" or details.get("error") in ("missing_test_code", "harness_error"):
+        reason = f"Inconclusive evaluation ({details.get('error', 'unverified')}): trust preserved, no failure penalty"
+        return old_trust, reason
+
     score = max(0.0, min(1.0, float(outcome_score)))
 
     if score >= 0.80:
@@ -65,30 +82,38 @@ def update_experience_trust(
     outcome_score: float,
     execution_id: str | None = None,
     quarantine_threshold: float = QUARANTINE_THRESHOLD,
+    evaluator_details: dict[str, Any] | None = None,
 ) -> tuple[Experience, TrustHistoryRecord, TrustUpdate]:
     """
     Updates an experience model's trust score, increments usage counters,
     checks the deprecation boundary, and generates an audit record.
     """
     old_trust = experience.trust_score
-    new_trust, reason = compute_next_trust(old_trust, outcome_score)
+    new_trust, reason = compute_next_trust(old_trust, outcome_score, evaluator_details=evaluator_details)
     delta = round(new_trust - old_trust, 4)
 
-    # Increment usage statistics
-    experience.uses_count += 1
-    if outcome_score >= 0.80:
-        experience.successes_count += 1
-        # Promote candidate to active upon verified success
-        if experience.status == ExperienceStatus.CANDIDATE:
-            experience.status = ExperienceStatus.ACTIVE
-            reason += " | Promoted from candidate to active"
-    elif outcome_score <= 0.30:
-        experience.failures_count += 1
+    details = evaluator_details or {}
+    is_inconclusive = details.get("status") == "inconclusive" or details.get("error") in ("missing_test_code", "harness_error")
 
-    # Apply Theorem 1 Quarantine Cutoff
-    if new_trust < quarantine_threshold:
-        experience.status = ExperienceStatus.DEPRECATED
-        reason += f" | Quarantined below theta={quarantine_threshold}"
+    # Increment usage statistics only for verified outcomes
+    if not is_inconclusive:
+        experience.uses_count += 1
+        if outcome_score >= 0.80:
+            experience.successes_count += 1
+            # Promote candidate to active upon verified success only if not a quarantined probation candidate
+            if experience.status == ExperienceStatus.CANDIDATE:
+                if getattr(experience, "failures_count", 0) == 0:
+                    experience.status = ExperienceStatus.ACTIVE
+                    reason += " | Promoted from candidate to active"
+                else:
+                    reason += " | Candidate success recorded (probation quota required for promotion)"
+        elif outcome_score <= 0.30:
+            experience.failures_count += 1
+
+        # Apply Theorem 1 Quarantine Cutoff
+        if new_trust < quarantine_threshold:
+            experience.status = ExperienceStatus.DEPRECATED
+            reason += f" | Quarantined below theta={quarantine_threshold}"
 
     experience.trust_score = new_trust
     experience.updated_at = datetime.now(timezone.utc)
@@ -123,6 +148,7 @@ def trust_node(state: dict[str, Any]) -> dict[str, Any]:
     outcome_score = state.get("outcome_score", 0.50)
     execution_id = state.get("task_id")
     raw_matches = state.get("retrieved_experiences", [])
+    evaluator_details = state.get("evaluator_details")
 
     updated_experiences: list[Experience] = []
     audit_records: list[TrustHistoryRecord] = []
@@ -140,6 +166,7 @@ def trust_node(state: dict[str, Any]) -> dict[str, Any]:
             experience=exp,
             outcome_score=outcome_score,
             execution_id=execution_id,
+            evaluator_details=evaluator_details,
         )
         updated_experiences.append(updated_exp)
         audit_records.append(record)
@@ -161,6 +188,7 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
     outcome_score = state.get("outcome_score", 0.85)
     execution_id = state.get("task_id")
     raw_matches = state.get("retrieved_memories") or state.get("retrieved_experiences", [])
+    evaluator_details = state.get("evaluator_details")
 
     # F1: this node sits ON the retry cycle and is therefore visited once per ATTEMPT.
     # It is now PURE -- it computes trust updates but performs no I/O. Persistence
@@ -177,7 +205,7 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
         if not exp_id:
             continue
         old_trust = float(exp_dict.get("trustScore", exp_dict.get("trust_score", 0.75)))
-        new_trust, reason = compute_next_trust(old_trust, outcome_score)
+        new_trust, reason = compute_next_trust(old_trust, outcome_score, evaluator_details=evaluator_details)
         delta = round(new_trust - old_trust, 4)
         is_quarantined = new_trust < QUARANTINE_THRESHOLD
 
@@ -186,7 +214,7 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
             "oldScore": old_trust,
             "newScore": new_trust,
             "delta": delta,
-            "status": "quarantined" if is_quarantined else "active",
+            "status": "quarantined" if is_quarantined else ("active" if old_trust >= QUARANTINE_THRESHOLD else "quarantined"),
             "reason": reason,
             # Set by execute_task when the single task-level write is performed.
             "persisted": False,
@@ -203,6 +231,8 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
         except ValueError:
             task_domain_enum = TaskDomain.GENERAL
 
+        initial_status = ExperienceStatus.ACTIVE if outcome_score >= 0.80 else ExperienceStatus.CANDIDATE
+
         new_exp_obj = Experience(
             task_domain=task_domain_enum,
             trigger_condition=candidate_exp.get("trigger_condition", ""),
@@ -210,7 +240,7 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
             pitfall=candidate_exp.get("pitfall"),
             confidence=candidate_exp.get("confidence", 0.85),
             trust_score=0.75,
-            status=ExperienceStatus.CANDIDATE,
+            status=initial_status,
         )
 
         # F1: the candidate is NOT written here. reflect_node also runs once per

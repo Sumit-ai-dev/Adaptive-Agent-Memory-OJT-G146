@@ -7,7 +7,7 @@ Memory Retriever supporting the 4 Controlled Experimental Ablation Conditions:
 """
 
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from ai_service.config import settings
 from ai_service.embedder import local_embedder
@@ -27,19 +27,28 @@ class MemoryRetriever:
     def __init__(self, store: Optional[BaseMemoryStore] = None):
         self.store = store or memory_store
 
-    async def retrieve(
+    async def retrieve_with_diagnostics(
         self,
         query: str,
         domain: TaskDomain = TaskDomain.GENERAL,
         mode: MemoryMode = MemoryMode.ADAPTIVE,
         top_k: int = 3,
-    ) -> List[RetrievedMemory]:
+    ) -> Tuple[List[RetrievedMemory], Dict[str, Any]]:
         """
-        Executes constrained retrieval based on the operational memory mode.
+        Executes constrained retrieval based on the operational memory mode and returns
+        both the ranked memories and retrieval funnel diagnostics.
         """
+        diagnostics: Dict[str, Any] = {
+            "candidate_count": 0,
+            "admissible_count": 0,
+            "gate_reasons": {},
+            "ranker": "lcb" if mode == MemoryMode.ADAPTIVE else f"retriever_{mode.value}",
+            "policy": "aema" if mode == MemoryMode.ADAPTIVE else mode.value,
+        }
+
         # Condition A: Memory OFF
         if mode == MemoryMode.OFF:
-            return []
+            return [], diagnostics
 
         # Embed query text
         query_vec = local_embedder.embed_text(query)
@@ -47,9 +56,11 @@ class MemoryRetriever:
         # Retrieve top candidates by raw cosine similarity
         raw_matches = await self.store.search_similar(query_vec, domain=domain, top_k=top_k * 3)
         if not raw_matches:
-            return []
+            return [], diagnostics
 
+        diagnostics["candidate_count"] = len(raw_matches)
         results: List[RetrievedMemory] = []
+        gate_reasons: Dict[str, str] = {}
 
         for exp, raw_sim in raw_matches:
             trust = float(exp.trust_score)
@@ -71,6 +82,8 @@ class MemoryRetriever:
                             composite_score=sim,
                         )
                     )
+                else:
+                    gate_reasons[exp.id] = f"similarity below naive cutoff ({sim:.3f})"
 
             # Condition C: Symmetric Reflexion
             elif mode == MemoryMode.SYMMETRIC:
@@ -93,18 +106,21 @@ class MemoryRetriever:
                     threshold=settings.RELIABILITY_THRESHOLD,
                     alpha_0=settings.PRIOR_ALPHA,
                     beta_0=settings.PRIOR_BETA,
-                ) or (trust < settings.THETA_CUTOFF)
+                ) or (trust < settings.THETA_CUTOFF) or (exp.status == ExperienceStatus.DEPRECATED)
 
                 if is_quar:
                     logger.debug(f"Quarantined memory {exp.id} (P(reliable) < {settings.QUARANTINE_GAMMA} or trust={trust:.2f})")
+                    gate_reasons[exp.id] = f"quarantined (P(reliable) < {settings.QUARANTINE_GAMMA} or trust={trust:.2f})"
                     continue
 
-                # 2. Status filter: Only active memories are eligible
+                # 2. Status filter: Require ACTIVE status for production task retrieval (CANDIDATE and DEPRECATED excluded)
                 if exp.status != ExperienceStatus.ACTIVE:
+                    gate_reasons[exp.id] = f"inadmissible_status_{exp.status.value if hasattr(exp.status, 'value') else exp.status}"
                     continue
 
                 # 3. Relevance threshold
                 if sim < settings.SIMILARITY_THRESHOLD:
+                    gate_reasons[exp.id] = f"similarity below threshold ({sim:.3f} < {settings.SIMILARITY_THRESHOLD})"
                     continue
 
                 # 4. Pessimistic Lower Confidence Bound (LCB) composite score
@@ -126,7 +142,25 @@ class MemoryRetriever:
 
         # Sort by composite score descending
         results.sort(key=lambda m: m.composite_score, reverse=True)
-        return results[:top_k]
+        diagnostics["admissible_count"] = len(results)
+        diagnostics["gate_reasons"] = gate_reasons
+        return results[:top_k], diagnostics
+
+    async def retrieve(
+        self,
+        query: str,
+        domain: TaskDomain = TaskDomain.GENERAL,
+        mode: MemoryMode = MemoryMode.ADAPTIVE,
+        top_k: int = 3,
+    ) -> List[RetrievedMemory]:
+        """
+        Executes constrained retrieval based on the operational memory mode.
+        Backwards-compatible wrapper returning List[RetrievedMemory].
+        """
+        results, _ = await self.retrieve_with_diagnostics(
+            query=query, domain=domain, mode=mode, top_k=top_k
+        )
+        return results
 
 
 # Global default retriever instance

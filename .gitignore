@@ -81,3 +81,5 @@ hf_space/
 hf_dataset/
 *.pdf
 logbooks/
+.agents/
+.statwrap/
