@@ -135,14 +135,22 @@ let localExperiences: Experience[] = [...INITIAL_EXPERIENCES]
 
 // ─── Experience Retrieval Service ───────────────────────────────────────────
 
-export async function fetchExperiences(domain?: TaskDomain | 'all'): Promise<Experience[]> {
+export async function fetchExperiences(
+  domain?: TaskDomain | 'all',
+  search?: string,
+  status?: string,
+): Promise<Experience[]> {
   try {
     const session = await getCurrentSession()
     const token = session.data?.session?.access_token
 
-    const url = domain && domain !== 'all'
-      ? `${API_BASE_URL}/api/v1/memories?domain=${domain}`
-      : `${API_BASE_URL}/api/v1/memories`
+    const params = new URLSearchParams()
+    if (domain && domain !== 'all') params.set('domain', domain)
+    if (search && search.trim()) params.set('search', search.trim())
+    if (status && status !== 'all') params.set('status', status)
+    const qs = params.toString() ? `?${params.toString()}` : ''
+
+    const url = `${API_BASE_URL}/api/v1/memories${qs}`
 
     const res = await fetch(url, {
       headers: {
@@ -153,7 +161,7 @@ export async function fetchExperiences(domain?: TaskDomain | 'all'): Promise<Exp
 
     if (res.ok) {
       const data = await res.json()
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         return data.map((item: any) => ({
           id: item.id,
           taskDomain: item.taskDomain || item.task_domain,
@@ -183,13 +191,74 @@ export async function fetchExperiences(domain?: TaskDomain | 'all'): Promise<Exp
     // Fall through to memory store cache
   }
 
-  if (!domain || domain === 'all') return localExperiences
-  return localExperiences.filter((e) => e.taskDomain === domain)
+  let result = localExperiences
+  if (domain && domain !== 'all') {
+    result = result.filter((e) => e.taskDomain === domain)
+  }
+  if (status && status !== 'all') {
+    result = result.filter((e) => e.status === status)
+  }
+  if (search && search.trim()) {
+    const q = search.toLowerCase()
+    result = result.filter(
+      (e) =>
+        e.triggerCondition.toLowerCase().includes(q) ||
+        e.strategyLesson.toLowerCase().includes(q) ||
+        (e.pitfallWarning && e.pitfallWarning.toLowerCase().includes(q))
+    )
+  }
+  return result
 }
 
 // ─── Save New Experience ────────────────────────────────────────────────────
 
 export async function createExperience(exp: Partial<Experience>): Promise<Experience> {
+  try {
+    const session = await getCurrentSession()
+    const token = session.data?.session?.access_token
+
+    const res = await fetch(`${API_BASE_URL}/api/v1/memories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify({
+        taskDomain: exp.taskDomain || 'general',
+        triggerCondition: exp.triggerCondition || '',
+        strategyLesson: exp.strategyLesson || '',
+        pitfall: exp.pitfallWarning || null,
+        trustScore: exp.trustScore || 0.50,
+        confidence: exp.confidenceScore || 0.85,
+      }),
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      const created: Experience = {
+        id: data.id,
+        taskDomain: data.taskDomain || data.task_domain,
+        triggerCondition: data.triggerCondition || data.trigger_condition,
+        strategyLesson: data.strategyLesson || data.strategy_lesson,
+        pitfallWarning: data.pitfallWarning || data.pitfall_warning || data.pitfall,
+        trustScore: data.trustScore !== undefined ? data.trustScore : data.trust_score,
+        confidenceScore: data.confidenceScore || 0.85,
+        usesCount: data.usesCount !== undefined ? data.usesCount : data.uses_count,
+        successesCount: data.successesCount !== undefined ? data.successesCount : data.successes_count,
+        failuresCount: data.failuresCount !== undefined ? data.failuresCount : data.failures_count,
+        consecutiveFailures: data.consecutiveFailures ?? data.consecutive_failures ?? 0,
+        status: data.status || 'candidate',
+        trustTrajectory: Array.isArray(data.trust_trajectory) ? data.trust_trajectory : [data.trust_score || 0.5],
+        createdAt: data.createdAt || data.created_at || new Date().toISOString(),
+        updatedAt: data.updatedAt || data.updated_at || new Date().toISOString(),
+      }
+      localExperiences = [created, ...localExperiences]
+      return created
+    }
+  } catch (err) {
+    console.warn('Backend createMemory failed, falling back to local memory store:', err)
+  }
+
   const newExp: Experience = {
     id: `exp-${String(localExperiences.length + 1).padStart(3, '0')}`,
     taskDomain: exp.taskDomain || 'general',
@@ -210,6 +279,30 @@ export async function createExperience(exp: Partial<Experience>): Promise<Experi
 
   localExperiences = [newExp, ...localExperiences]
   return newExp
+}
+
+// ─── Delete / Quarantine Experience ──────────────────────────────────────────
+
+export async function deleteExperienceApi(id: string): Promise<boolean> {
+  try {
+    const session = await getCurrentSession()
+    const token = session.data?.session?.access_token
+
+    const res = await fetch(`${API_BASE_URL}/api/v1/memories/${id}`, {
+      method: 'DELETE',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+    if (res.ok || res.status === 204) {
+      localExperiences = localExperiences.filter((e) => e.id !== id)
+      return true
+    }
+  } catch (err) {
+    console.warn('Backend deleteMemory failed:', err)
+  }
+  localExperiences = localExperiences.filter((e) => e.id !== id)
+  return true
 }
 
 // ─── Task Execution Service with Live Backend & Exact A-EMA ─────────────────
@@ -565,11 +658,11 @@ export async function fetchTelemetry(): Promise<AgentMetricSummary> {
         totalTasks: data.totalExecutions ?? 0,
         activeMemories: data.activeMemories ?? 0,
         quarantinedMemories: data.quarantinedMemories ?? 0,
-        meanTrustScore: data.initialTrustScore ?? 0.75,
+        meanTrustScore: data.meanTrustScore ?? data.initialTrustScore ?? 0.0,
         memoryHitRate: data.memoryHitRate ?? 0,
         negativeTransferReduction: 100.0,
-        timeSavedPct: 62.5,
-        tokensSavedPct: 67.8,
+        timeSavedPct: 0.0,
+        tokensSavedPct: 0.0,
       }
     }
   } catch {
@@ -578,23 +671,23 @@ export async function fetchTelemetry(): Promise<AgentMetricSummary> {
   return getTelemetryMetrics()
 }
 
-export function getTelemetryMetrics(): AgentMetricSummary {
-  const active = localExperiences.filter((e) => e.status === 'active')
-  const quarantined = localExperiences.filter((e) => e.status === 'quarantined')
+export function getTelemetryMetrics(exps: Experience[] = localExperiences): AgentMetricSummary {
+  const active = exps.filter((e) => e.status === 'active')
+  const quarantined = exps.filter((e) => e.status === 'quarantined' || (e.trustScore ?? 0) < 0.35)
   const meanTrust =
-    localExperiences.length > 0
-      ? localExperiences.reduce((acc, e) => acc + e.trustScore, 0) / localExperiences.length
-      : 0.91
+    exps.length > 0
+      ? exps.reduce((acc, e) => acc + (e.trustScore ?? 0), 0) / exps.length
+      : 0.0
 
   return {
-    totalTasks: 4820,
+    totalTasks: 0,
     activeMemories: active.length,
     quarantinedMemories: quarantined.length,
     meanTrustScore: Number(meanTrust.toFixed(3)),
-    memoryHitRate: 88.4,
+    memoryHitRate: 0.0,
     negativeTransferReduction: 100.0,
-    timeSavedPct: 62.5,
-    tokensSavedPct: 67.8,
+    timeSavedPct: 0.0,
+    tokensSavedPct: 0.0,
   }
 }
 

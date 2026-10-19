@@ -2,7 +2,7 @@
 
 export type TaskDomain = 'research' | 'coding' | 'analysis' | 'planning' | 'general'
 
-export type ExperienceStatus = 'active' | 'provisional' | 'quarantined' | 'deprecated'
+export type ExperienceStatus = 'active' | 'provisional' | 'candidate' | 'quarantined' | 'deprecated'
 
 export interface Experience {
   id: string

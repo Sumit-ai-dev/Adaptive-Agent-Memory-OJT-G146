@@ -36,7 +36,7 @@ async def get_telemetry():
     )
     total_uses = sum(e.uses_count for e in exps)
     total_successes = sum(e.successes_count for e in exps)
-    hit_rate = round((total_successes / total_uses * 100), 1) if total_uses > 0 else 85.0
+    hit_rate = round((total_successes / total_uses * 100), 1) if total_uses > 0 else 0.0
     task_count = total_uses + get_task_execution_count()
 
     return {
