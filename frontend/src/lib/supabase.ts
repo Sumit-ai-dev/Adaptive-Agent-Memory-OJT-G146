@@ -1,8 +1,8 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import type { Experience, TaskExecution, TrustHistoryRecord } from '../types'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || ''
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || ''
+const supabaseUrl = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_URL) || ''
+const supabaseAnonKey = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_SUPABASE_ANON_KEY) || ''
 
 export const isSupabaseConfigured = Boolean(
   supabaseUrl && 
@@ -73,14 +73,24 @@ export async function getCurrentSession() {
   return supabase.auth.getSession()
 }
 
-// ─── Direct Database Helpers (Supabase PostgreSQL / pgvector) ────────────────
+// --- Direct Database Helpers (Supabase PostgreSQL / pgvector) ----------------
 
-export async function dbFetchExperiences(domain?: string): Promise<Experience[]> {
+export async function dbFetchExperiences(domain?: string, status?: string): Promise<Experience[]> {
   if (!supabase) return []
   try {
     let query = supabase.from('experiences').select('*').order('trust_score', { ascending: false })
     if (domain && domain !== 'all') {
       query = query.eq('task_domain', domain)
+    }
+    if (status && status !== 'all') {
+      const s = status.toLowerCase().trim()
+      if (s === 'candidate' || s === 'provisional') {
+        query = query.in('status', ['candidate', 'provisional'])
+      } else if (s === 'deprecated' || s === 'quarantined') {
+        query = query.in('status', ['deprecated', 'quarantined'])
+      } else {
+        query = query.eq('status', s)
+      }
     }
     const { data, error } = await query
     if (error || !data) return []

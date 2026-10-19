@@ -16,7 +16,7 @@ export default function MemoryExplorer({
 }: MemoryExplorerProps) {
   const [search, setSearch] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<TaskDomain | 'all'>('all')
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'provisional' | 'quarantined'>('all')
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'candidate' | 'deprecated'>('all')
   const [selectedExp, setSelectedExp] = useState<Experience | null>(null)
   const [isAddOpen, setIsAddOpen] = useState(false)
 
@@ -38,7 +38,15 @@ export default function MemoryExplorer({
         exp.id.toLowerCase().includes(search.toLowerCase())
 
       const matchDomain = selectedDomain === 'all' || exp.taskDomain === selectedDomain
-      const matchStatus = statusFilter === 'all' || exp.status === statusFilter
+
+      let matchStatus = true
+      if (statusFilter === 'active') {
+        matchStatus = exp.status === 'active'
+      } else if (statusFilter === 'candidate') {
+        matchStatus = exp.status === 'candidate' || (exp.status as string) === 'provisional'
+      } else if (statusFilter === 'deprecated') {
+        matchStatus = exp.status === 'deprecated' || (exp.status as string) === 'quarantined'
+      }
 
       return matchSearch && matchDomain && matchStatus
     })
@@ -48,8 +56,8 @@ export default function MemoryExplorer({
     return {
       all: experiences.length,
       active: experiences.filter((e) => e.status === 'active').length,
-      provisional: experiences.filter((e) => e.status === 'provisional').length,
-      quarantined: experiences.filter((e) => e.status === 'quarantined').length,
+      candidate: experiences.filter((e) => e.status === 'candidate' || (e.status as string) === 'provisional').length,
+      deprecated: experiences.filter((e) => e.status === 'deprecated' || (e.status as string) === 'quarantined').length,
     }
   }, [experiences])
 
@@ -162,24 +170,24 @@ export default function MemoryExplorer({
             Active ({counts.active})
           </button>
           <button
-            onClick={() => setStatusFilter('provisional')}
+            onClick={() => setStatusFilter('candidate')}
             className={`px-2.5 py-1 rounded-md border transition-all ${
-              statusFilter === 'provisional'
+              statusFilter === 'candidate'
                 ? 'border-amber-600 bg-amber-50 text-amber-800 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-300 font-semibold'
                 : 'border-transparent text-zinc-400 hover:text-amber-600'
             }`}
           >
-            Provisional ({counts.provisional})
+            Candidate/Provisional ({counts.candidate})
           </button>
           <button
-            onClick={() => setStatusFilter('quarantined')}
+            onClick={() => setStatusFilter('deprecated')}
             className={`px-2.5 py-1 rounded-md border transition-all ${
-              statusFilter === 'quarantined'
+              statusFilter === 'deprecated'
                 ? 'border-rose-600 bg-rose-50 text-rose-800 dark:border-rose-500 dark:bg-rose-950/40 dark:text-rose-300 font-semibold'
                 : 'border-transparent text-zinc-400 hover:text-rose-600'
             }`}
           >
-            Quarantined ({counts.quarantined})
+            Deprecated/Quarantined ({counts.deprecated})
           </button>
         </div>
       </div>

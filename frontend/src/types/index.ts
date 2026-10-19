@@ -2,7 +2,7 @@
 
 export type TaskDomain = 'research' | 'coding' | 'analysis' | 'planning' | 'general'
 
-export type ExperienceStatus = 'active' | 'provisional' | 'quarantined' | 'deprecated'
+export type ExperienceStatus = 'active' | 'candidate' | 'deprecated' | 'provisional' | 'quarantined'
 
 export interface Experience {
   id: string
@@ -79,12 +79,15 @@ export interface TaskExecution {
 export interface AgentMetricSummary {
   totalTasks: number
   activeMemories: number
+  candidateMemories?: number
   quarantinedMemories: number
   meanTrustScore: number
   memoryHitRate: number // %
-  negativeTransferReduction: number // %
-  timeSavedPct: number
-  tokensSavedPct: number
+  negativeTransferReduction?: number // %
+  timeSavedPct?: number
+  tokensSavedPct?: number
+  benchmarkNegativeTransferReduction?: number
+  benchmarkSource?: string
 }
 
 export interface BenchmarkResult {

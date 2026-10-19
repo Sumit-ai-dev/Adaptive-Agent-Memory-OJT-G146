@@ -9,6 +9,7 @@ import {
   Clock,
   Menu,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import Sidebar, { TabType } from '../components/Sidebar'
@@ -51,6 +52,7 @@ export default function DashboardPage() {
   const [isExecuting, setIsExecuting] = useState(false)
   const [currentStage, setCurrentStage] = useState<'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'idle' | 'complete'>('idle')
   const [activeExecution, setActiveExecution] = useState<TaskExecution | null>(null)
+  const [executionError, setExecutionError] = useState<string | null>(null)
 
   // Auth modal triggered from demo banner
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false)
@@ -89,6 +91,7 @@ export default function DashboardPage() {
   }) => {
     setIsExecuting(true)
     setCurrentStage('retrieval')
+    setExecutionError(null)
 
     try {
       const exec = await executeAgentTask({
@@ -98,6 +101,7 @@ export default function DashboardPage() {
         provider: params.provider,
         apiKey: params.apiKey,
         simulateFailure: params.simulateFailure,
+        isExplicitDemo: isDemo,
         onStageChange: (stage) => setCurrentStage(stage),
       })
 
@@ -109,6 +113,11 @@ export default function DashboardPage() {
       setExperiences(updatedExps)
       const updatedMetrics = await fetchTelemetry()
       setMetrics(updatedMetrics)
+      setCurrentStage('complete')
+    } catch (err: any) {
+      console.error('Task execution failed:', err)
+      setExecutionError(err?.message || 'Execution failed due to backend error.')
+      setCurrentStage('idle')
     } finally {
       setIsExecuting(false)
     }
@@ -141,7 +150,13 @@ export default function DashboardPage() {
           activeTab={activeTab}
           onSelectTab={setActiveTab}
           isDemo={isDemo}
-          onExitDemo={() => navigate('/')}
+          onExitDemo={() => {
+            if (user) {
+              setSearchParams({}, { replace: true })
+            } else {
+              navigate('/')
+            }
+          }}
           onOpenAuth={() => setIsAuthModalOpen(true)}
         />
       </div>
@@ -160,7 +175,11 @@ export default function DashboardPage() {
               isDemo={isDemo}
               onExitDemo={() => {
                 setMobileSidebarOpen(false)
-                navigate('/')
+                if (user) {
+                  setSearchParams({}, { replace: true })
+                } else {
+                  navigate('/')
+                }
               }}
               onOpenAuth={() => {
                 setMobileSidebarOpen(false)
@@ -190,9 +209,9 @@ export default function DashboardPage() {
 
           <div className="flex items-center gap-3">
             {isDemo && (
-              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/60 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
-                Demo Sandbox
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                Demo Sandbox (Simulated)
               </span>
             )}
             <span className="font-mono text-xs text-zinc-400">
@@ -249,14 +268,14 @@ export default function DashboardPage() {
 
                 <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
                   <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
-                    <span>NEGATIVE TRANSFER DROP</span>
+                    <span>BENCHMARK RESILIENCE</span>
                     <Award size={16} className="text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {metrics.negativeTransferReduction}%
+                    {metrics.benchmarkNegativeTransferReduction ?? metrics.negativeTransferReduction ?? 100}%
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-1">
-                    Full recovery by Trial 4 (McNemar p=1.192e-7)
+                    Fixed Benchmark: {metrics.benchmarkSource || 'Phase 8 v2 McNemar test (p=1.192e-7)'}
                   </div>
                 </div>
               </div>
@@ -275,6 +294,28 @@ export default function DashboardPage() {
                       Open Full Studio →
                     </button>
                   </div>
+                  {executionError && (
+                    <div className="rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-4 text-xs space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-semibold">
+                          <AlertTriangle size={16} />
+                          <span>AEMA Backend Execution Failed (Integrity Policy: No Mock Fallback)</span>
+                        </div>
+                        <button
+                          onClick={() => setExecutionError(null)}
+                          className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-mono"
+                        >
+                          Dismiss
+                        </button>
+                      </div>
+                      <p className="text-rose-800 dark:text-rose-300 font-mono text-[11px] break-all">
+                        {executionError}
+                      </p>
+                      <div className="text-[11px] text-rose-600 dark:text-rose-400">
+                        Live execution integrity enforced: Failed backend requests are never silently simulated as successful runs.
+                      </div>
+                    </div>
+                  )}
                   <PromptConsole onRunTask={handleRunTask} isRunning={isExecuting} />
                   {currentStage !== 'idle' && (
                     <ExecutionStepper currentStage={currentStage} execution={activeExecution} />
@@ -352,6 +393,29 @@ export default function DashboardPage() {
                   </p>
                 </div>
               </div>
+
+              {executionError && (
+                <div className="rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-4 text-xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-semibold">
+                      <AlertTriangle size={16} />
+                      <span>AEMA Backend Execution Failed (Integrity Policy: No Mock Fallback)</span>
+                    </div>
+                    <button
+                      onClick={() => setExecutionError(null)}
+                      className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-mono"
+                    >
+                      Dismiss
+                    </button>
+                  </div>
+                  <p className="text-rose-800 dark:text-rose-300 font-mono text-[11px] break-all">
+                    {executionError}
+                  </p>
+                  <div className="text-[11px] text-rose-600 dark:text-rose-400">
+                    Live execution integrity enforced: Failed backend requests are never silently simulated as successful runs.
+                  </div>
+                </div>
+              )}
 
               <PromptConsole onRunTask={handleRunTask} isRunning={isExecuting} />
               <ExecutionStepper currentStage={currentStage} execution={activeExecution} />

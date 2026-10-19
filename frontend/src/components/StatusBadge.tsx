@@ -35,8 +35,9 @@ export default function StatusBadge({ status, size = 'sm', className = '' }: Sta
         </span>
       )
 
-    case 'Preview':
+    case 'candidate':
     case 'provisional':
+    case 'Preview':
       return (
         <span
           className={`inline-flex items-center gap-1.5 font-mono font-medium rounded-md border ${sizeClasses} ${className}
@@ -44,11 +45,12 @@ export default function StatusBadge({ status, size = 'sm', className = '' }: Sta
             dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-800/60`}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-          {status === 'provisional' ? 'Provisional' : 'Preview'}
+          {status === 'candidate' ? 'Candidate' : status === 'provisional' ? 'Candidate (Provisional)' : 'Preview'}
         </span>
       )
 
     case 'quarantined':
+    case 'deprecated':
       return (
         <span
           className={`inline-flex items-center gap-1.5 font-mono font-medium rounded-md border ${sizeClasses} ${className}
@@ -56,12 +58,11 @@ export default function StatusBadge({ status, size = 'sm', className = '' }: Sta
             dark:bg-rose-950/40 dark:text-rose-300 dark:border-rose-800/60`}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-          Quarantined
+          {status === 'deprecated' ? 'Deprecated (Quarantined)' : 'Quarantined'}
         </span>
       )
 
     case 'Planned':
-    case 'deprecated':
     default:
       return (
         <span
@@ -70,7 +71,7 @@ export default function StatusBadge({ status, size = 'sm', className = '' }: Sta
             dark:bg-zinc-800/60 dark:text-zinc-400 dark:border-zinc-700`}
         >
           <span className="w-1.5 h-1.5 rounded-full bg-zinc-400" />
-          {status === 'deprecated' ? 'Deprecated' : 'Planned'}
+          Planned
         </span>
       )
   }
