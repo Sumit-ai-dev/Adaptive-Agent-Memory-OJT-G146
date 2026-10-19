@@ -113,9 +113,9 @@ class MemoryRetriever:
                     gate_reasons[exp.id] = f"quarantined (P(reliable) < {settings.QUARANTINE_GAMMA} or trust={trust:.2f})"
                     continue
 
-                # 2. Status filter: Exclude deprecated / quarantined memories
-                if exp.status == ExperienceStatus.DEPRECATED:
-                    gate_reasons[exp.id] = "deprecated"
+                # 2. Status filter: Require ACTIVE status for production task retrieval (CANDIDATE and DEPRECATED excluded)
+                if exp.status != ExperienceStatus.ACTIVE:
+                    gate_reasons[exp.id] = f"inadmissible_status_{exp.status.value if hasattr(exp.status, 'value') else exp.status}"
                     continue
 
                 # 3. Relevance threshold

@@ -53,8 +53,8 @@ def retrieve_experiences(
     matches: list[ExperienceMatch] = []
 
     for exp in candidates:
-        # 1. Filter out deprecated/quarantined experiences (Theorem 1 quarantine)
-        if exp.status == ExperienceStatus.DEPRECATED:
+        # 1. Require ACTIVE status (exclude DEPRECATED and CANDIDATE probationary memories)
+        if exp.status != ExperienceStatus.ACTIVE:
             continue
 
         # 2. Filter by domain (allow domain match or general)

@@ -15,7 +15,7 @@ from fastapi import APIRouter, Header, HTTPException, Query, status
 
 from ai_service.config import settings
 from ai_service.graph import execute_task
-from ai_service.memory.store import SQLiteMemoryStore
+from ai_service.memory.store import BaseMemoryStore, SQLiteMemoryStore, get_memory_store
 from models.domain import MemoryMode, TaskDomain
 from models.task import TaskExecuteRequest, TaskExecution
 
@@ -24,7 +24,7 @@ logger = logging.getLogger("backend.routes.agent")
 router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 
 # Global shared memory store for API server
-shared_store = SQLiteMemoryStore(db_path="data/adaptive_memory.db")
+shared_store: BaseMemoryStore = get_memory_store(db_path="data/adaptive_memory.db", auto_seed=False)
 
 # In-memory session cache — populated from SQLite on startup, kept in sync after that
 _execution_history: List[TaskExecution] = []

@@ -208,6 +208,8 @@ async def recover_memory(
             client_ref=request.client_ref,
         )
         return updated.model_dump(by_alias=True)
+    except NotImplementedError as nie:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(nie))
     except ValueError as ve:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
     except Exception as e:
@@ -255,6 +257,8 @@ async def validate_memory_probe(
             "outcome": outcome.model_dump(),
             "trustRecord": record.model_dump() if hasattr(record, "model_dump") else record.__dict__,
         }
+    except NotImplementedError as nie:
+        raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED, detail=str(nie))
     except ValueError as ve:
         err_msg = str(ve)
         if "Duplicate" in err_msg:

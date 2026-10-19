@@ -100,10 +100,13 @@ def update_experience_trust(
         experience.uses_count += 1
         if outcome_score >= 0.80:
             experience.successes_count += 1
-            # Promote candidate to active upon verified success
+            # Promote candidate to active upon verified success only if not a quarantined probation candidate
             if experience.status == ExperienceStatus.CANDIDATE:
-                experience.status = ExperienceStatus.ACTIVE
-                reason += " | Promoted from candidate to active"
+                if getattr(experience, "failures_count", 0) == 0:
+                    experience.status = ExperienceStatus.ACTIVE
+                    reason += " | Promoted from candidate to active"
+                else:
+                    reason += " | Candidate success recorded (probation quota required for promotion)"
         elif outcome_score <= 0.30:
             experience.failures_count += 1
 

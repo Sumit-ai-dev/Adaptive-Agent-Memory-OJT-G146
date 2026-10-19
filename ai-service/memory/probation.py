@@ -29,12 +29,18 @@ from models.experience import Experience, ExperienceStatus, TrustHistoryRecord
 logger = logging.getLogger("ai_service.memory.probation")
 
 
+import ast
+
 def normalize_for_fingerprint(text: str) -> str:
-    """Normalizes input text by trimming lines and removing blank lines for consistent SHA-256 hashing."""
+    """Normalizes input text by canonicalizing Python AST when possible, or trimming lines."""
     if not text:
         return ""
-    lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
-    return "\n".join(lines)
+    try:
+        parsed = ast.parse(text)
+        return ast.unparse(parsed).strip()
+    except Exception:
+        lines = [line.strip() for line in text.strip().splitlines() if line.strip()]
+        return "\n".join(lines)
 
 
 def compute_task_fingerprint(task_input: str, test_code: str) -> str:

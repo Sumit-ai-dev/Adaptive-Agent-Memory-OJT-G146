@@ -20,9 +20,11 @@ class LocalEmbedder:
         self.model_name = model_name
         self.dimension = 384
         self._model = None
+        self._load_attempted = False
         self._load_model()
 
     def _load_model(self) -> None:
+        self._load_attempted = True
         try:
             from sentence_transformers import SentenceTransformer
             # Load with local cache
@@ -39,7 +41,7 @@ class LocalEmbedder:
         """
         Embed a single text string into a normalized 384-dimensional vector.
         """
-        if self._model is None:
+        if self._model is None and not self._load_attempted:
             self._load_model()
 
         if self._model is not None:
@@ -55,7 +57,7 @@ class LocalEmbedder:
         """
         Batch embed multiple text strings.
         """
-        if self._model is None:
+        if self._model is None and not self._load_attempted:
             self._load_model()
 
         if self._model is not None:
