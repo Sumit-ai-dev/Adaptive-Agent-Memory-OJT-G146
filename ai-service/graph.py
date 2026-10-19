@@ -24,6 +24,7 @@ from models.state import AgentState
 from models.task import (
     DEFAULT_OUTCOME_THRESHOLD,
     AttemptRecord,
+    ChatMessage,
     ExecutionMetadata,
     ExecutionStatus,
     ExecutionStepTrace,
@@ -41,6 +42,11 @@ def should_loop_or_finish(state: AgentState) -> str:
     Cyclical routing decision:
     If the task failed (R < 0.80) and we haven't reached loop limit, re-execute with new constraints!
     """
+    # If the execution encountered an infrastructure/provider error or is inconclusive, do not loop
+    eval_details = state.get("evaluator_details") or {}
+    if eval_details.get("status") == "inconclusive" or eval_details.get("error") in ("missing_test_code", "harness_error", "provider_error"):
+        return END
+
     score = state.get("outcome_score", 1.0)
     loop_count = state.get("loop_count", 1)
     max_loops = state.get("max_loops", settings.MAX_CYCLICAL_LOOPS)
@@ -227,10 +233,18 @@ async def execute_task(
         policy_retriever = PolicyBackedRetriever(run=run_context, ranker=run_context.ranker)
         task_index = run_context.next_task_index()
 
+    # Format conversational history messages if supplied
+    history_messages: List[Dict[str, str]] = []
+    if request.messages:
+        for m in request.messages:
+            history_messages.append({"role": m.role, "content": m.content})
+
     initial_state: AgentState = {
         "execution_id": exec_id,
         "task_id": task_id,
+        "session_id": request.session_id,
         "task_input": request.task_input,
+        "messages": history_messages,
         "task_domain": request.task_domain.value if hasattr(request.task_domain, "value") else str(request.task_domain),
         "memory_enabled": request.memory_enabled,
         "memory_mode": request.memory_mode.value if hasattr(request.memory_mode, "value") else str(request.memory_mode),
@@ -340,7 +354,7 @@ async def execute_task(
         # store.update_trust touches no counters.
         is_inconclusive = (
             terminal_details.get("status") == "inconclusive"
-            or terminal_details.get("error") in ("missing_test_code", "harness_error")
+            or terminal_details.get("error") in ("missing_test_code", "harness_error", "provider_error")
         )
 
         # Exactly one write per (task, memory). Deduplicated by experience id so that
@@ -441,10 +455,21 @@ async def execute_task(
     else:
         quality = OutcomeQuality.NEGATIVE
 
+    # Format conversation messages for record
+    final_messages: list[ChatMessage] = []
+    for m in final_state.get("messages", []):
+        if isinstance(m, dict) and "role" in m and "content" in m:
+            try:
+                final_messages.append(ChatMessage(role=m["role"], content=m["content"]))
+            except Exception:
+                pass
+
     return TaskExecution(
         id=exec_id,
         execution_id=exec_id,
         task_id=task_id,
+        session_id=request.session_id,
+        messages=final_messages,
         task_input=request.task_input,
         task_domain=request.task_domain,
         memory_enabled=request.memory_enabled,

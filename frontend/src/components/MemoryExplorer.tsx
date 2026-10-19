@@ -5,14 +5,18 @@ import MemoryCard from './MemoryCard'
 
 interface MemoryExplorerProps {
   experiences: Experience[]
-  onRefresh?: () => void
+  isDemo?: boolean
+  onRefresh?: (domain?: TaskDomain | 'all', search?: string, status?: string) => void
   onAddExperience?: (exp: Partial<Experience>) => void
+  onDeleteExperience?: (id: string) => void
 }
 
 export default function MemoryExplorer({
   experiences,
+  isDemo = false,
   onRefresh,
   onAddExperience,
+  onDeleteExperience,
 }: MemoryExplorerProps) {
   const [search, setSearch] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<TaskDomain | 'all'>('all')
@@ -27,6 +31,21 @@ export default function MemoryExplorer({
   const [newPitfall, setNewPitfall] = useState('')
 
   const domains: (TaskDomain | 'all')[] = ['all', 'research', 'coding', 'analysis', 'planning', 'general']
+
+  const handleDomainChange = (dom: TaskDomain | 'all') => {
+    setSelectedDomain(dom)
+    onRefresh?.(dom, search, statusFilter)
+  }
+
+  const handleStatusChange = (stat: 'all' | 'active' | 'candidate' | 'deprecated') => {
+    setStatusFilter(stat)
+    onRefresh?.(selectedDomain, search, stat)
+  }
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    onRefresh?.(selectedDomain, search, statusFilter)
+  }
 
   const filtered = useMemo(() => {
     return experiences.filter((exp) => {
@@ -57,7 +76,7 @@ export default function MemoryExplorer({
       all: experiences.length,
       active: experiences.filter((e) => e.status === 'active').length,
       candidate: experiences.filter((e) => e.status === 'candidate' || (e.status as string) === 'provisional').length,
-      deprecated: experiences.filter((e) => e.status === 'deprecated' || (e.status as string) === 'quarantined').length,
+      deprecated: experiences.filter((e) => e.status === 'deprecated' || (e.status as string) === 'quarantined' || (e.trustScore ?? 0) < 0.35).length,
     }
   }, [experiences])
 
@@ -88,30 +107,42 @@ export default function MemoryExplorer({
 
   return (
     <div className="space-y-5">
+      {/* Demo Sandbox Alert Banner */}
+      {isDemo && (
+        <div className="p-3.5 rounded-xl border bg-indigo-50/70 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-900/50 text-indigo-950 dark:text-indigo-200 text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="font-mono font-semibold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-300 text-[10px]">
+              DEMO SANDBOX
+            </span>
+            <span>Displaying pre-seeded benchmark memories. Additions and updates in this mode run in-memory.</span>
+          </div>
+        </div>
+      )}
+
       {/* Search and Action Bar */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-        {/* Search Input */}
-        <div className="relative flex-1">
+        {/* Search Input Form */}
+        <form onSubmit={handleSearchSubmit} className="relative flex-1">
           <Search size={15} className="absolute left-3.5 top-3 text-zinc-400" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search triggers, verified strategies, or hazards..."
+            placeholder="Search triggers, verified strategies, or hazards (press Enter to query backend)..."
             className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border transition-colors outline-none
               bg-white border-[#E6E6E1] text-[#18181B] focus:border-indigo-600
               dark:bg-[#131722] dark:border-[#252B3B] dark:text-[#F4F4F6] dark:focus:border-indigo-400"
           />
-        </div>
+        </form>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-2">
           {onRefresh && (
             <button
-              onClick={onRefresh}
+              onClick={() => onRefresh(selectedDomain, search, statusFilter)}
               className="p-2 rounded-xl border transition-colors text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200
-                bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]"
-              title="Refresh experience index"
+                bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] cursor-pointer"
+              title="Refresh experience index from backend"
             >
               <RefreshCw size={15} />
             </button>
@@ -120,7 +151,7 @@ export default function MemoryExplorer({
           <button
             onClick={() => setIsAddOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white transition-all
-              bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 shadow-sm"
+              bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 shadow-sm cursor-pointer"
           >
             <Plus size={14} />
             <span>Record Experience</span>
@@ -135,8 +166,8 @@ export default function MemoryExplorer({
           {domains.map((dom) => (
             <button
               key={dom}
-              onClick={() => setSelectedDomain(dom)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono capitalize transition-all ${
+              onClick={() => handleDomainChange(dom)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-mono capitalize transition-all cursor-pointer ${
                 selectedDomain === dom
                   ? 'bg-indigo-600 text-white font-medium shadow-sm'
                   : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-[#1A1F2C]'
@@ -150,8 +181,8 @@ export default function MemoryExplorer({
         {/* Status Pill Filter */}
         <div className="flex items-center gap-1.5 text-xs font-mono">
           <button
-            onClick={() => setStatusFilter('all')}
-            className={`px-2.5 py-1 rounded-md border transition-all ${
+            onClick={() => handleStatusChange('all')}
+            className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
               statusFilter === 'all'
                 ? 'border-zinc-700 bg-zinc-200/70 text-zinc-900 dark:border-zinc-400 dark:bg-zinc-800 dark:text-zinc-100 font-semibold'
                 : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
@@ -160,8 +191,8 @@ export default function MemoryExplorer({
             All ({counts.all})
           </button>
           <button
-            onClick={() => setStatusFilter('active')}
-            className={`px-2.5 py-1 rounded-md border transition-all ${
+            onClick={() => handleStatusChange('active')}
+            className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
               statusFilter === 'active'
                 ? 'border-emerald-600 bg-emerald-50 text-emerald-800 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold'
                 : 'border-transparent text-zinc-400 hover:text-emerald-600'
@@ -170,8 +201,8 @@ export default function MemoryExplorer({
             Active ({counts.active})
           </button>
           <button
-            onClick={() => setStatusFilter('candidate')}
-            className={`px-2.5 py-1 rounded-md border transition-all ${
+            onClick={() => handleStatusChange('candidate')}
+            className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
               statusFilter === 'candidate'
                 ? 'border-amber-600 bg-amber-50 text-amber-800 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-300 font-semibold'
                 : 'border-transparent text-zinc-400 hover:text-amber-600'
@@ -180,8 +211,8 @@ export default function MemoryExplorer({
             Candidate/Provisional ({counts.candidate})
           </button>
           <button
-            onClick={() => setStatusFilter('deprecated')}
-            className={`px-2.5 py-1 rounded-md border transition-all ${
+            onClick={() => handleStatusChange('deprecated')}
+            className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
               statusFilter === 'deprecated'
                 ? 'border-rose-600 bg-rose-50 text-rose-800 dark:border-rose-500 dark:bg-rose-950/40 dark:text-rose-300 font-semibold'
                 : 'border-transparent text-zinc-400 hover:text-rose-600'
@@ -197,11 +228,27 @@ export default function MemoryExplorer({
         <div className="rounded-xl border p-12 text-center bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
           <Database size={32} className="mx-auto text-zinc-300 dark:text-zinc-600 mb-3" />
           <h3 className="text-sm font-semibold text-[#18181B] dark:text-[#F4F4F6]">
-            No matching experiences found
+            {experiences.length === 0
+              ? isDemo
+                ? 'No experiences in demo sandbox'
+                : 'No persistent experiences recorded yet'
+              : 'No matching experiences found'}
           </h3>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto">
-            Try adjusting your search query, domain filter, or status criteria.
+            {experiences.length === 0
+              ? isDemo
+                ? 'The demo sandbox environment has no loaded memories.'
+                : 'Experiences are distilled automatically after task runs in Execution Studio, or you can record one manually.'
+              : 'Try adjusting your search query, domain filter, or status criteria.'}
           </p>
+          {experiences.length === 0 && (
+            <button
+              onClick={() => setIsAddOpen(true)}
+              className="mt-4 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors cursor-pointer"
+            >
+              Record First Experience
+            </button>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -289,10 +336,28 @@ export default function MemoryExplorer({
               </div>
             </div>
 
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3 pt-2">
+              {onDeleteExperience && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      window.confirm(
+                        `Quarantine or delete experience ${selectedExp.id}? This will isolate it from agent task retrieval under Theorem 1.`
+                      )
+                    ) {
+                      onDeleteExperience(selectedExp.id)
+                      setSelectedExp(null)
+                    }
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-mono font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 transition-colors cursor-pointer"
+                >
+                  Quarantine / Delete
+                </button>
+              )}
               <button
                 onClick={() => setSelectedExp(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-100 hover:bg-zinc-200 dark:bg-[#1A1F2C] dark:hover:bg-[#252B3B] text-zinc-800 dark:text-zinc-200 transition-colors"
+                className="px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-100 hover:bg-zinc-200 dark:bg-[#1A1F2C] dark:hover:bg-[#252B3B] text-zinc-800 dark:text-zinc-200 transition-colors ml-auto cursor-pointer"
               >
                 Close Inspector
               </button>

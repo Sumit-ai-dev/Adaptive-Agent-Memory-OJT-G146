@@ -4,11 +4,12 @@ import {
   Shield,
   Database,
   Activity,
-  Award,
   CheckCircle2,
   Clock,
   Menu,
   ExternalLink,
+  PanelLeftClose,
+  PanelLeftOpen,
   AlertTriangle,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -17,12 +18,14 @@ import MemoryExplorer from '../components/MemoryExplorer'
 import PromptConsole from '../components/PromptConsole'
 import ExecutionStepper from '../components/ExecutionStepper'
 import ContextInspector from '../components/ContextInspector'
+import ConversationStudio from '../components/ConversationStudio'
 import TheoremSandbox from '../components/TheoremSandbox'
 import BenchmarkMatrix from '../components/BenchmarkMatrix'
 import AuthModal from '../components/AuthModal'
 import {
   fetchExperiences,
   createExperience,
+  deleteExperienceApi,
   executeAgentTask,
   fetchExecutions,
   fetchTelemetry,
@@ -48,6 +51,25 @@ export default function DashboardPage() {
   const [recentExecutions, setRecentExecutions] = useState<TaskExecution[]>([])
   const [selectedExecution, setSelectedExecution] = useState<TaskExecution | null>(null)
 
+  // Main application sidebar collapse state (persisted across refreshes)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('aema_sidebar_collapsed') === 'true'
+    } catch {
+      return false
+    }
+  })
+
+  const handleToggleSidebar = () => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev
+      try {
+        localStorage.setItem('aema_sidebar_collapsed', String(next))
+      } catch {}
+      return next
+    })
+  }
+
   // Execution Studio States
   const [isExecuting, setIsExecuting] = useState(false)
   const [currentStage, setCurrentStage] = useState<'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'idle' | 'complete'>('idle')
@@ -68,7 +90,7 @@ export default function DashboardPage() {
   // Load real persistent experiences, telemetry, and execution runs from backend
   useEffect(() => {
     fetchExperiences().then((exps) => {
-      setExperiences(exps.length > 0 ? exps : INITIAL_EXPERIENCES)
+      setExperiences(exps.length > 0 ? exps : (isDemo ? INITIAL_EXPERIENCES : []))
     })
     fetchTelemetry().then((m) => {
       setMetrics(m)
@@ -79,7 +101,7 @@ export default function DashboardPage() {
         setSelectedExecution(runs[0])
       }
     })
-  }, [])
+  }, [isDemo])
 
   const handleRunTask = async (params: {
     prompt: string
@@ -145,7 +167,7 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen flex bg-[#FBFBFA] dark:bg-[#0C0E14] text-[#18181B] dark:text-[#F4F4F6] transition-colors">
       {/* Desktop Sidebar */}
-      <div className="hidden lg:block">
+      <div className="hidden lg:block shrink-0 transition-all duration-300 ease-in-out">
         <Sidebar
           activeTab={activeTab}
           onSelectTab={setActiveTab}
@@ -158,6 +180,8 @@ export default function DashboardPage() {
             }
           }}
           onOpenAuth={() => setIsAuthModalOpen(true)}
+          collapsed={sidebarCollapsed}
+          onToggleCollapse={handleToggleSidebar}
         />
       </div>
 
@@ -197,9 +221,17 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-1.5 rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-500"
+              className="lg:hidden p-1.5 rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
             >
               <Menu size={16} />
+            </button>
+            <button
+              onClick={handleToggleSidebar}
+              className="hidden lg:flex p-1.5 rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              title={sidebarCollapsed ? 'Expand main sidebar' : 'Collapse main sidebar'}
+              aria-label={sidebarCollapsed ? 'Expand main sidebar' : 'Collapse main sidebar'}
+            >
+              {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             </button>
             <div className="font-semibold text-xs capitalize tracking-wide flex items-center gap-2">
               <span className="text-zinc-400 font-mono">Workspace /</span>
@@ -233,10 +265,14 @@ export default function DashboardPage() {
                     <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <div className="text-2xl font-bold font-mono text-[#18181B] dark:text-[#F4F4F6]">
-                    {(metrics.meanTrustScore * 100).toFixed(1)}%
+                    {experiences.length > 0
+                      ? `${((experiences.reduce((acc, e) => acc + (e.trustScore ?? 0), 0) / experiences.length) * 100).toFixed(1)}%`
+                      : 'N/A'}
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-1">
-                    Asymmetric EMA St across {experiences.length} memories
+                    {experiences.length > 0
+                      ? `Asymmetric EMA St across ${experiences.length} memories`
+                      : 'No memories recorded yet'}
                   </div>
                 </div>
 
@@ -246,10 +282,10 @@ export default function DashboardPage() {
                     <Database size={16} className="text-emerald-600 dark:text-emerald-400" />
                   </div>
                   <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
-                    {metrics.activeMemories}
+                    {experiences.filter((e) => e.status === 'active').length}
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-1">
-                    {metrics.quarantinedMemories} quarantined under Theorem 1
+                    {experiences.filter((e) => e.status === 'quarantined' || (e.trustScore ?? 0) < 0.35).length} quarantined under Theorem 1
                   </div>
                 </div>
 
@@ -259,17 +295,21 @@ export default function DashboardPage() {
                     <Activity size={16} className="text-indigo-600 dark:text-indigo-400" />
                   </div>
                   <div className="text-2xl font-bold font-mono text-[#18181B] dark:text-[#F4F4F6]">
-                    {metrics.memoryHitRate}%
+                    {metrics.totalTasks > 0 ? `${metrics.memoryHitRate}%` : '0.0%'}
                   </div>
                   <div className="text-[11px] text-zinc-500 mt-1">
-                    Similarity &gt; 0.70 with valid trust
+                    {metrics.totalTasks > 0
+                      ? `Live hit rate across ${metrics.totalTasks} recorded runs`
+                      : '0 runs recorded yet (execute in Studio)'}
                   </div>
                 </div>
 
                 <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
                   <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
                     <span>BENCHMARK RESILIENCE</span>
-                    <Award size={16} className="text-emerald-600 dark:text-emerald-400" />
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                      THEOREM 1
+                    </span>
                   </div>
                   <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
                     {metrics.benchmarkNegativeTransferReduction ?? metrics.negativeTransferReduction ?? 100}%
@@ -289,7 +329,7 @@ export default function DashboardPage() {
                     </h3>
                     <button
                       onClick={() => setActiveTab('studio')}
-                      className="text-xs font-mono text-indigo-600 dark:text-indigo-400 hover:underline"
+                      className="text-xs font-mono text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
                     >
                       Open Full Studio →
                     </button>
@@ -330,7 +370,7 @@ export default function DashboardPage() {
                   <div className="rounded-2xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-3 text-xs">
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-500 font-mono">Persistence:</span>
-                      <span className="font-mono font-semibold">PostgreSQL (pgvector)</span>
+                      <span className="font-mono font-semibold">SQLite (Local) / pgvector (Cloud)</span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-500 font-mono">Quarantine Bound:</span>
@@ -382,44 +422,29 @@ export default function DashboardPage() {
 
           {/* TAB 2: STUDIO */}
           {activeTab === 'studio' && (
-            <div className="space-y-6 anim-fade-in">
+            <div className="space-y-4 anim-fade-in">
               <div className="flex items-center justify-between">
                 <div>
                   <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
                     Execution Studio
                   </h2>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Visibly track: Retrieve → Execute → Evaluate → Reflect → Trust Update.
+                    Conversational agent with multi-turn context and per-turn AEMA 5-node cognitive traces.
                   </p>
                 </div>
               </div>
 
-              {executionError && (
-                <div className="rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-4 text-xs space-y-2">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-semibold">
-                      <AlertTriangle size={16} />
-                      <span>AEMA Backend Execution Failed (Integrity Policy: No Mock Fallback)</span>
-                    </div>
-                    <button
-                      onClick={() => setExecutionError(null)}
-                      className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-mono"
-                    >
-                      Dismiss
-                    </button>
-                  </div>
-                  <p className="text-rose-800 dark:text-rose-300 font-mono text-[11px] break-all">
-                    {executionError}
-                  </p>
-                  <div className="text-[11px] text-rose-600 dark:text-rose-400">
-                    Live execution integrity enforced: Failed backend requests are never silently simulated as successful runs.
-                  </div>
-                </div>
-              )}
-
-              <PromptConsole onRunTask={handleRunTask} isRunning={isExecuting} />
-              <ExecutionStepper currentStage={currentStage} execution={activeExecution} />
-              <ContextInspector execution={activeExecution} />
+              <ConversationStudio
+                onExecutionComplete={async (exec) => {
+                  setActiveExecution(exec)
+                  setSelectedExecution(exec)
+                  setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
+                  const updatedExps = await fetchExperiences()
+                  setExperiences(updatedExps)
+                  const updatedMetrics = await fetchTelemetry()
+                  setMetrics(updatedMetrics)
+                }}
+              />
             </div>
           )}
 
@@ -427,8 +452,13 @@ export default function DashboardPage() {
           {activeTab === 'memory' && (
             <div className="space-y-6 anim-fade-in">
               <div>
-                <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
-                  Experiential Memory Index
+                <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6] flex items-center gap-2">
+                  <span>Experiential Memory Index</span>
+                  {isDemo && (
+                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-medium">
+                      Demo Sandbox Mode
+                    </span>
+                  )}
                 </h2>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
                   7-tuple operational memories containing affirmative lessons and negative transfer pitfall bounds.
@@ -437,11 +467,22 @@ export default function DashboardPage() {
 
               <MemoryExplorer
                 experiences={experiences}
-                onRefresh={async () => {
-                  const exps = await fetchExperiences()
-                  setExperiences(exps)
+                isDemo={isDemo}
+                onRefresh={async (domain, search, status) => {
+                  const exps = await fetchExperiences(domain, search, status)
+                  setExperiences(exps.length > 0 ? exps : (isDemo ? INITIAL_EXPERIENCES : []))
+                  const updatedMetrics = await fetchTelemetry()
+                  setMetrics(updatedMetrics)
                 }}
                 onAddExperience={handleAddExperience}
+                onDeleteExperience={async (id) => {
+                  const ok = await deleteExperienceApi(id)
+                  if (ok) {
+                    setExperiences((prev) => prev.filter((e) => e.id !== id))
+                    const updatedMetrics = await fetchTelemetry()
+                    setMetrics(updatedMetrics)
+                  }
+                }}
               />
             </div>
           )}
@@ -462,11 +503,8 @@ export default function DashboardPage() {
                 {recentExecutions.length > 0 && (
                   <button
                     onClick={async () => {
-                      const adminKey = prompt(
-                        'Enter ADMIN_API_KEY to authorize clearing history (or leave blank if VITE_ADMIN_API_KEY is configured):'
-                      )
-                      if (adminKey === null) return // User cancelled prompt
-                      const res = await clearExecutionsApi(adminKey.trim() || undefined)
+                      if (!window.confirm('Clear all historical execution runs and traces?')) return
+                      const res = await clearExecutionsApi()
                       if (res.success) {
                         setRecentExecutions([])
                         setSelectedExecution(null)

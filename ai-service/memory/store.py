@@ -540,7 +540,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
             details = outcome.details or {}
             is_inconclusive = (
                 details.get("status") == "inconclusive"
-                or details.get("error") in ("missing_test_code", "harness_error", "infrastructure_error", "invalid_setup")
+                or details.get("error") in ("missing_test_code", "harness_error", "infrastructure_error", "invalid_setup", "provider_error")
                 or (bool(outcome.reason) and outcome.reason.strip().lower().startswith("inconclusive"))
             )
 
@@ -1218,7 +1218,7 @@ class PostgresMemoryStore(BaseMemoryStore):
                 details = outcome.details or {}
                 is_inconclusive = (
                     details.get("status") == "inconclusive"
-                    or details.get("error") in ("missing_test_code", "harness_error", "infrastructure_error", "invalid_setup")
+                    or details.get("error") in ("missing_test_code", "harness_error", "infrastructure_error", "invalid_setup", "provider_error")
                     or (bool(outcome.reason) and outcome.reason.strip().lower().startswith("inconclusive"))
                 )
 

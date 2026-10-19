@@ -10,8 +10,11 @@ Dispatches generation through the Universal BYOK LLM gateway (Groq, Gemini, Olla
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any, Dict, List, Optional
+
+logger = logging.getLogger("ai_service.nodes.execute_node")
 
 from ai_service.llm_client import llm_gateway, resolve_provider_config
 from models.provider import ModelProvider, ProviderConfig
@@ -72,20 +75,58 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
     else:
         task_input_with_context = task_input
 
-    messages = [
-        {"role": "system", "content": system_prompt},
-        {"role": "user", "content": task_input_with_context},
-    ]
+    # Build conversation history from state (preserving user/assistant sequence)
+    conversation_history: List[Dict[str, str]] = []
+    raw_history = state.get("messages", [])
+    if raw_history:
+        for msg in raw_history:
+            if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                role = str(msg["role"]).strip().lower()
+                # Skip prior system messages from history so our fresh AEMA system prompt
+                # with bilateral constraints (+sigma, -pi) remains authoritative at index 0.
+                if role == "system":
+                    continue
+                conversation_history.append({"role": role, "content": str(msg["content"])})
+
+    # Assemble prompt sequence:
+    # 1. System prompt with AEMA bilateral constraints (+sigma, -pi)
+    messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
+
+    # 2. Historical conversation messages (if any)
+    # Check if the final message in conversation_history already matches task_input_with_context or task_input
+    last_msg = conversation_history[-1] if conversation_history else None
+    is_duplicate_user = (
+        last_msg is not None
+        and last_msg.get("role") == "user"
+        and (
+            last_msg.get("content") == task_input_with_context
+            or last_msg.get("content") == task_input
+        )
+    )
+
+    if not is_duplicate_user:
+        messages.extend(conversation_history)
+        messages.append({"role": "user", "content": task_input_with_context})
+    else:
+        # History already ends with current user prompt; pass without duplicating
+        messages.extend(conversation_history[:-1])
+        messages.append({"role": "user", "content": task_input_with_context})
 
     # S8: single shared resolver, so every call site in the graph dispatches with
     # the run's declared provider/model/temperature.
     provider_config, requested_temperature = resolve_provider_config(state)
 
-    # Call Universal LLM Gateway. Passing `temperature` explicitly overrides the
+    # Call Universal LLM Gateway with error-safe handling. Passing `temperature` explicitly overrides the
     # config default; passing None leaves the config/provider default in force.
-    final_answer, tokens = await llm_gateway.generate(
-        messages, config=provider_config, temperature=requested_temperature,
-    )
+    try:
+        final_answer, tokens = await llm_gateway.generate(
+            messages, config=provider_config, temperature=requested_temperature,
+        )
+    except Exception as e:
+        logger.error(f"Universal LLM gateway call failed in execute_node: {e}", exc_info=True)
+        final_answer = f"Execution encountered a model provider error: {str(e)}"
+        tokens = 0
+
     duration_ms = int((time.time() - start_ts) * 1000)
 
     # Build stepper telemetry trace
@@ -114,12 +155,16 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
 
     accumulated_tokens = state.get("tokens_used", 0) + tokens
 
+    updated_messages = list(messages)
+    updated_messages.append({"role": "assistant", "content": final_answer})
+
     return {
         "final_answer": final_answer,
         "tool_calls": tool_calls,
         "tokens_used": accumulated_tokens,
         "loop_count": loop_count,
         "trajectory": trajectory,
+        "messages": updated_messages,
         "status": "evaluating",
     }
 

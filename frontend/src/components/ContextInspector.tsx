@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Code, Check, Copy } from 'lucide-react'
 import type { TaskExecution } from '../types'
+import MarkdownRenderer from './MarkdownRenderer'
 
 interface ContextInspectorProps {
   execution: TaskExecution | null
@@ -98,8 +99,8 @@ ${execution.taskInput}`
       <div className="p-4 text-xs font-mono overflow-x-auto max-h-[380px] leading-relaxed">
         {activeTab === 'output' && (
           <div className="space-y-3">
-            <div className="p-3 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">
-              {execution.finalOutput || 'No output generated.'}
+            <div className="p-3.5 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-800 dark:text-zinc-200">
+              <MarkdownRenderer content={execution.finalOutput || 'No output generated.'} />
             </div>
 
             {execution.reflectionLesson && (

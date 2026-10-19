@@ -26,7 +26,7 @@ router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 # Global shared memory store for API server
 shared_store: BaseMemoryStore = get_memory_store(db_path="data/adaptive_memory.db", auto_seed=False)
 
-# In-memory session cache — populated from SQLite on startup, kept in sync after that
+# In-memory session cache: populated from SQLite on startup, kept in sync after that
 _execution_history: List[TaskExecution] = []
 
 
@@ -39,6 +39,7 @@ def _ensure_executions_table() -> None:
         """
         CREATE TABLE IF NOT EXISTS task_executions (
             id                     TEXT PRIMARY KEY,
+            session_id             TEXT,
             task_input             TEXT NOT NULL,
             task_domain            TEXT NOT NULL,
             memory_mode            TEXT NOT NULL,
@@ -53,6 +54,15 @@ def _ensure_executions_table() -> None:
         )
         """
     )
+    # Backward compatibility: verify session_id column exists
+    cursor = conn.execute("PRAGMA table_info(task_executions)")
+    existing_cols = [row[1] for row in cursor.fetchall()]
+    if "session_id" not in existing_cols:
+        try:
+            conn.execute("ALTER TABLE task_executions ADD COLUMN session_id TEXT")
+            conn.commit()
+        except Exception as exc:
+            logger.warning(f"Could not add session_id column to task_executions: {exc}")
     conn.commit()
     conn.close()
 
@@ -65,13 +75,14 @@ def _save_execution_to_db(execution: TaskExecution) -> None:
         conn.execute(
             """
             INSERT OR REPLACE INTO task_executions
-                (id, task_input, task_domain, memory_mode, memory_enabled,
+                (id, session_id, task_input, task_domain, memory_mode, memory_enabled,
                  status, outcome_score, latency_ms, tokens_used,
                  new_experience_created, payload_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 execution.id,
+                execution.session_id,
                 (execution.task_input or "")[:500],
                 execution.task_domain.value,
                 execution.memory_mode.value,
@@ -94,6 +105,7 @@ def _save_execution_to_db(execution: TaskExecution) -> None:
 def _load_executions_from_db(
     domain: Optional[str] = None,
     memory_mode: Optional[str] = None,
+    session_id: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> "tuple[int, List[TaskExecution]]":
@@ -111,6 +123,9 @@ def _load_executions_from_db(
         if memory_mode and memory_mode != "all":
             where_clauses.append("memory_mode = ?")
             params.append(memory_mode)
+        if session_id:
+            where_clauses.append("session_id = ?")
+            params.append(session_id)
 
         where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
 
@@ -211,20 +226,66 @@ async def run_agent_task(request: TaskExecuteRequest) -> TaskExecution:
 async def list_executions(
     domain: Optional[str] = Query(None, description="Filter by task domain"),
     memory_mode: Optional[str] = Query(None, description="Filter by memory mode"),
+    session_id: Optional[str] = Query(None, alias="sessionId", description="Filter by session ID"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> Dict[str, Any]:
     """
-    Lists historical task execution records with optional domain/memory-mode filtering
-    and pagination. Reads from SQLite — persisted across server restarts.
+    Lists historical task execution records with optional domain/memory-mode/session_id filtering
+    and pagination. Reads from SQLite: persisted across server restarts.
     """
     total, items = _load_executions_from_db(
-        domain=domain, memory_mode=memory_mode, limit=limit, offset=offset
+        domain=domain,
+        memory_mode=memory_mode,
+        session_id=session_id,
+        limit=limit,
+        offset=offset,
     )
     return {
         "total": total,
         "items": [item.model_dump(by_alias=True) for item in items],
     }
+
+
+@router.get(
+    "/sessions",
+    response_model=List[Dict[str, Any]],
+    summary="List Recent Conversational Sessions",
+)
+async def list_sessions(
+    limit: int = Query(50, ge=1, le=100),
+) -> List[Dict[str, Any]]:
+    """
+    Returns unique recent conversation sessions with session ID, title, turn count,
+    and last activity timestamp from persisted execution history.
+    """
+    try:
+        conn = sqlite3.connect(shared_store.db_path)
+        rows = conn.execute(
+            """
+            SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+            FROM task_executions
+            WHERE session_id IS NOT NULL AND session_id != ''
+            GROUP BY session_id
+            ORDER BY last_active DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        conn.close()
+
+        sessions = []
+        for row in rows:
+            sessions.append({
+                "sessionId": row[0],
+                "title": (row[1] or "New Conversation")[:60],
+                "lastActive": row[2],
+                "turnCount": row[3],
+            })
+        return sessions
+    except Exception as exc:
+        logger.warning(f"Could not load sessions from SQLite: {exc}")
+        return []
 
 
 @router.get(

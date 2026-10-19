@@ -22,7 +22,7 @@ router = APIRouter(prefix="/telemetry", tags=["Dashboard Telemetry"])
 @router.get(
     "",
     response_model=Dict[str, Any],
-    summary="Get System Telemetry — real metrics only, no fabricated values",
+    summary="Get System Telemetry: real metrics only, no fabricated values",
 )
 async def get_telemetry() -> Dict[str, Any]:
     """
@@ -39,6 +39,11 @@ async def get_telemetry() -> Dict[str, Any]:
         e for e in all_exps
         if e.trust_score < 0.35 or e.status == ExperienceStatus.DEPRECATED
     ]
+
+    mean_trust = (
+        round(sum(e.trust_score for e in all_exps) / len(all_exps), 3)
+        if all_exps else 0.0
+    )
 
     # ── Execution metrics from SQLite task_executions table ───────────────────
     total_executions = 0

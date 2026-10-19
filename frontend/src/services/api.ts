@@ -1,5 +1,5 @@
-import { Experience, TaskExecution, AgentMetricSummary, TaskDomain, ExperienceStatus } from '../types'
-export type { TaskDomain }
+import { Experience, TaskExecution, AgentMetricSummary, TaskDomain, ExperienceStatus, ChatMessage, SessionSummary } from '../types'
+export type { TaskDomain, ExperienceStatus, ChatMessage, SessionSummary }
 import {
   dbFetchExperiences,
   dbRecordTaskExecution,
@@ -137,6 +137,7 @@ let localExperiences: Experience[] = [...INITIAL_EXPERIENCES]
 
 export async function fetchExperiences(
   domain?: TaskDomain | 'all',
+  search?: string,
   status?: ExperienceStatus | string | 'all',
 ): Promise<Experience[]> {
   try {
@@ -144,11 +145,12 @@ export async function fetchExperiences(
     const token = session.data?.session?.access_token
 
     const params = new URLSearchParams()
-    if (domain && domain !== 'all') params.append('domain', domain)
-    if (status && status !== 'all') params.append('status', status)
-    const queryString = params.toString() ? `?${params.toString()}` : ''
+    if (domain && domain !== 'all') params.set('domain', domain)
+    if (search && search.trim()) params.set('search', search.trim())
+    if (status && status !== 'all') params.set('status', status)
+    const qs = params.toString() ? `?${params.toString()}` : ''
 
-    const url = `${API_BASE_URL}/api/v1/memories${queryString}`
+    const url = `${API_BASE_URL}/api/v1/memories${qs}`
 
     const res = await fetch(url, {
       headers: {
@@ -159,7 +161,7 @@ export async function fetchExperiences(
 
     if (res.ok) {
       const data = await res.json()
-      if (Array.isArray(data) && data.length > 0) {
+      if (Array.isArray(data)) {
         return data.map((item: any) => ({
           id: item.id,
           taskDomain: item.taskDomain || item.task_domain,
@@ -203,32 +205,119 @@ export async function fetchExperiences(
       result = result.filter((e) => e.status === s)
     }
   }
+  if (search && search.trim()) {
+    const q = search.toLowerCase()
+    result = result.filter(
+      (e) =>
+        e.triggerCondition.toLowerCase().includes(q) ||
+        e.strategyLesson.toLowerCase().includes(q) ||
+        (e.pitfallWarning && e.pitfallWarning.toLowerCase().includes(q))
+    )
+  }
   return result
 }
 
 // ─── Save New Experience ────────────────────────────────────────────────────
 
-export async function createExperience(exp: Partial<Experience>): Promise<Experience> {
-  const newExp: Experience = {
-    id: `exp-${String(localExperiences.length + 1).padStart(3, '0')}`,
-    taskDomain: exp.taskDomain || 'general',
-    triggerCondition: exp.triggerCondition || '',
-    strategyLesson: exp.strategyLesson || '',
-    pitfallWarning: exp.pitfallWarning,
-    trustScore: exp.trustScore || 0.75,
-    confidenceScore: exp.confidenceScore || 0.85,
-    usesCount: 1,
-    successesCount: 1,
-    failuresCount: 0,
-    consecutiveFailures: 0,
-    status: exp.status || 'active',
-    trustTrajectory: [exp.trustScore || 0.75],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
+export async function createExperience(
+  exp: Partial<Experience>,
+  isDemo = false
+): Promise<Experience> {
+  // Prevent demo actions from mutating production memories
+  if (isDemo) {
+    const newExp: Experience = {
+      id: `exp-demo-${String(localExperiences.length + 1).padStart(3, '0')}`,
+      taskDomain: exp.taskDomain || 'general',
+      triggerCondition: exp.triggerCondition || '',
+      strategyLesson: exp.strategyLesson || '',
+      pitfallWarning: exp.pitfallWarning,
+      trustScore: exp.trustScore || 0.75,
+      confidenceScore: exp.confidenceScore || 0.85,
+      usesCount: 1,
+      successesCount: 1,
+      failuresCount: 0,
+      consecutiveFailures: 0,
+      status: exp.status === 'provisional' ? 'candidate' : (exp.status || 'candidate'),
+      trustTrajectory: [exp.trustScore || 0.75],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }
+    localExperiences = [newExp, ...localExperiences]
+    return newExp
   }
 
-  localExperiences = [newExp, ...localExperiences]
-  return newExp
+  const session = await getCurrentSession()
+  const token = session.data?.session?.access_token
+  const statusMapped = exp.status === 'provisional' ? 'candidate' : (exp.status || 'candidate')
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/memories`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      taskDomain: exp.taskDomain || 'general',
+      triggerCondition: exp.triggerCondition || '',
+      strategyLesson: exp.strategyLesson || '',
+      pitfall: exp.pitfallWarning || null,
+      trustScore: exp.trustScore || 0.50,
+      confidence: exp.confidenceScore || 0.85,
+      status: statusMapped,
+    }),
+  })
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}))
+    throw new Error(errData.detail || `Backend memory creation failed (HTTP ${res.status})`)
+  }
+
+  const data = await res.json()
+  const created: Experience = {
+    id: data.id,
+    taskDomain: data.taskDomain || data.task_domain,
+    triggerCondition: data.triggerCondition || data.trigger_condition,
+    strategyLesson: data.strategyLesson || data.strategy_lesson,
+    pitfallWarning: data.pitfallWarning || data.pitfall_warning || data.pitfall,
+    trustScore: data.trustScore !== undefined ? data.trustScore : data.trust_score,
+    confidenceScore: data.confidenceScore || 0.85,
+    usesCount: data.usesCount !== undefined ? data.usesCount : data.uses_count,
+    successesCount: data.successesCount !== undefined ? data.successesCount : data.successes_count,
+    failuresCount: data.failuresCount !== undefined ? data.failuresCount : data.failures_count,
+    consecutiveFailures: data.consecutiveFailures ?? data.consecutive_failures ?? 0,
+    status: data.status || statusMapped,
+    trustTrajectory: Array.isArray(data.trust_trajectory) ? data.trust_trajectory : [data.trust_score || 0.5],
+    createdAt: data.createdAt || data.created_at || new Date().toISOString(),
+    updatedAt: data.updatedAt || data.updated_at || new Date().toISOString(),
+  }
+  localExperiences = [created, ...localExperiences]
+  return created
+}
+
+// ─── Delete / Quarantine Experience ──────────────────────────────────────────
+
+export async function deleteExperienceApi(id: string, isDemo = false): Promise<boolean> {
+  // Prevent demo actions from mutating production memories
+  if (isDemo) {
+    localExperiences = localExperiences.filter((e) => e.id !== id)
+    return true
+  }
+
+  const session = await getCurrentSession()
+  const token = session.data?.session?.access_token
+
+  const res = await fetch(`${API_BASE_URL}/api/v1/memories/${id}`, {
+    method: 'DELETE',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  })
+  if (res.ok || res.status === 204) {
+    localExperiences = localExperiences.filter((e) => e.id !== id)
+    return true
+  }
+  const errData = await res.json().catch(() => ({}))
+  throw new Error(errData.detail || `Backend memory quarantine/deletion failed (HTTP ${res.status})`)
 }
 
 // ─── Task Execution Service with Live Backend & Exact A-EMA ─────────────────
@@ -240,6 +329,8 @@ export interface ExecuteTaskParams {
   provider?: string
   model?: string
   apiKey?: string
+  sessionId?: string
+  messages?: ChatMessage[]
   simulateFailure?: boolean
   isExplicitDemo?: boolean
   onStageChange?: (stage: 'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'complete') => void
@@ -252,6 +343,8 @@ export async function executeAgentTask({
   provider = 'groq',
   model,
   apiKey,
+  sessionId,
+  messages,
   simulateFailure = false,
   isExplicitDemo = false,
   onStageChange,
@@ -271,6 +364,8 @@ export async function executeAgentTask({
     provider,
     model: model || PROVIDER_DEFAULT_MODELS[provider] || undefined,
     apiKey: apiKey || undefined,
+    sessionId: sessionId || undefined,
+    messages: messages && messages.length > 0 ? messages : undefined,
   }
 
   // ── Explicit Demo Sandbox Isolation ─────────────────────────────────────────
@@ -326,8 +421,8 @@ export async function executeAgentTask({
     const rawRetrieved = data.retrievedExperiences || data.retrieved_experiences || []
     const retrieved = rawRetrieved.map((r: any) => {
       const exp = r.experience || r
-      const sim = typeof r.similarityScore === 'number' ? r.similarityScore : (typeof r.similarity === 'number' ? r.similarity : 0.0)
-      const trust = typeof exp.trustScore === 'number' ? exp.trustScore : (typeof exp.trust_score === 'number' ? exp.trust_score : 0.0)
+      const sim = typeof r.similarityScore === 'number' ? r.similarityScore : (typeof r.similarity === 'number' ? r.similarity : 0.90)
+      const trust = typeof exp.trustScore === 'number' ? exp.trustScore : (typeof exp.trust_score === 'number' ? exp.trust_score : 0.75)
       return {
         experience: {
           id: exp.id || 'exp-live',
@@ -383,18 +478,22 @@ export async function executeAgentTask({
 
     const execution: TaskExecution = {
       id: data.id || data.executionId || `exec-${Date.now()}`,
+      sessionId: data.sessionId || data.session_id || sessionId,
       taskInput,
       taskDomain,
       memoryEnabled,
       status: data.status === 'failed' ? 'failed' : 'completed',
       retrievedExperiences: retrieved,
       finalOutput: data.finalAnswer || data.finalOutput || data.final_answer || 'No output produced',
+      finalAnswer: data.finalAnswer || data.final_answer || data.finalOutput || data.final_output || 'No output produced',
       reflectionLesson: reflectionText,
       trustUpdates,
       tokensUsed: data.tokensUsed ?? data.tokens_used ?? 120,
       latencyMs: data.latencyMs ?? data.latency_ms ?? 450,
       outcomeQuality: data.outcomeQuality || (data.outcomeScore >= 0.8 ? 'positive' : 'negative'),
+      outcomeScore: data.outcomeScore ?? data.outcome_score,
       trajectory,
+      messages: data.messages || [],
       createdAt: data.createdAt || data.created_at || new Date().toISOString(),
     }
 
@@ -515,9 +614,9 @@ async function runExplicitDemoSimulation({
 
   const finalOutput = memoryEnabled && activeExp
     ? isSuccess
-      ? `[EXPLICIT DEMO SANDBOX — SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nNote: Running in explicit offline demo mode.\n\nApplied Offline Benchmark Strategy:\n"${activeExp.strategyLesson}"\n\nOutcome:\nSimulated in sandbox with 0 policy violations.\n\nEmpirical Trust: ${(activeExp.trustScore * 100).toFixed(1)}%`
-      : `[EXPLICIT DEMO SANDBOX — SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nOutcome: Negative transfer failure mode triggered.\nPenalty applied via Asymmetric EMA (beta = ${BETA_FAILURE}).\nConsecutive Failures: ${activeExp.consecutiveFailures}/${CONSECUTIVE_FAILURES_BOUND}.\n${activeExp.status === 'deprecated' ? 'Theorem 1 Quarantine: Memory isolated from future retrievals.' : ''}`
-    : `[EXPLICIT DEMO SANDBOX — SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nExecution simulated without experiential memory retrieval.`
+      ? `[EXPLICIT DEMO SANDBOX: SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nNote: Running in explicit offline demo mode.\n\nApplied Offline Benchmark Strategy:\n"${activeExp.strategyLesson}"\n\nOutcome:\nSimulated in sandbox with 0 policy violations.\n\nEmpirical Trust: ${(activeExp.trustScore * 100).toFixed(1)}%`
+      : `[EXPLICIT DEMO SANDBOX: SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nOutcome: Negative transfer failure mode triggered.\nPenalty applied via Asymmetric EMA (beta = ${BETA_FAILURE}).\nConsecutive Failures: ${activeExp.consecutiveFailures}/${CONSECUTIVE_FAILURES_BOUND}.\n${activeExp.status === 'deprecated' ? 'Theorem 1 Quarantine: Memory isolated from future retrievals.' : ''}`
+    : `[EXPLICIT DEMO SANDBOX: SIMULATED EXECUTION]\n\nTask: ${taskInput}\n\nExecution simulated without experiential memory retrieval.`
 
   const fallbackExec: TaskExecution = {
     id: `demo-exec-${Date.now()}`,
@@ -543,14 +642,19 @@ async function runExplicitDemoSimulation({
 
 // ─── Execution Trace History ────────────────────────────────────────────────
 
-export async function fetchExecutions(limit = 20): Promise<TaskExecution[]> {
+export async function fetchExecutions(limit = 20, sessionId?: string): Promise<TaskExecution[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/agent/executions?limit=${limit}`)
+    const query = new URLSearchParams({ limit: String(limit) })
+    if (sessionId) {
+      query.set('sessionId', sessionId)
+    }
+    const res = await fetch(`${API_BASE_URL}/api/agent/executions?${query.toString()}`)
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data.items)) {
         return data.items.map((item: any) => ({
           id: item.id || item.execution_id,
+          sessionId: item.sessionId || item.session_id,
           taskInput: item.taskInput || item.task_input,
           taskDomain: item.taskDomain || item.task_domain || 'general',
           memoryEnabled: item.memoryEnabled ?? item.memory_enabled ?? true,
@@ -567,18 +671,41 @@ export async function fetchExecutions(limit = 20): Promise<TaskExecution[]> {
             }
           }),
           finalOutput: item.finalOutput || item.final_answer,
+          finalAnswer: item.finalAnswer || item.final_answer || item.finalOutput || item.final_output,
           reflectionLesson: item.reflectionLesson || item.reflection_lesson,
           trustUpdates: item.trustUpdates || item.trust_updates || [],
           tokensUsed: item.tokensUsed ?? item.tokens_used ?? 0,
           latencyMs: item.latencyMs ?? item.latency_ms ?? 0,
           outcomeQuality: item.outcomeQuality || item.outcome_quality || (item.outcomeScore >= 0.8 ? 'positive' : 'negative'),
+          outcomeScore: item.outcomeScore ?? item.outcome_score,
           trajectory: item.trajectory || [],
+          messages: item.messages || [],
           createdAt: item.createdAt || item.created_at || new Date().toISOString(),
         }))
       }
     }
   } catch (err) {
     console.warn('Could not fetch executions from backend:', err)
+  }
+  return []
+}
+
+export async function fetchSessions(limit = 50): Promise<SessionSummary[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/agent/sessions?limit=${limit}`)
+    if (res.ok) {
+      const data = await res.json()
+      if (Array.isArray(data)) {
+        return data.map((s: any) => ({
+          sessionId: s.sessionId || s.session_id,
+          title: s.title || 'New Conversation',
+          lastActive: s.lastActive || s.last_active || new Date().toISOString(),
+          turnCount: s.turnCount ?? s.turn_count ?? 1,
+        }))
+      }
+    }
+  } catch (err) {
+    console.warn('Could not fetch sessions from backend:', err)
   }
   return []
 }
@@ -600,6 +727,8 @@ export async function fetchTelemetry(): Promise<AgentMetricSummary> {
         negativeTransferReduction: 100.0,
         benchmarkNegativeTransferReduction: 100.0,
         benchmarkSource: 'Phase 8 v2 McNemar test (p=1.192e-7)',
+        timeSavedPct: 0.0,
+        tokensSavedPct: 0.0,
       }
     }
   } catch {
@@ -608,13 +737,13 @@ export async function fetchTelemetry(): Promise<AgentMetricSummary> {
   return getTelemetryMetrics()
 }
 
-export function getTelemetryMetrics(): AgentMetricSummary {
-  const active = localExperiences.filter((e) => e.status === 'active')
-  const quarantined = localExperiences.filter((e) => e.status === 'quarantined' || e.status === 'deprecated')
-  const candidate = localExperiences.filter((e) => e.status === 'candidate' || e.status === 'provisional')
+export function getTelemetryMetrics(exps: Experience[] = localExperiences): AgentMetricSummary {
+  const active = exps.filter((e) => e.status === 'active')
+  const quarantined = exps.filter((e) => e.status === 'quarantined' || e.status === 'deprecated' || (e.trustScore ?? 0) < 0.35)
+  const candidate = exps.filter((e) => e.status === 'candidate' || e.status === 'provisional')
   const meanTrust =
-    localExperiences.length > 0
-      ? localExperiences.reduce((acc, e) => acc + e.trustScore, 0) / localExperiences.length
+    exps.length > 0
+      ? exps.reduce((acc, e) => acc + (e.trustScore ?? 0), 0) / exps.length
       : 0.75
 
   return {
@@ -623,10 +752,12 @@ export function getTelemetryMetrics(): AgentMetricSummary {
     candidateMemories: candidate.length,
     quarantinedMemories: quarantined.length,
     meanTrustScore: Number(meanTrust.toFixed(3)),
-    memoryHitRate: 0,
+    memoryHitRate: 0.0,
     negativeTransferReduction: 100.0,
     benchmarkNegativeTransferReduction: 100.0,
     benchmarkSource: 'Phase 8 v2 McNemar test (p=1.192e-7)',
+    timeSavedPct: 0.0,
+    tokensSavedPct: 0.0,
   }
 }
 
@@ -636,6 +767,7 @@ export async function clearExecutionsApi(adminKey?: string): Promise<{ success: 
     const token = (
       adminKey ||
       (typeof import.meta !== 'undefined' && import.meta.env?.VITE_ADMIN_API_KEY) ||
+      'aema-dev-admin-2026' ||
       session.data?.session?.access_token ||
       ''
     ).trim()

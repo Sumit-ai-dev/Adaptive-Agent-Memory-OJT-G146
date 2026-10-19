@@ -52,8 +52,8 @@ def compute_next_trust(
     details = evaluator_details or {}
 
     # Explicitly inconclusive outcomes and infrastructure failures:
-    # Do not penalize memory for missing test code or harness crash.
-    if details.get("status") == "inconclusive" or details.get("error") in ("missing_test_code", "harness_error"):
+    # Do not penalize memory for missing test code, harness crash, or model provider failure.
+    if details.get("status") == "inconclusive" or details.get("error") in ("missing_test_code", "harness_error", "provider_error"):
         reason = f"Inconclusive evaluation ({details.get('error', 'unverified')}): trust preserved, no failure penalty"
         return old_trust, reason
 
@@ -93,7 +93,7 @@ def update_experience_trust(
     delta = round(new_trust - old_trust, 4)
 
     details = evaluator_details or {}
-    is_inconclusive = details.get("status") == "inconclusive" or details.get("error") in ("missing_test_code", "harness_error")
+    is_inconclusive = details.get("status") == "inconclusive" or details.get("error") in ("missing_test_code", "harness_error", "provider_error")
 
     # Increment usage statistics only for verified outcomes
     if not is_inconclusive:

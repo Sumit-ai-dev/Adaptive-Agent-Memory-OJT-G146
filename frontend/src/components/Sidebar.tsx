@@ -9,6 +9,8 @@ import {
   Layers,
   ChevronDown,
   Sparkles,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import ThemeToggle from './ThemeToggle'
@@ -40,15 +42,126 @@ export default function Sidebar({
   isDemo = false,
   onExitDemo,
   onOpenAuth,
+  collapsed = false,
+  onToggleCollapse,
 }: SidebarProps) {
   const { user, signOut } = useAuth()
 
   const displayName = user?.name || user?.email?.split('@')[0] || (isDemo ? 'Demo Researcher' : 'User')
 
+  if (collapsed) {
+    return (
+      <aside
+        className="w-[68px] shrink-0 border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out
+          bg-[#FFFFFF] border-[#E6E6E1] text-[#18181B]
+          dark:bg-[#0C0E14] dark:border-[#252B3B] dark:text-[#F4F4F6] items-center py-3 z-20 select-none"
+      >
+        {/* Brand Header Icon & Expand Toggle */}
+        <div className="flex flex-col items-center gap-2 pb-3 border-b border-[#E6E6E1] dark:border-[#252B3B] w-full">
+          <div
+            className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-sm font-mono font-bold text-sm"
+            title="AEMA Engine v0.1.0"
+          >
+            Æ
+          </div>
+          {onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#131722] transition-colors cursor-pointer"
+              title="Expand main sidebar"
+              aria-label="Expand main sidebar"
+            >
+              <PanelLeftOpen size={16} />
+            </button>
+          )}
+        </div>
+
+        {/* Workspace Indicator (Compact) */}
+        <div className="my-2.5 w-full flex justify-center">
+          <div
+            className="w-9 h-9 rounded-xl border flex items-center justify-center transition-colors cursor-default
+              bg-zinc-50 border-[#E6E6E1] text-indigo-600
+              dark:bg-[#131722] dark:border-[#252B3B] dark:text-indigo-400"
+            title={isDemo ? 'Sandbox Protocol (Seeded N=30)' : 'Production Cluster (Primary Agent Node)'}
+          >
+            <Layers size={16} />
+          </div>
+        </div>
+
+        {/* Navigation List (Icon Only with Native Tooltips) */}
+        <nav className="flex-1 w-full space-y-1.5 px-2 overflow-y-auto flex flex-col items-center">
+          {NAV_ITEMS.map((item) => {
+            const Icon = item.icon
+            const isActive = activeTab === item.id
+
+            return (
+              <button
+                key={item.id}
+                onClick={() => onSelectTab(item.id)}
+                title={item.label}
+                aria-label={item.label}
+                className={`w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-indigo-600 text-white shadow-sm'
+                    : 'text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-[#131722]'
+                }`}
+              >
+                <Icon size={18} />
+              </button>
+            )
+          })}
+        </nav>
+
+        {/* Demo Indicator (if active) */}
+        {isDemo && (
+          <div className="my-2 w-full flex justify-center">
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center bg-indigo-50 border border-indigo-200 dark:bg-indigo-950/40 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400 cursor-help"
+              title="Demo Sandbox: Running with protocol-frozen benchmark data"
+            >
+              <Sparkles size={14} />
+            </div>
+          </div>
+        )}
+
+        {/* Compact Footer: Theme Toggle & User Avatar */}
+        <div className="pt-3 border-t border-[#E6E6E1] dark:border-[#252B3B] w-full flex flex-col items-center gap-2.5">
+          <ThemeToggle />
+          <div
+            className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center font-mono text-xs font-semibold text-zinc-700 dark:text-zinc-300"
+            title={`${displayName} (${isDemo ? 'Demo Mode' : user?.email || 'Authenticated'})`}
+          >
+            {displayName[0].toUpperCase()}
+          </div>
+          {isDemo ? (
+            onExitDemo && (
+              <button
+                onClick={onExitDemo}
+                title="Exit Demo Sandbox"
+                className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#131722] transition-colors cursor-pointer"
+              >
+                <LogOut size={16} />
+              </button>
+            )
+          ) : (
+            <button
+              onClick={() => signOut()}
+              title="Sign Out"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
+            >
+              <LogOut size={16} />
+            </button>
+          )}
+        </div>
+      </aside>
+    )
+  }
+
   return (
-    <aside className="w-64 shrink-0 border-r flex flex-col h-screen sticky top-0 transition-colors
-      bg-[#FFFFFF] border-[#E6E6E1] text-[#18181B]
-      dark:bg-[#0C0E14] dark:border-[#252B3B] dark:text-[#F4F4F6]"
+    <aside
+      className="w-64 shrink-0 border-r flex flex-col h-screen sticky top-0 transition-all duration-300 ease-in-out
+        bg-[#FFFFFF] border-[#E6E6E1] text-[#18181B]
+        dark:bg-[#0C0E14] dark:border-[#252B3B] dark:text-[#F4F4F6] z-20 select-none"
     >
       {/* Brand Header */}
       <div className="p-4 border-b border-[#E6E6E1] dark:border-[#252B3B] flex items-center justify-between">
@@ -69,7 +182,19 @@ export default function Sidebar({
           </div>
         </div>
 
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          {onToggleCollapse && (
+            <button
+              onClick={onToggleCollapse}
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#131722] transition-colors cursor-pointer"
+              title="Collapse sidebar"
+              aria-label="Collapse sidebar"
+            >
+              <PanelLeftClose size={16} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Workspace Selector */}
@@ -156,7 +281,7 @@ export default function Sidebar({
             <button
               onClick={onExitDemo}
               title="Exit Demo Sandbox"
-              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#131722] transition-colors"
+              className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-[#131722] transition-colors cursor-pointer"
             >
               <LogOut size={15} />
             </button>
@@ -165,7 +290,7 @@ export default function Sidebar({
           <button
             onClick={() => signOut()}
             title="Sign Out"
-            className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors"
+            className="p-1.5 rounded-lg text-zinc-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-colors cursor-pointer"
           >
             <LogOut size={15} />
           </button>
