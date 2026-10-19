@@ -6,7 +6,7 @@
 * **Reviewer / Co-Maintainer:** Kasat Sakshi Dattaprasad (`sakshisamu1809@gmail.com`)  
 * **Created:** September 22, 2026  
 * **Status:** **PROPOSED / READY FOR REVIEW**  
-* **Target Sprint:** Month 2 (GenAI OJT Capstone — Group G146)  
+* **Target Sprint:** Month 2 (GenAI OJT Capstone - Group G146)  
 
 ---
 

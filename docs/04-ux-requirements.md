@@ -68,6 +68,12 @@ Login ──> Dashboard ──> Submit Task Prompt ──> Watch LangGraph Execu
 - Secure storage indicator (explaining that keys are kept in session memory and never persisted in database plaintext).
 - Retrieval parameter sliders: Similarity Threshold ($\theta_{\text{sim}} \in [0.5, 0.9]$), Top-$k$ ($1 \le k \le 10$), and Trust Weight ($w_{\text{trust}} \in [0.0, 0.5]$).
 
+### 6. Execution Studio & Conversation History Drawer
+- Collapsible sidebar drawer displaying active and historical multi-turn conversation sessions.
+- Session metadata display: automatic title generation from first turn, turn count badge, and relative timestamps.
+- Context-aware multi-turn chat stream maintaining conversation history while injecting bilateral strategies and pitfalls into every turn.
+- Instant session switching and thread isolation without leaking executions across conversations.
+
 ---
 
 ## States

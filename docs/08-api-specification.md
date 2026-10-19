@@ -18,7 +18,7 @@ Endpoints return `401 Unauthorized` if the header is missing or expired, and `40
 ## Agent Execution
 
 ### POST /agent/execute
-Executes a task through the 5-node LangGraph orchestration loop (`retrieve_node` → `execute_node` → `evaluate_node` → `reflect_node` → `trust_node`). Handles experience retrieval, task execution with LiteLLM and tools, outcome evaluation, reflection, and trust scoring.
+Executes a task through the 5-node LangGraph orchestration loop (`retrieve_node` -> `execute_node` -> `evaluate_node` -> `reflect_node` -> `trust_node`). Handles experience retrieval, multi-turn conversational history assembly, task execution with LiteLLM and tools, outcome evaluation, reflection, and trust scoring.
 
 **Request Body:**
 ```json
@@ -26,17 +26,26 @@ Executes a task through the 5-node LangGraph orchestration loop (`retrieve_node`
   "task_input": "Research conflicting claims on carbon capture efficiency rates.",
   "task_domain": "research",
   "memory_enabled": true,
-  "memory_mode": "adaptive"
+  "memory_mode": "adaptive",
+  "sessionId": "session_8f12a9c4",
+  "messages": [
+    {"role": "user", "content": "What are primary direct air capture methods?"},
+    {"role": "assistant", "content": "The two primary methods are liquid solvent and solid sorbent systems..."}
+  ],
+  "provider": "groq"
 }
 ```
 
-* `task_input` *(string, required)*: The natural language prompt or problem statement.
-* `task_domain` *(string, required)*: One of `research`, `coding`, `analysis`, `planning`.
-* `memory_enabled` *(boolean, required)*: Whether to enable the memory subsystem.
+* `task_input` *(string, required)*: The natural language prompt or problem statement (also accepts `taskInput`).
+* `task_domain` *(string, optional, default: `"general"`)*: One of `research`, `coding`, `analysis`, `planning`, `general` (also accepts `domain`).
+* `memory_enabled` *(boolean, optional, default: `true`)*: Whether to enable the memory subsystem.
 * `memory_mode` *(string, optional, default: `"adaptive"`)*: Execution condition:
   * `"off"`: Condition A (Baseline agent, no experience retrieval).
   * `"naive"`: Condition B (Standard semantic retrieval, no reliability filtering).
   * `"adaptive"`: Condition C (Retrieval with composite similarity + trust scoring and reliability updates).
+* `sessionId` *(string, optional)*: Unique conversation thread identifier (also accepts `session_id`). Enables session persistence and multi-turn continuity.
+* `messages` *(array of ChatMessage, optional)*: Prior conversation history turns (`role`: `"user"` | `"assistant"` | `"system"`, `content`: string). Automatically preserved in order and clipped to the latest 50 messages.
+* `provider` *(string, optional, default: `"groq"`)*: BYOK execution provider (`"groq"`, `"gemini"`, `"ollama"`, `"mock"`).
 
 **Response (200 OK):**
 ```json
@@ -102,10 +111,26 @@ Executes a task through the 5-node LangGraph orchestration loop (`retrieve_node`
 }
 ```
 
+### GET /agent/sessions
+Lists unique recent multi-turn conversation sessions persisted in storage.
+
+**Response (200 OK):**
+```json
+[
+  {
+    "sessionId": "session_8f12a9c4",
+    "title": "Research conflicting claims on carbon capture...",
+    "turnCount": 4,
+    "lastActive": "2026-09-15T14:22:10Z"
+  }
+]
+```
+
 ### GET /agent/executions
 Lists historical task execution records with filtering and pagination.
 
 **Query Parameters:**
+* `sessionId` *(string, optional)*: Filter executions by conversation session identifier (also accepts `session_id`).
 * `domain` *(string, optional)*: Filter by task domain (`research`, `coding`, `analysis`, `planning`).
 * `memory_mode` *(string, optional)*: Filter by condition (`off`, `naive`, `adaptive`).
 * `limit` *(integer, optional, default: 20, max: 100)*: Items per page.

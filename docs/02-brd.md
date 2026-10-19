@@ -9,7 +9,7 @@
 ## 1. Executive Summary
 Modern Large Language Models (LLMs) demonstrate remarkable capability in solving individual reasoning tasks, yet they remain fundamentally stateless. When deployed across recurring workflows, LLMs fail to retain operational lessons from previous executions, frequently repeating identical mistakes and requiring users to restate domain guidance. Conversely, existing agent memory approaches naively treat semantic relevance as equivalent to reliability, allowing obsolete, wrong, or context-inappropriate experiences to degrade future performance. 
 
-This project delivers an **Adaptive AI Agent with Persistent Experience Memory**—an external intelligence layer wrapped around a frozen LLM. The system systematically extracts compact, reusable lessons (`{Trigger, Strategy, Pitfall}`), evaluates execution outcomes, dynamically tracks empirical trust scores, and applies reliability-aware retrieval ($0.70 \times \text{Similarity} + 0.30 \times \text{Trust}$) to ensure an agent measurably improves over time without modifying underlying model weights.
+This project delivers an **Adaptive AI Agent with Persistent Experience Memory**: an external intelligence layer wrapped around a frozen LLM. The system systematically extracts compact, reusable lessons (`{Trigger, Strategy, Pitfall}`), evaluates execution outcomes, dynamically tracks empirical trust scores, and applies reliability-aware retrieval ($0.70 \times \text{Similarity} + 0.30 \times \text{Trust}$) to ensure an agent measurably improves over time without modifying underlying model weights.
 
 ---
 
@@ -18,7 +18,7 @@ Knowledge workers, software developers, and research evaluators using AI agents 
 1. **Experience Amnesia:** Useful problem-solving strategies, error recoveries, and operational lessons discovered during task execution are permanently lost once a session terminates.
 2. **The "Relevant $\neq$ Reliable" Fallacy:** Storing unvetted conversational transcripts or purely semantic vector memories pollutes the agent's context. When an agent recalls past experiences solely based on cosine similarity, misleading, outdated, or harmful strategies are injected into future prompts, inducing compounding hallucinations and degraded task success.
 
-Memory requires continuous evaluation, evidence-based trust scoring, and lifecycle management—not merely persistent vector storage.
+Memory requires continuous evaluation, evidence-based trust scoring, and lifecycle management - not merely persistent vector storage.
 
 ---
 

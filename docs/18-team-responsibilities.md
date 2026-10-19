@@ -6,17 +6,17 @@
 
 ---
 
-## Student 1 — Kasat Sakshi Dattaprasad (Memory Intelligence + Trust Engine + Full-Stack Gateway)
+## Student 1: Kasat Sakshi Dattaprasad (Memory Intelligence + Trust Engine + Full-Stack Gateway)
 
 - **Requirements & System Governance:**
   - Lead author of BRD, PRD, TRD, API Specification, and Database Design specifications.
   - Definition of research question, problem formulation, and evaluation criteria.
-- **Memory Retrieval Engine (LangGraph Node 1 — `retrieve_node`):**
+- **Memory Retrieval Engine (LangGraph Node 1: `retrieve_node`):**
   - Implementation of `retrieve_node` in `ai-service/nodes/retrieve_node.py`.
   - Composite retrieval ranking formula: $\text{Score} = 0.70 \times \text{Similarity} + 0.30 \times \text{TrustScore}$.
   - Vector embedding pipeline using HuggingFace `all-MiniLM-L6-v2` (384 dimensions, zero cloud cost).
   - Supabase PostgreSQL 15 + `pgvector` HNSW vector index optimization and `match_experiences` stored procedure (RPC).
-- **Trust Lifecycle Engine (LangGraph Node 5 — `trust_node`):**
+- **Trust Lifecycle Engine (LangGraph Node 5: `trust_node`):**
   - Implementation of `trust_node` in `ai-service/nodes/trust_node.py`.
   - Asymmetric Exponential Moving Average (A-EMA) trust engine: $\alpha = 0.85$ (success climb), $\beta = 0.70$ (failure penalty).
   - Active memory quarantine cutoff ($\theta < 0.35$): automatically transitions degraded memories to `status = 'deprecated'` to neutralize negative transfer.
@@ -32,16 +32,16 @@
 
 ---
 
-## Student 2 — Sumit Das (Agent Orchestration + Model Gateway + Benchmarks)
+## Student 2: Sumit Das (Agent Orchestration + Model Gateway + Benchmarks)
 
 - **Month 1 Foundation Scaffolding:**
   - Initial Three.js 3D Neural Memory Core component (`ThreeMemoryCore.tsx`), Supabase OAuth integration, and baseline dashboard UI layout.
-- **Cognitive Loop & Execution (LangGraph Node 2 — `execute_node`):**
+- **Cognitive Loop & Execution (LangGraph Node 2: `execute_node`):**
   - Implementation of `execute_node` in `ai-service/nodes/execute_node.py`.
   - Bilateral prompt synthesis: augmenting system instructions with affirmative **Strategies** and negative constraints (**Pitfalls**).
   - Multi-turn tool execution loop with strict circuit breakers (`max_turns = 4`).
   - Tool execution wrappers: DuckDuckGo web search, Jina AI reader, and sandboxed Python code execution.
-- **Evaluation & Reflection (LangGraph Nodes 3 & 4 — `evaluate_node` & `reflect_node`):**
+- **Evaluation & Reflection (LangGraph Nodes 3 & 4: `evaluate_node` & `reflect_node`):**
   - Implementation of `evaluate_node` in `ai-service/nodes/evaluate_node.py`: deterministic outcome evaluation heuristics (tool exit codes, Python AST parsing, schema checks) emitting scalar reward $R_t \in [0.0, 1.0]$.
   - Implementation of `reflect_node` in `ai-service/nodes/reflect_node.py`: reflector prompt engineering to distill structured 3-tuples `{Trigger, Strategy, Pitfall}` from non-trivial trajectories ($\ge 2$ steps).
 - **Universal BYOK Model Gateway:**

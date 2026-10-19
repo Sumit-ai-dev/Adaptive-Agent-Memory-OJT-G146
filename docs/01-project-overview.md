@@ -1,10 +1,10 @@
-# Adaptive AI Agent with Persistent Experience Memory — Project Overview
+# Adaptive AI Agent with Persistent Experience Memory: Project Overview
 
 ## Project Identity
 - **Track:** Generative AI / Agentic AI
 - **Domain:** General-Purpose Agentic AI / AI Memory Systems
 - **Duration:** 12 weeks
-- **Team:** 2 students (Kasat Sakshi Dattaprasad, Sumit Das — Group G146)
+- **Team:** 2 students (Kasat Sakshi Dattaprasad, Sumit Das - Group G146)
 - **Skill level:** Intermediate
 - **Primary users:** Knowledge workers, researchers, AI developers, and evaluators
 - **Constraint:** Fixed/unmodified LLM (no model fine-tuning or retraining; adaptation driven solely by external memory)

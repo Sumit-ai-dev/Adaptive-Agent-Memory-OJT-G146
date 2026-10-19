@@ -1,7 +1,7 @@
 # Product Requirements Document (PRD)
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
-**Prepared by:** Kasat Sakshi Dattaprasad & Sumit Das — G146  
+**Prepared by:** Kasat Sakshi Dattaprasad & Sumit Das - G146  
 
 ---
 
