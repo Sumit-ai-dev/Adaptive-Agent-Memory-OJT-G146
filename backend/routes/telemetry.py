@@ -81,6 +81,7 @@ async def get_telemetry() -> Dict[str, Any]:
         "activeMemories": len(active_exps),
         "candidateMemories": len(candidate_exps),
         "quarantinedMemories": len(quarantined_exps),
+        "meanTrustScore": round(sum(e.trust_score for e in all_exps) / len(all_exps), 4) if all_exps else 0.75,
         # ── Execution history (persisted to SQLite) ────────────────────────
         "totalExecutions": total_executions,
         "executionsWithMemoryHit": executions_with_memory_hit,

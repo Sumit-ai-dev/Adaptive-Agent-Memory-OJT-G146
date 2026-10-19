@@ -97,10 +97,25 @@ async def list_memories(
                     out.append(d)
             return out
 
+        resolved_status: Optional[ExperienceStatus] = None
+        if status_filter and status_filter.lower() != "all":
+            sf = status_filter.lower().strip()
+            if sf in ("candidate", "provisional"):
+                resolved_status = ExperienceStatus.CANDIDATE
+            elif sf in ("deprecated", "quarantined"):
+                resolved_status = ExperienceStatus.DEPRECATED
+            elif sf == "active":
+                resolved_status = ExperienceStatus.ACTIVE
+            else:
+                try:
+                    resolved_status = ExperienceStatus(sf)
+                except ValueError:
+                    resolved_status = None
+
         # Non-semantic listing
         all_exps = await shared_store.list_experiences(
             domain=TaskDomain(domain) if domain and domain != "all" else None,
-            status=ExperienceStatus(status_filter) if status_filter and status_filter != "all" else None,
+            status=resolved_status,
             min_trust=min_trust,
         )
 

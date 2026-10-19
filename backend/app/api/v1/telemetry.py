@@ -34,9 +34,13 @@ async def get_telemetry():
         sum(e.trust_score for e in active) / len(active)
         if active else 0.0
     )
+    mean_trust = (
+        sum(e.trust_score for e in exps) / len(exps)
+        if exps else 0.75
+    )
     total_uses = sum(e.uses_count for e in exps)
     total_successes = sum(e.successes_count for e in exps)
-    hit_rate = round((total_successes / total_uses * 100), 1) if total_uses > 0 else 85.0
+    hit_rate = round((total_successes / total_uses * 100), 1) if total_uses > 0 else 0.0
     task_count = total_uses + get_task_execution_count()
 
     return {
@@ -45,7 +49,9 @@ async def get_telemetry():
         "activeMemories": len(active),
         "candidateMemories": len(candidate),
         "deprecatedMemories": len(deprecated),
+        "quarantinedMemories": len(deprecated),
         "avgTrustScore": round(avg_trust, 3),
+        "meanTrustScore": round(mean_trust, 4),
         "memoryHitRate": hit_rate,
         "totalMemories": len(exps),
     }
