@@ -1,0 +1,21 @@
+# Gitleaks Configuration for AEMA (Adaptive Experience Memory Architecture)
+title = "AEMA Gitleaks Config"
+
+[extend]
+useDefault = true
+
+
+[allowlist]
+description = "Allowlist for build artifacts, package managers, virtualenvs, and test fixtures"
+paths = [
+    '''^\.venv/''',
+    '''^venv/''',
+    '''^\.git/''',
+    '''^node_modules/''',
+    '''^dist/''',
+    '''^build/''',
+    '''^paper/''',
+    '''^\.pytest_cache/''',
+    '''^\.hypothesis/''',
+    '''^chat_transcript\.md$''',
+]
