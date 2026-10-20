@@ -9,6 +9,9 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![CI Status](https://img.shields.io/badge/CI-Passing-brightgreen.svg)](.github/workflows/ci.yml)
 
+<img width="2172" height="724" alt="aema logo" src="https://github.com/user-attachments/assets/b6a01f8f-ed7c-4af4-a6b5-47e116e40d2c" />
+
+
 **GenAI OJT Capstone Project: Group G146**  
 **Authors:** Kasat Sakshi Dattaprasad & Sumit Das  
 
