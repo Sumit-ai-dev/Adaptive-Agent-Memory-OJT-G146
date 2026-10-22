@@ -60,6 +60,16 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["aema", "models", "ai_service"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "/aema",
+    "/models",
+    "/ai_service",
+    "/README.md",
+    "/LICENSE",
+    "/pyproject.toml",
+]
+
 [tool.ruff]
 line-length = 100
 target-version = "py39"
