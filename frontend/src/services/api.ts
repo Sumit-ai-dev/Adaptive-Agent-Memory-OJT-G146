@@ -333,6 +333,8 @@ export interface ExecuteTaskParams {
   messages?: ChatMessage[]
   simulateFailure?: boolean
   isExplicitDemo?: boolean
+  useStreaming?: boolean
+  onToken?: (token: string) => void
   onStageChange?: (stage: 'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'complete') => void
 }
 
@@ -347,6 +349,8 @@ export async function executeAgentTask({
   messages,
   simulateFailure = false,
   isExplicitDemo = false,
+  useStreaming = true,
+  onToken,
   onStageChange,
 }: ExecuteTaskParams): Promise<TaskExecution> {
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
@@ -369,9 +373,6 @@ export async function executeAgentTask({
   }
 
   // ── Explicit Demo Sandbox Isolation ─────────────────────────────────────────
-  // Only route to the isolated client-side demo simulation when the user is explicitly
-  // in Demo Sandbox mode (isExplicitDemo === true). Production-mode executions ALWAYS invoke
-  // the live backend, even when using the mock provider.
   if (isExplicitDemo) {
     return runExplicitDemoSimulation({
       taskInput,
@@ -385,38 +386,98 @@ export async function executeAgentTask({
   try {
     const session = await getCurrentSession()
     const token = session.data?.session?.access_token
-
-    // Visual pacing step so the user can observe the cognitive stage progression
-    await sleep(400)
-    onStageChange?.('execution')
-
-    const res = await fetch(`${API_BASE_URL}/api/agent/execute`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      body: JSON.stringify(payload),
-    })
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      const detail = errData.detail || errData.message || `HTTP ${res.status}: ${res.statusText}`
-      throw new Error(`AEMA Backend execution failed (${res.status}): ${detail}`)
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
     }
 
-    const data = await res.json()
+    let data: any = null
 
-    onStageChange?.('evaluation')
-    await sleep(350)
+    // ── Attempt Real-Time Server-Sent Events (SSE) Streaming ────────────────
+    if (useStreaming) {
+      try {
+        const streamRes = await fetch(`${API_BASE_URL}/api/agent/execute/stream`, {
+          method: 'POST',
+          headers: {
+            ...headers,
+            Accept: 'text/event-stream',
+          },
+          body: JSON.stringify(payload),
+        })
 
-    onStageChange?.('reflection')
-    await sleep(300)
+        if (streamRes.ok && streamRes.body) {
+          const reader = streamRes.body.getReader()
+          const decoder = new TextDecoder()
+          let buffer = ''
 
-    onStageChange?.('trust_update')
-    await sleep(350)
+          while (true) {
+            const { done, value } = await reader.read()
+            if (done) break
 
-    onStageChange?.('complete')
+            buffer += decoder.decode(value, { stream: true })
+            const blocks = buffer.split('\n\n')
+            buffer = blocks.pop() || ''
+
+            for (const block of blocks) {
+              if (!block.trim()) continue
+              let eventType = 'message'
+              let dataStr = ''
+              for (const line of block.split('\n')) {
+                if (line.startsWith('event: ')) eventType = line.slice(7).trim()
+                else if (line.startsWith('data: ')) dataStr = line.slice(6).trim()
+              }
+
+              if (!dataStr) continue
+              try {
+                const parsed = JSON.parse(dataStr)
+                if (eventType === 'token' && parsed.chunk) {
+                  onToken?.(parsed.chunk)
+                } else if (eventType === 'node_complete') {
+                  if (parsed.node === 'retrieve_node') onStageChange?.('execution')
+                  else if (parsed.node === 'execute_node') onStageChange?.('evaluation')
+                  else if (parsed.node === 'evaluate_node') onStageChange?.('reflection')
+                  else if (parsed.node === 'reflect_node') onStageChange?.('trust_update')
+                  else if (parsed.node === 'trust_node') onStageChange?.('complete')
+                } else if (eventType === 'done' && parsed.result) {
+                  data = parsed.result
+                  onStageChange?.('complete')
+                }
+              } catch {
+                // Ignore raw non-JSON SSE lines
+              }
+            }
+          }
+        }
+      } catch (streamErr) {
+        // Fall back to blocking endpoint if stream fails
+        console.warn('SSE stream attempt failed, falling back to standard endpoint:', streamErr)
+      }
+    }
+
+    // ── Standard Blocking Fallback if stream was disabled or yielded no terminal result ──
+    if (!data) {
+      onStageChange?.('execution')
+      const res = await fetch(`${API_BASE_URL}/api/agent/execute`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        const detail = errData.detail || errData.message || `HTTP ${res.status}: ${res.statusText}`
+        throw new Error(`AEMA Backend execution failed (${res.status}): ${detail}`)
+      }
+
+      data = await res.json()
+      onStageChange?.('evaluation')
+      await sleep(250)
+      onStageChange?.('reflection')
+      await sleep(200)
+      onStageChange?.('trust_update')
+      await sleep(250)
+      onStageChange?.('complete')
+    }
 
     const rawRetrieved = data.retrievedExperiences || data.retrieved_experiences || []
     const retrieved = rawRetrieved.map((r: any) => {

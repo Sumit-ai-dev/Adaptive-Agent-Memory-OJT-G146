@@ -9,6 +9,7 @@ uvicorn>=0.30.0
 pydantic>=2.10.0
 pydantic-settings>=2.5.0          # ai_service/config.py
 httpx>=0.27.0
+python-dotenv>=1.0.0
 
 # --- Agent orchestration ---
 langgraph>=0.2.0                  # ai_service/graph.py

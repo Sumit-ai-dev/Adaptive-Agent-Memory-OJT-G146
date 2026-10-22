@@ -5,10 +5,12 @@ Compiles the stateful StateGraph:
 With conditional self-healing loop: if R < 0.80 and loop < max_loops, route back to execute_node!
 """
 
+import asyncio
+import json
 import logging
 import time
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 from langgraph.graph import END, START, StateGraph
 
@@ -207,29 +209,27 @@ def _record_run_evidence(
         ))
 
 
-async def execute_task(
+def _format_sse(event: str, data: Dict[str, Any]) -> str:
+    """Formats an event and payload into valid SSE text/event-stream message format."""
+    return f"event: {event}\ndata: {json.dumps(data, default=str)}\n\n"
+
+
+def _build_initial_state(
     request: TaskExecuteRequest,
     memory_store: Optional[Any] = None,
     run_context: Optional[Any] = None,
-) -> TaskExecution:
-    """
-    High-level entry point to execute an agent task through the compiled LangGraph.
-    Returns complete TaskExecution record compatible with both REST API and React dashboard.
-    """
+) -> Tuple[AgentState, str, str, int, float]:
+    """Constructs the initial AgentState, correlation IDs, and timing for graph execution."""
     start_time = time.time()
     exec_id = f"exec_{uuid.uuid4().hex[:8]}"
     task_id = f"task_{uuid.uuid4().hex[:8]}"
 
     # Step 1: when a RunContext is supplied, retrieval and trust state are run-scoped.
-    # When it is absent the legacy store path runs exactly as before.
     policy_retriever = None
     task_index = 0
     if run_context is not None:
         from ai_service.experiment.retrieval import PolicyBackedRetriever
 
-        # R3: the ranker comes from the RunContext, declared explicitly. It is NOT
-        # derived from `memory_mode`, which is how the legacy Beta/quarantine filter
-        # used to be applied silently alongside the injected TrustPolicy.
         policy_retriever = PolicyBackedRetriever(run=run_context, ranker=run_context.ranker)
         task_index = run_context.next_task_index()
 
@@ -253,25 +253,16 @@ async def execute_task(
         "api_key": request.api_key,
         "memory_store": memory_store,
         "policy_retriever": policy_retriever,
-        # S6: no hardcoded experimental top_k. The run declares it; the legacy path
-        # (run_context is None) keeps its historical default of 2.
         "top_k": run_context.top_k if run_context is not None else 2,
-        # S8: the run is authoritative for sampling temperature when present;
-        # otherwise fall back to whatever the request specified (None => provider default).
         "temperature": (
             run_context.temperature if run_context is not None else request.temperature
         ),
-        # S9: seed is executed or rejected -- never silently recorded.
         "seed": run_context.seed if run_context is not None else request.seed,
-        # S12: effective token budget (None => provider default, recorded by the run).
         "max_tokens": (
             run_context.max_tokens if run_context is not None else request.max_tokens
         ),
-        # F2: explicit task-level evaluator selection (None => infer from directives).
         "evaluator": request.evaluator.value if request.evaluator is not None else None,
         "evaluator_config": dict(request.evaluator_config or {}),
-        # F3 / S11: requested cut-point. The evaluator resolves the EFFECTIVE value
-        # via `effective_outcome_threshold`, which the manifest also consults.
         "outcome_threshold": (
             run_context.requested_outcome_threshold if run_context is not None
             else request.outcome_threshold
@@ -286,19 +277,22 @@ async def execute_task(
         "start_time": start_time,
         "status": "starting",
     }
+    return initial_state, exec_id, task_id, task_index, start_time
 
-    # Execute graph
-    final_state = await agent_graph.ainvoke(initial_state)
 
+async def _finalize_execution(
+    final_state: Dict[str, Any],
+    request: TaskExecuteRequest,
+    memory_store: Optional[Any],
+    run_context: Optional[Any],
+    exec_id: str,
+    task_id: str,
+    task_index: int,
+    start_time: float,
+) -> TaskExecution:
+    """Persists outcomes and packages the final AgentState into a typed TaskExecution object."""
     total_latency_ms = int((time.time() - start_time) * 1000)
 
-    # ------------------------------------------------------------------
-    # F1 + F3: resolve the single TASK-LEVEL outcome and persist it ONCE.
-    #
-    # Nodes on the retry cycle run once per attempt. This block runs once per task,
-    # outside the cycle, so a retry can never multiply a memory's evidence.
-    # The TERMINAL attempt defines the task outcome.
-    # ------------------------------------------------------------------
     attempt_dicts = list(final_state.get("attempts", []))
     for a in attempt_dicts:
         a["is_terminal"] = False
@@ -322,7 +316,6 @@ async def execute_task(
     raw_trust_updates = list(final_state.get("trust_updates", []))
 
     if run_context is not None:
-        # --- Step 1 path: run-scoped evidence, immutable bank ---
         _record_run_evidence(
             run=run_context,
             request=request,
@@ -339,8 +332,6 @@ async def execute_task(
         for u in raw_trust_updates:
             u["persisted"] = True
 
-        # Fixed-bank guarantee: candidate memories are written only when the run
-        # explicitly enables bank mutation. Default is off.
         new_exp_obj = final_state.get("new_experience")
         if new_exp_obj is not None and run_context.memory_write_enabled and memory_store is not None:
             try:
@@ -349,16 +340,11 @@ async def execute_task(
                 logger.error("Failed to persist candidate experience.", exc_info=True)
 
     elif memory_store is not None:
-        # Inconclusive evaluations / infrastructure errors must not receive failure penalty
-        # and must not increment failure counters. Passing binary_outcome=None ensures
-        # store.update_trust touches no counters.
         is_inconclusive = (
             terminal_details.get("status") == "inconclusive"
             or terminal_details.get("error") in ("missing_test_code", "harness_error", "provider_error")
         )
 
-        # Exactly one write per (task, memory). Deduplicated by experience id so that
-        # a memory retrieved more than once still yields a single observation.
         seen_experience_ids: set[str] = set()
         for u in raw_trust_updates:
             exp_id = u.get("experienceId")
@@ -371,7 +357,7 @@ async def execute_task(
                     new_trust=float(u.get("newScore", 0.75)),
                     reason=u.get("reason"),
                     execution_id=task_id,
-                    binary_outcome=None if is_inconclusive else task_binary,   # F3: None preserves counters for inconclusive
+                    binary_outcome=None if is_inconclusive else task_binary,
                 )
                 u["persisted"] = True
             except Exception:
@@ -381,14 +367,12 @@ async def execute_task(
                     exc_info=True,
                 )
 
-        # Ensure all trust_node traces in trajectory reflect persisted state
         for step in final_state.get("trajectory", []):
             if step.get("node") == "trust_node" and step.get("metadata", {}).get("trustUpdates"):
                 for upd in step["metadata"]["trustUpdates"]:
                     if upd.get("experienceId") in seen_experience_ids:
                         upd["persisted"] = True
 
-        # One candidate per task, from the terminal reflection.
         new_exp_obj = final_state.get("new_experience")
         if new_exp_obj is not None:
             try:
@@ -410,7 +394,6 @@ async def execute_task(
             metadata=t.get("metadata"),
         ))
 
-    # Format trust updates (already persisted above, exactly once per task)
     trust_updates = []
     for u in raw_trust_updates:
         trust_updates.append(TrustUpdateSummary(
@@ -421,7 +404,6 @@ async def execute_task(
             status=u.get("status"),
         ))
 
-    # Format retrieved experiences as typed models for frontend and API
     retrieved_exp_matches = []
     for item in final_state.get("retrieved_memories", []):
         try:
@@ -445,8 +427,6 @@ async def execute_task(
         except Exception:
             logger.warning("Could not convert retrieved memory item to ExperienceMatch", exc_info=True)
 
-    # F3: the task-level reward is the terminal attempt's reward -- the continuous
-    # signal is retained alongside the binary outcome, never replaced by it.
     score = task_reward
     if score >= 0.80:
         quality = OutcomeQuality.POSITIVE
@@ -455,7 +435,6 @@ async def execute_task(
     else:
         quality = OutcomeQuality.NEGATIVE
 
-    # Format conversation messages for record
     final_messages: list[ChatMessage] = []
     for m in final_state.get("messages", []):
         if isinstance(m, dict) and "role" in m and "content" in m:
@@ -504,3 +483,137 @@ async def execute_task(
             loop_count=final_state.get("loop_count", 1),
         ),
     )
+
+
+async def execute_task(
+    request: TaskExecuteRequest,
+    memory_store: Optional[Any] = None,
+    run_context: Optional[Any] = None,
+) -> TaskExecution:
+    """
+    High-level entry point to execute an agent task through the compiled LangGraph.
+    Returns complete TaskExecution record compatible with both REST API and React dashboard.
+    """
+    initial_state, exec_id, task_id, task_index, start_time = _build_initial_state(
+        request, memory_store, run_context
+    )
+
+    final_state = await agent_graph.ainvoke(initial_state)
+
+    return await _finalize_execution(
+        final_state=final_state,
+        request=request,
+        memory_store=memory_store,
+        run_context=run_context,
+        exec_id=exec_id,
+        task_id=task_id,
+        task_index=task_index,
+        start_time=start_time,
+    )
+
+
+async def execute_task_stream(
+    request: TaskExecuteRequest,
+    memory_store: Optional[Any] = None,
+    run_context: Optional[Any] = None,
+) -> AsyncGenerator[str, None]:
+    """
+    Streams task execution through the 5-node LangGraph cognitive cycle using Server-Sent Events (SSE).
+    Yields real-time events for node transitions, token chunks, empirical verification, and final execution.
+    """
+    initial_state, exec_id, task_id, task_index, start_time = _build_initial_state(
+        request, memory_store, run_context
+    )
+
+    yield _format_sse("start", {
+        "execution_id": exec_id,
+        "task_id": task_id,
+        "session_id": request.session_id,
+        "task_input": request.task_input,
+        "task_domain": request.task_domain.value if hasattr(request.task_domain, "value") else str(request.task_domain),
+        "memory_enabled": request.memory_enabled,
+        "memory_mode": request.memory_mode.value if hasattr(request.memory_mode, "value") else str(request.memory_mode),
+    })
+
+    running_state: Dict[str, Any] = dict(initial_state)
+
+    try:
+        async for chunk in agent_graph.astream(initial_state, stream_mode="updates"):
+            for node_name, node_update in chunk.items():
+                running_state.update(node_update)
+
+                if node_name == "retrieve_node":
+                    retrieved = node_update.get("retrieved_memories", [])
+                    yield _format_sse("node_complete", {
+                        "node": "retrieve_node",
+                        "title": "Memory Retrieval",
+                        "retrieved_count": len(retrieved),
+                        "retrieved_memories": retrieved,
+                        "positive_strategy": node_update.get("positive_strategy"),
+                        "negative_pitfall": node_update.get("negative_pitfall"),
+                    })
+
+                elif node_name == "execute_node":
+                    solution = node_update.get("final_answer") or node_update.get("solution") or ""
+                    # Stream token chunks for responsive live typing effect
+                    if solution:
+                        words = solution.split(" ")
+                        chunk_size = 2
+                        for i in range(0, len(words), chunk_size):
+                            part = " ".join(words[i : i + chunk_size]) + (" " if i + chunk_size < len(words) else "")
+                            yield _format_sse("token", {"chunk": part})
+                            await asyncio.sleep(0.01)
+
+                    yield _format_sse("node_complete", {
+                        "node": "execute_node",
+                        "title": "Task Execution",
+                        "final_answer": solution,
+                        "tool_calls": node_update.get("tool_calls", []),
+                    })
+
+                elif node_name == "evaluate_node":
+                    score = node_update.get("outcome_score", 0.0)
+                    yield _format_sse("node_complete", {
+                        "node": "evaluate_node",
+                        "title": "Empirical Verification",
+                        "outcome_score": score,
+                        "evaluator_name": node_update.get("evaluator_name"),
+                        "evaluator_details": node_update.get("evaluator_details", {}),
+                    })
+
+                elif node_name == "reflect_node":
+                    cand = node_update.get("candidate_experience") or {}
+                    yield _format_sse("node_complete", {
+                        "node": "reflect_node",
+                        "title": "Experiential Reflection",
+                        "candidate_experience": cand,
+                    })
+
+                elif node_name == "trust_node":
+                    updates = node_update.get("trust_updates", [])
+                    yield _format_sse("node_complete", {
+                        "node": "trust_node",
+                        "title": "Trust Calibration",
+                        "trust_updates": updates,
+                    })
+
+        final_execution = await _finalize_execution(
+            final_state=running_state,
+            request=request,
+            memory_store=memory_store,
+            run_context=run_context,
+            exec_id=exec_id,
+            task_id=task_id,
+            task_index=task_index,
+            start_time=start_time,
+        )
+
+        yield _format_sse("done", {
+            "execution_id": exec_id,
+            "status": "completed",
+            "result": final_execution.model_dump(by_alias=True),
+        })
+
+    except Exception as exc:
+        logger.error("Error during streaming execution in graph: %s", exc, exc_info=True)
+        yield _format_sse("error", {"message": str(exc), "execution_id": exec_id})

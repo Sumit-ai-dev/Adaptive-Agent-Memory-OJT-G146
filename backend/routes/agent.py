@@ -7,14 +7,16 @@ Executions are persisted to SQLite (task_executions table) so history survives
 server restarts.
 """
 
+import json
 import logging
 import secrets
 import sqlite3
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 
 from ai_service.config import settings
-from ai_service.graph import execute_task
+from ai_service.graph import execute_task, execute_task_stream
 from ai_service.memory.store import BaseMemoryStore, SQLiteMemoryStore, get_memory_store
 from models.domain import MemoryMode, TaskDomain
 from models.task import TaskExecuteRequest, TaskExecution
@@ -216,6 +218,50 @@ async def run_agent_task(request: TaskExecuteRequest) -> TaskExecution:
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Execution pipeline error: {str(e)}",
         )
+
+
+@router.post(
+    "/execute/stream",
+    summary="Execute Agent Task with Real-Time Event & Token Streaming (SSE)",
+)
+async def run_agent_task_stream(request: TaskExecuteRequest):
+    """
+    Executes a task through the 5-node LangGraph orchestration loop with real-time SSE streaming.
+    Streams node lifecycle events (node_complete), code generation tokens, and final TaskExecution.
+    """
+    async def event_generator():
+        try:
+            async for sse_chunk in execute_task_stream(request, memory_store=shared_store):
+                if sse_chunk.startswith("event: done"):
+                    try:
+                        lines = sse_chunk.strip().split("\n")
+                        for line in lines:
+                            if line.startswith("data: "):
+                                payload_data = json.loads(line[6:])
+                                res_obj = payload_data.get("result")
+                                if res_obj:
+                                    exec_obj = TaskExecution.model_validate(res_obj)
+                                    _save_execution_to_db(exec_obj)
+                                    _execution_history.insert(0, exec_obj)
+                                    if len(_execution_history) > 100:
+                                        _execution_history.pop()
+                    except Exception as cache_exc:
+                        logger.warning(f"Could not cache streaming execution in db: {cache_exc}")
+
+                yield sse_chunk
+        except Exception as exc:
+            logger.error(f"Error during streaming execution: {exc}", exc_info=True)
+            yield f"event: error\ndata: {json.dumps({'error': str(exc)})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get(
