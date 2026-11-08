@@ -16,7 +16,7 @@ typing-extensions>=4.12.0         # models/state.py
 
 # --- Numerics / trust mathematics ---
 numpy>=1.26.0                     # ai_service/embedder.py, memory/store.py
-scipy>=1.11.0                     # ai_service/trust_math.py (scipy.special.betainc)
+scipy>=1.18.1                     # ai_service/trust_math.py (scipy.special.betainc)
 
 # --- PostgreSQL / pgvector persistence ---
 asyncpg>=0.30.0                   # ai_service/memory/store.py (PostgresMemoryStore)
