@@ -33,6 +33,6 @@ pytest>=8.0.0
 pytest-asyncio>=0.24.0
 
 # --- Agent tools ---
-duckduckgo-search>=8.0.0          # ai_service/tools/search.py
+duckduckgo-search>=8.1.1          # ai_service/tools/search.py
 ddgs>=9.0.0                       # standalone DDGS search tool
 
