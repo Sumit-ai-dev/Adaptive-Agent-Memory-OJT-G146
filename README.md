@@ -1,13 +1,17 @@
 # Adaptive AI Agent with Persistent Experience Memory (AEMA)
 
+[![PyPI - Version](https://img.shields.io/pypi/v/aema.svg?logo=pypi&logoColor=white&label=PyPI)](https://pypi.org/project/aema/)
+[![npm - Version](https://img.shields.io/npm/v/%40sumitaidev%2Faema.svg?logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@sumitaidev/aema)
+[![CI Status](https://img.shields.io/badge/CI-Passing-brightgreen.svg)](.github/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146/badge)](https://securityscorecards.dev/viewer/?uri=github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146)
+[![Security Policy](https://img.shields.io/badge/Security-Policy-blue.svg?logo=github)](SECURITY.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6.svg)](https://www.typescriptlang.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![React 18](https://img.shields.io/badge/React-18.3-61dafb.svg)](https://react.dev/)
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-3178c6.svg)](https://www.typescriptlang.org/)
 [![LangGraph](https://img.shields.io/badge/Orchestration-LangGraph-orange.svg)](https://langchain-ai.github.io/langgraph/)
 [![PostgreSQL](https://img.shields.io/badge/Vector_DB-pgvector_HNSW-336791.svg)](https://github.com/pgvector/pgvector)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![CI Status](https://img.shields.io/badge/CI-Passing-brightgreen.svg)](.github/workflows/ci.yml)
 
 <img width="2172" height="724" alt="aema logo" src="https://github.com/user-attachments/assets/b6a01f8f-ed7c-4af4-a6b5-47e116e40d2c" />
 

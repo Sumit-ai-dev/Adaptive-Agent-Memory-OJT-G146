@@ -1,6 +1,6 @@
 # AEMA (Adaptive Experience Memory Agent)
 
-[![npm version](https://img.shields.io/npm/v/aema.svg?color=blue)](https://www.npmjs.com/package/aema)
+[![npm version](https://img.shields.io/npm/v/%40sumitaidev%2Faema.svg?logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@sumitaidev/aema)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Ready](https://img.shields.io/badge/MCP-Standard%20v1.0-purple)](https://modelcontextprotocol.io)
 [![Docker Pulls](https://img.shields.io/docker/pulls/aema/mcp.svg?color=brightgreen)](https://hub.docker.com/r/aema/mcp)
@@ -29,7 +29,7 @@ Standard retrieval-augmented generation (RAG) and agent memory architectures ret
 ### 1. Installation
 
 ```bash
-npm install aema
+npm install @sumitaidev/aema
 ```
 
 Or run directly with `npx`:
