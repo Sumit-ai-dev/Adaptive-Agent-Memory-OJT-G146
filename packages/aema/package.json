@@ -61,7 +61,7 @@
   "homepage": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146#readme",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.6.0",
-    "zod": "^3.24.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "^22.13.0",
