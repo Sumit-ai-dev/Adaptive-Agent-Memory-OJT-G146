@@ -1,4 +1,6 @@
 # Pyrefly Configuration for AEMA
+preset = "basic"
+search-path = ["aema", "ai_service", "models", "backend"]
 skip-lsp-config-indexing = true
 
 project-excludes = [
@@ -19,4 +21,3 @@ project-excludes = [
     "**/paper/**",
     "**/research_papers/**"
 ]
-

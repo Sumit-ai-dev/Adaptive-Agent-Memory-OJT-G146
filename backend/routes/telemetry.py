@@ -6,10 +6,11 @@ No fabricated constants.
 
 import json
 import logging
+import secrets
 import sqlite3
 from pathlib import Path
-from typing import Any, Dict
-from fastapi import APIRouter
+from typing import Any, Dict, List, Optional
+from fastapi import APIRouter, Header
 
 from ai_service.config import settings
 from ai_service.security import security_audit_logger
@@ -112,14 +113,51 @@ async def get_telemetry() -> Dict[str, Any]:
     response_model=Dict[str, Any],
     summary="Get Security Telemetry: runtime audit metrics and blocked incident history",
 )
-async def get_security_telemetry() -> Dict[str, Any]:
+async def get_security_telemetry(
+    authorization: Optional[str] = Header(None, description="Admin authorization header"),
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token", description="Admin authorization token"),
+) -> Dict[str, Any]:
     """
     Returns security telemetry derived from runtime security audit logger:
     counters for blocked code executions, rate limit violations,
     unauthorized attempts, prompt injection detections, and recent security logs.
+    Redacts client IP addresses and attack payload strings for unauthenticated requests.
     """
     summary = security_audit_logger.get_summary()
-    recent_events = security_audit_logger.get_recent_events(limit=25)
+
+    # Determine whether caller has administrator credentials
+    is_admin = False
+    configured_key = (getattr(settings, "ADMIN_API_KEY", None) or "").strip()
+    if configured_key:
+        token = (x_admin_token or "").strip()
+        if not token and authorization:
+            if authorization.lower().startswith("bearer "):
+                token = authorization[7:].strip()
+            else:
+                token = authorization.strip()
+        if token and secrets.compare_digest(token, configured_key):
+            is_admin = True
+    else:
+        # Development mode without ADMIN_API_KEY
+        is_admin = True
+
+    raw_events = security_audit_logger.get_recent_events(limit=25)
+    if is_admin:
+        events = raw_events
+    else:
+        # Redact sensitive client IPs and internal payload strings for public viewers
+        events = []
+        for ev in raw_events:
+            masked = dict(ev)
+            if "client_ip" in masked:
+                masked["client_ip"] = "redacted"
+            if "details" in masked and isinstance(masked["details"], dict):
+                masked["details"] = {
+                    k: v for k, v in masked["details"].items()
+                    if k in {"source", "event", "error", "endpoint", "reason"}
+                }
+            events.append(masked)
+
     return {
         "status": "active",
         "ast_sandbox_enforced": getattr(settings, "SANDBOX_AST_STRICT", True),
@@ -129,7 +167,7 @@ async def get_security_telemetry() -> Dict[str, Any]:
         "counters": summary["counters"],
         "recentEventCount": summary["recentEventCount"],
         "lastEventTimestamp": summary["lastEventTimestamp"],
-        "recentEvents": recent_events,
+        "recentEvents": events,
     }
 
 

@@ -186,10 +186,11 @@ except Exception as _warm_exc:
 def verify_agent_execution_auth(
     authorization: Optional[str] = None,
     x_api_key: Optional[str] = None,
+    client_ip: Optional[str] = None,
 ) -> Optional[str]:
     """
     Validates API key for agent execution when REQUIRE_AGENT_AUTH is enabled.
-    Accepts AGENT_API_KEY or ADMIN_API_KEY.
+    Accepts AGENT_API_KEY or ADMIN_API_KEY. Logs authentication failures with client IP.
     """
     configured_key = (getattr(settings, "AGENT_API_KEY", None) or "").strip()
     admin_key = (getattr(settings, "ADMIN_API_KEY", None) or "").strip()
@@ -218,6 +219,7 @@ def verify_agent_execution_auth(
             event_type="AUTHENTICATION_FAILURE",
             severity="HIGH",
             details={"endpoint": "/agent/execute", "reason": "invalid_or_missing_token"},
+            client_ip=client_ip or "unknown",
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -269,7 +271,11 @@ async def run_agent_task(
         )
 
     # API Authentication verification
-    verify_agent_execution_auth(authorization=authorization, x_api_key=x_api_key)
+    verify_agent_execution_auth(
+        authorization=authorization,
+        x_api_key=x_api_key,
+        client_ip=client_ip,
+    )
 
     try:
         logger.info(

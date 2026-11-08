@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger("ai_service.security.code_sandbox")
 
-# Modules strictly prohibited in candidate solutions
+# Modules strictly prohibited in untrusted candidate and test execution
 PROHIBITED_MODULES: Set[str] = {
     # System and shell execution
     "os",
@@ -24,6 +24,8 @@ PROHIBITED_MODULES: Set[str] = {
     "pty",
     "commands",
     "shutil",
+    # Filesystem abstraction
+    "pathlib",
     # Network sockets and HTTP clients
     "socket",
     "urllib",
@@ -55,6 +57,10 @@ PROHIBITED_CALLS: Set[str] = {
     "compile",
     "__import__",
     "breakpoint",
+    "globals",
+    "locals",
+    "vars",
+    "dir",
 }
 
 # Python sandbox escape gadget attributes
@@ -64,7 +70,10 @@ PROHIBITED_ATTRIBUTES: Set[str] = {
     "__code__",
     "__closure__",
     "__bases__",
+    "__base__",
     "__mro__",
+    "__builtins__",
+    "__class__",
 }
 
 # Dangerous target names passed to dynamic getattr/setattr
@@ -79,6 +88,8 @@ DANGEROUS_DYNAMIC_ATTRS: Set[str] = {
     "connect",
     "eval",
     "exec",
+    "read_text",
+    "write_text",
 }
 
 # Sensitive path indicators in file operations
@@ -98,51 +109,68 @@ class CodeSafetyVisitor(ast.NodeVisitor):
     """AST Visitor that validates Python code against dangerous execution patterns."""
 
     def __init__(self, is_test_code: bool = False):
+        """Initializes the visitor with execution context."""
         self.is_test_code = is_test_code
         self.violations: List[str] = []
 
     def visit_Import(self, node: ast.Import) -> None:
+        """Inspects static imports against the prohibited module security list."""
         for alias in node.names:
             root_mod = alias.name.split(".")[0]
-            if not self.is_test_code and root_mod in PROHIBITED_MODULES:
+            if root_mod in PROHIBITED_MODULES:
                 self.violations.append(f"Prohibited module '{root_mod}' imported (line {node.lineno})")
-            elif self.is_test_code and root_mod in {"socket", "requests", "urllib", "http", "pty"}:
-                self.violations.append(f"Network module '{root_mod}' prohibited in test code (line {node.lineno})")
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        """Inspects module import-from statements against prohibited modules."""
         if node.module:
             root_mod = node.module.split(".")[0]
-            if not self.is_test_code and root_mod in PROHIBITED_MODULES:
+            if root_mod in PROHIBITED_MODULES:
                 self.violations.append(f"Prohibited import from '{root_mod}' (line {node.lineno})")
-            elif self.is_test_code and root_mod in {"socket", "requests", "urllib", "http", "pty"}:
-                self.violations.append(f"Network import from '{root_mod}' prohibited in test code (line {node.lineno})")
         self.generic_visit(node)
 
     def visit_Call(self, node: ast.Call) -> None:
-        # Check direct calls (e.g. eval(), exec())
+        """Inspects direct and dynamic function calls for RCE and filesystem hazards."""
+        # Check direct calls (e.g. eval(), exec(), globals(), __import__())
         if isinstance(node.func, ast.Name):
             if node.func.id in PROHIBITED_CALLS:
                 self.violations.append(f"Prohibited function call '{node.func.id}()' (line {node.lineno})")
-            elif node.func.id == "getattr":
-                # Check for getattr(x, "system") style evasion
-                for arg in node.args[1:]:
-                    if isinstance(arg, ast.Constant) and str(arg.value).lower() in DANGEROUS_DYNAMIC_ATTRS:
-                        self.violations.append(f"Prohibited dynamic getattr call on '{arg.value}' (line {node.lineno})")
-
-        # Check open() on sensitive filesystem paths
-        if isinstance(node.func, ast.Name) and node.func.id == "open":
-            if node.args and isinstance(node.args[0], ast.Constant):
-                path_str = str(node.args[0].value)
-                for sensitive in SENSITIVE_PATH_PATTERNS:
-                    if sensitive in path_str:
-                        self.violations.append(f"Prohibited access to sensitive path '{path_str}' in open() (line {node.lineno})")
+            elif node.func.id in {"getattr", "setattr", "delattr", "hasattr"}:
+                # Check for dynamic attribute evasion
+                if len(node.args) >= 2:
+                    attr_arg = node.args[1]
+                    if isinstance(attr_arg, ast.Constant):
+                        attr_val = str(attr_arg.value).lower()
+                        if attr_val in DANGEROUS_DYNAMIC_ATTRS or attr_val in PROHIBITED_ATTRIBUTES:
+                            self.violations.append(f"Prohibited dynamic {node.func.id} call on '{attr_arg.value}' (line {node.lineno})")
+                    else:
+                        # Non-constant dynamic attribute access (e.g. getattr(x, "sys" + "tem"))
+                        self.violations.append(f"Non-constant dynamic {node.func.id} call detected (line {node.lineno})")
+            elif node.func.id == "open":
+                # Check open() on sensitive filesystem paths or non-constant paths
+                if node.args and isinstance(node.args[0], ast.Constant):
+                    path_str = str(node.args[0].value)
+                    for sensitive in SENSITIVE_PATH_PATTERNS:
+                        if sensitive in path_str:
+                            self.violations.append(f"Prohibited access to sensitive path '{path_str}' in open() (line {node.lineno})")
+                else:
+                    self.violations.append(f"Variable-based open() call prohibited for untrusted code (line {node.lineno})")
 
         self.generic_visit(node)
 
     def visit_Attribute(self, node: ast.Attribute) -> None:
+        """Blocks access to sandbox-escape gadget attributes."""
         if node.attr in PROHIBITED_ATTRIBUTES:
             self.violations.append(f"Prohibited sandbox escape attribute '{node.attr}' accessed (line {node.lineno})")
+        self.generic_visit(node)
+
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        """Blocks dictionary indexing of builtins or globals gadgets."""
+        # e.g. globals()["__builtins__"] or obj["__subclasses__"]
+        if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+            val = node.slice.value
+            if val in PROHIBITED_ATTRIBUTES or val in PROHIBITED_CALLS:
+                self.violations.append(f"Prohibited gadget index '{val}' accessed via subscript (line {node.lineno})")
         self.generic_visit(node)
 
 
@@ -156,7 +184,7 @@ def validate_code_safety(code: str, is_test_code: bool = False) -> Tuple[bool, O
 
     try:
         tree = ast.parse(code)
-    except SyntaxError as e:
+    except SyntaxError:
         # Syntax errors are handled downstream by the test runner
         return True, None
 
@@ -176,7 +204,6 @@ def get_sanitized_subprocess_env(workdir: str) -> Dict[str, str]:
     Constructs an isolated, minimal environment dict for child execution processes.
     Strips all API keys, database credentials, and secret environment variables.
     """
-    # Safe system path preservation
     clean_env: Dict[str, str] = {
         "PATH": os.environ.get("PATH", "/usr/bin:/bin:/usr/local/bin"),
         "HOME": workdir,
@@ -185,17 +212,12 @@ def get_sanitized_subprocess_env(workdir: str) -> Dict[str, str]:
         "PYTHONHASHSEED": "0",
         "PYTHONIOENCODING": "utf-8",
         "PYTHONPATH": workdir,
-        "LANG": "en_US.UTF-8",
     }
 
-    # Ensure no secrets leak even if child inspects os.environ
-    for key, val in os.environ.items():
-        k_upper = key.upper()
-        if any(secret_term in k_upper for secret_term in ["KEY", "TOKEN", "SECRET", "PASS", "DATABASE", "SUPABASE"]):
-            continue
-        # Only allow minimal system variables
-        if key in {"USER", "LOGNAME", "SHELL", "TERM", "VIRTUAL_ENV"}:
-            clean_env[key] = val
+    # Only inherit benign host identity variables if present
+    for key in ("USER", "LOGNAME", "SHELL", "TERM", "VIRTUAL_ENV"):
+        if key in os.environ:
+            clean_env[key] = os.environ[key]
 
     return clean_env
 
@@ -223,12 +245,5 @@ def apply_sandbox_resource_limits() -> None:
         except (ValueError, OSError):
             pass
 
-        # Maximum child processes (fork bomb defense): 64
-        try:
-            resource.setrlimit(resource.RLIMIT_NPROC, (64, 128))
-        except (ValueError, OSError):
-            pass
-
     except Exception as exc:
         logger.debug(f"Could not apply POSIX rlimits in child process: {exc}")
-

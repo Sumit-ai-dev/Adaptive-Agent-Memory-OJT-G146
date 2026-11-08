@@ -282,46 +282,48 @@ class PytestExecutionEvaluator:
                 details={"error": "syntax_error", "lineno": e.lineno, "msg": e.msg},
             )
 
-        # Pre-execution static security verification (Sandboxing & RCE defense)
-        is_safe_cand, cand_violation = validate_code_safety(candidate, is_test_code=False)
-        if not is_safe_cand:
-            security_audit_logger.record_event(
-                event_type="BLOCKED_CODE_EXECUTION",
-                severity="CRITICAL",
-                details={"violation": cand_violation, "source": "candidate_code"},
-            )
-            return EvaluationOutcome.from_reward(
-                reward=0.0,
-                evaluator_name=self.name,
-                evaluator_version=self.version,
-                reason=f"Security violation: {cand_violation}",
-                outcome_threshold=effective_outcome_threshold(self.name),
-                details={"error": "security_violation", "violation": cand_violation},
-            )
+        # Combine setup and candidate before verification and execution
+        full_candidate = f"{setup_code.rstrip()}\n\n{candidate}" if setup_code.strip() else candidate
 
-        is_safe_test, test_violation = validate_code_safety(test_code, is_test_code=True)
-        if not is_safe_test:
-            security_audit_logger.record_event(
-                event_type="BLOCKED_CODE_EXECUTION",
-                severity="HIGH",
-                details={"violation": test_violation, "source": "test_code"},
-            )
-            return EvaluationOutcome.from_reward(
-                reward=0.0,
-                evaluator_name=self.name,
-                evaluator_version=self.version,
-                reason=f"Security violation in test suite: {test_violation}",
-                outcome_threshold=effective_outcome_threshold(self.name),
-                details={"error": "security_violation", "violation": test_violation},
-            )
+        # Pre-execution static security verification (Sandboxing & RCE defense)
+        from ai_service.config import settings
+        if getattr(settings, "SANDBOX_AST_STRICT", True):
+            is_safe_cand, cand_violation = validate_code_safety(full_candidate, is_test_code=False)
+            if not is_safe_cand:
+                security_audit_logger.record_event(
+                    event_type="BLOCKED_CODE_EXECUTION",
+                    severity="CRITICAL",
+                    details={"violation": cand_violation, "source": "candidate_with_setup_code"},
+                )
+                return EvaluationOutcome.from_reward(
+                    reward=0.0,
+                    evaluator_name=self.name,
+                    evaluator_version=self.version,
+                    reason=f"Security violation: {cand_violation}",
+                    outcome_threshold=effective_outcome_threshold(self.name),
+                    details={"error": "security_violation", "violation": cand_violation},
+                )
+
+            is_safe_test, test_violation = validate_code_safety(test_code, is_test_code=True)
+            if not is_safe_test:
+                security_audit_logger.record_event(
+                    event_type="BLOCKED_CODE_EXECUTION",
+                    severity="HIGH",
+                    details={"violation": test_violation, "source": "test_code"},
+                )
+                return EvaluationOutcome.from_reward(
+                    reward=0.0,
+                    evaluator_name=self.name,
+                    evaluator_version=self.version,
+                    reason=f"Security violation in test suite: {test_violation}",
+                    outcome_threshold=effective_outcome_threshold(self.name),
+                    details={"error": "security_violation", "violation": test_violation},
+                )
 
         workdir = tempfile.mkdtemp(prefix="pytest_eval_")
         try:
-            if setup_code.strip():
-                candidate = f"{setup_code.rstrip()}\n\n{candidate}"
-
             with open(os.path.join(workdir, solution_filename), "w", encoding="utf-8") as fh:
-                fh.write(candidate + "\n")
+                fh.write(full_candidate + "\n")
 
             test_content = test_code
             if "from solution import" not in test_code and "import solution" not in test_code:
