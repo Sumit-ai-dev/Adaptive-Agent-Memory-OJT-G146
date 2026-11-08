@@ -305,11 +305,13 @@ export async function deleteExperienceApi(id: string, isDemo = false): Promise<b
 
   const session = await getCurrentSession()
   const token = session.data?.session?.access_token
+  const adminKey = (import.meta as any).env?.VITE_ADMIN_API_KEY
 
   const res = await fetch(`${API_BASE_URL}/api/v1/memories/${id}`, {
     method: 'DELETE',
     headers: {
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(adminKey ? { 'X-Admin-Token': adminKey } : {}),
     },
   })
   if (res.ok || res.status === 204) {

@@ -17,6 +17,11 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger("ai_service.nodes.execute_node")
 
 from ai_service.llm_client import llm_gateway, resolve_provider_config
+from ai_service.security import (
+    detect_prompt_injection_heuristic,
+    format_bilateral_constraints,
+    security_audit_logger,
+)
 from models.provider import ModelProvider, ProviderConfig
 from models.state import AgentState
 
@@ -43,16 +48,21 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
         "Solve the user's task rigorously, providing accurate, verifiable, and structured answers.",
     ]
 
-    if positive_strategy:
-        system_prompt_parts.append(
-            f"\n[VERIFIED OPERATIONAL STRATEGY (+sigma)]:\n{positive_strategy}"
+    # Heuristic prompt injection detection on task input (OWASP LLM01)
+    has_injection, matched_pattern = detect_prompt_injection_heuristic(task_input)
+    if has_injection:
+        security_audit_logger.record_event(
+            event_type="PROMPT_INJECTION_DETECTED",
+            severity="MEDIUM",
+            details={"pattern": matched_pattern, "source": "task_input"},
         )
 
-    if negative_pitfall:
-        system_prompt_parts.append(
-            f"\n[CRITICAL NEGATIVE CONSTRAINT - AVOID (-pi)]:\n"
-            f"Under NO circumstances should you commit the following known pitfall: {negative_pitfall}"
-        )
+    # Format bilateral memory injections with sanitized XML tags and reference boundaries
+    constraint_sections = format_bilateral_constraints(
+        positive_strategy=positive_strategy,
+        negative_pitfall=negative_pitfall,
+    )
+    system_prompt_parts.extend(constraint_sections)
 
     system_prompt = "\n".join(system_prompt_parts)
 

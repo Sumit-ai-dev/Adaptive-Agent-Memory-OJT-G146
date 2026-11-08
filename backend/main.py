@@ -48,16 +48,21 @@ app = FastAPI(
 # CORS Configuration for React Frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origins=settings.CORS_ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Injects defensive HTTP headers on all API responses."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    return response
 
 # Mount Routes under /api (frontend convention) and /api/v1 (REST spec convention)
 app.include_router(agent_router, prefix="/api")
@@ -70,20 +75,26 @@ app.include_router(telemetry_router, prefix="/api")
 app.include_router(telemetry_router, prefix="/api/v1")
 
 
+@app.get("/", tags=["Root"])
+async def root():
+    return {
+        "service": "adaptive-agent-backend",
+        "version": "0.1.0",
+        "docs": "/docs",
+        "health": "/api/v1/health",
+    }
+
+
+@app.get("/api/v1/health", tags=["Health"])
 @app.get("/health", tags=["Health"])
 @app.get("/api/health", tags=["Health"])
 async def health_check():
     return {
-        "status": "healthy",
-        "version": "2.0.0",
-        "service": "adaptive-agent-memory-backend",
-        "memory_store": "sqlite_hybrid",
-        "quarantine_cutoff": settings.THETA_CUTOFF,
-        "asymmetric_alpha": settings.ALPHA_SUCCESS,
-        "asymmetric_beta": settings.BETA_FAILURE,
+        "status": "ok",
+        "service": "adaptive-agent-backend",
     }
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("backend.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("backend.main:app", host=settings.HOST, port=settings.PORT, reload=True)

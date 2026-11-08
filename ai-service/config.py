@@ -66,6 +66,23 @@ class AIServiceSettings(BaseSettings):
     MAX_CYCLICAL_LOOPS: int = Field(default=3, description="Maximum reflection loops before forced exit")
     REQUEST_TIMEOUT_SECONDS: float = Field(default=15.0)
 
+    # Security & API Protection
+    HOST: str = Field(default="127.0.0.1", description="Default network bind address for the API server")
+    PORT: int = Field(default=8000, description="Default port for the API server")
+    AGENT_API_KEY: Optional[str] = Field(default=None, description="API key required for agent execution when auth is enabled")
+    REQUIRE_AGENT_AUTH: bool = Field(default=False, description="When true, requires valid AGENT_API_KEY or ADMIN_API_KEY on /agent/execute")
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = Field(default=60, description="Max execution requests per minute per IP")
+    CORS_ALLOWED_ORIGINS: list[str] = Field(
+        default=[
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+        ],
+        description="Allowed CORS origin list",
+    )
+    SANDBOX_AST_STRICT: bool = Field(default=True, description="Enforce strict AST code safety verification before evaluation")
+
 
 # Global singleton settings instance
 settings = AIServiceSettings()

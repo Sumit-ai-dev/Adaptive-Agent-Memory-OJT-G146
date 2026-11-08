@@ -81,3 +81,4 @@ source = ["ai_service", "models"]
 
 [tool.coverage.report]
 show_missing = true
+

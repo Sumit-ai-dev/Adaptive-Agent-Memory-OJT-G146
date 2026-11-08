@@ -1,5 +1,5 @@
 {
-  "name": "aema",
+  "name": "@sumitaidev/aema",
   "version": "0.1.0",
   "description": "Reliability-Aware Experiential Memory for Autonomous AI Agents — Asymmetric Exponential Moving Average (AEMA) SDK and MCP Server",
   "type": "module",

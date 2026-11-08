@@ -1,0 +1,266 @@
+"""
+Code Sandbox and AST Safety Verification Engine.
+Provides pre-execution static analysis and process-level sandboxing to prevent
+Host-Level Remote Code Execution (RCE), filesystem traversal, and network exfiltration.
+"""
+
+from __future__ import annotations
+
+import ast
+import logging
+import os
+import sys
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+logger = logging.getLogger("ai_service.security.code_sandbox")
+
+# Modules strictly prohibited in untrusted candidate and test execution
+PROHIBITED_MODULES: Set[str] = {
+    # System, shell, and interpreter inspection
+    "os",
+    "posix",
+    "nt",
+    "sys",
+    "subprocess",
+    "pty",
+    "commands",
+    "shutil",
+    # Filesystem abstraction
+    "pathlib",
+    # Network sockets and HTTP clients
+    "socket",
+    "urllib",
+    "requests",
+    "http",
+    "ftplib",
+    "telnetlib",
+    "aiohttp",
+    "httpx",
+    # Native bindings and raw memory access
+    "ctypes",
+    "cffi",
+    # Arbitrary object deserialization
+    "pickle",
+    "shelve",
+    # Runtime tampering / dynamic import hooks
+    "importlib",
+    "builtins",
+    "_thread",
+    "threading",
+    "multiprocessing",
+    "signal",
+}
+
+# Dangerous function calls
+PROHIBITED_CALLS: Set[str] = {
+    "eval",
+    "exec",
+    "compile",
+    "__import__",
+    "breakpoint",
+    "globals",
+    "locals",
+    "vars",
+    "dir",
+    "input",
+}
+
+# Python sandbox escape gadget attributes and process-level execution methods
+PROHIBITED_ATTRIBUTES: Set[str] = {
+    "__subclasses__",
+    "__globals__",
+    "__code__",
+    "__closure__",
+    "__bases__",
+    "__base__",
+    "__mro__",
+    "__builtins__",
+    "__class__",
+    "modules",
+    "environ",
+    "argv",
+}
+
+# Dangerous target names passed to dynamic getattr/setattr or invoked as attributes
+DANGEROUS_DYNAMIC_ATTRS: Set[str] = {
+    "system",
+    "popen",
+    "spawn",
+    "remove",
+    "unlink",
+    "rmdir",
+    "rmtree",
+    "connect",
+    "eval",
+    "exec",
+    "read_text",
+    "write_text",
+}
+
+# Sensitive path indicators in file operations
+SENSITIVE_PATH_PATTERNS: Set[str] = {
+    "/etc",
+    "~",
+    ".ssh",
+    ".env",
+    "id_rsa",
+    "passwd",
+    "shadow",
+    "adaptive_memory.db",
+}
+
+
+class CodeSafetyVisitor(ast.NodeVisitor):
+    """AST Visitor that validates Python code against dangerous execution patterns."""
+
+    def __init__(self, is_test_code: bool = False):
+        """Initializes the visitor with execution context."""
+        self.is_test_code = is_test_code
+        self.violations: List[str] = []
+
+    def visit_Import(self, node: ast.Import) -> None:
+        """Inspects static imports against the prohibited module security list."""
+        for alias in node.names:
+            root_mod = alias.name.split(".")[0]
+            if root_mod in PROHIBITED_MODULES:
+                self.violations.append(f"Prohibited module '{root_mod}' imported (line {node.lineno})")
+        self.generic_visit(node)
+
+    def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+        """Inspects module import-from statements against prohibited modules."""
+        if node.module:
+            root_mod = node.module.split(".")[0]
+            if root_mod in PROHIBITED_MODULES:
+                self.violations.append(f"Prohibited import from '{root_mod}' (line {node.lineno})")
+        self.generic_visit(node)
+
+    def visit_Call(self, node: ast.Call) -> None:
+        """Inspects direct and dynamic function calls for RCE and filesystem hazards."""
+        # Check direct calls (e.g. eval(), exec(), globals(), __import__())
+        if isinstance(node.func, ast.Name):
+            if node.func.id in PROHIBITED_CALLS:
+                self.violations.append(f"Prohibited function call '{node.func.id}()' (line {node.lineno})")
+            elif node.func.id in {"getattr", "setattr", "delattr", "hasattr"}:
+                # Check for dynamic attribute evasion
+                if len(node.args) >= 2:
+                    attr_arg = node.args[1]
+                    if isinstance(attr_arg, ast.Constant):
+                        attr_val = str(attr_arg.value).lower()
+                        if attr_val in DANGEROUS_DYNAMIC_ATTRS or attr_val in PROHIBITED_ATTRIBUTES:
+                            self.violations.append(f"Prohibited dynamic {node.func.id} call on '{attr_arg.value}' (line {node.lineno})")
+                    else:
+                        # Non-constant dynamic attribute access (e.g. getattr(x, "sys" + "tem"))
+                        self.violations.append(f"Non-constant dynamic {node.func.id} call detected (line {node.lineno})")
+            elif node.func.id == "open":
+                # Check open() on sensitive filesystem paths or non-constant paths
+                if node.args and isinstance(node.args[0], ast.Constant):
+                    path_str = str(node.args[0].value)
+                    for sensitive in SENSITIVE_PATH_PATTERNS:
+                        if sensitive in path_str:
+                            self.violations.append(f"Prohibited access to sensitive path '{path_str}' in open() (line {node.lineno})")
+                else:
+                    self.violations.append(f"Variable-based open() call prohibited for untrusted code (line {node.lineno})")
+
+        self.generic_visit(node)
+
+    def visit_Name(self, node: ast.Name) -> None:
+        """Blocks direct reference to dangerous builtins or module introspection variables."""
+        if node.id in {"__builtins__", "__loader__", "__spec__"}:
+            self.violations.append(f"Prohibited builtin or introspective name '{node.id}' accessed (line {node.lineno})")
+        self.generic_visit(node)
+
+    def visit_Attribute(self, node: ast.Attribute) -> None:
+        """Blocks access to sandbox-escape gadget attributes and shell methods."""
+        attr_lower = node.attr.lower()
+        if node.attr in PROHIBITED_ATTRIBUTES or attr_lower in DANGEROUS_DYNAMIC_ATTRS:
+            self.violations.append(f"Prohibited sandbox escape or shell attribute '{node.attr}' accessed (line {node.lineno})")
+        self.generic_visit(node)
+
+    def visit_Subscript(self, node: ast.Subscript) -> None:
+        """Blocks dictionary indexing of builtins, modules, or globals gadgets."""
+        # e.g. globals()["__builtins__"] or sys.modules["os"] or obj["__subclasses__"]
+        if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
+            val = str(node.slice.value).lower()
+            if (
+                val in PROHIBITED_ATTRIBUTES
+                or val in PROHIBITED_CALLS
+                or val in PROHIBITED_MODULES
+                or val in DANGEROUS_DYNAMIC_ATTRS
+            ):
+                self.violations.append(f"Prohibited gadget or module index '{node.slice.value}' accessed via subscript (line {node.lineno})")
+        self.generic_visit(node)
+
+
+def validate_code_safety(code: str, is_test_code: bool = False) -> Tuple[bool, Optional[str]]:
+    """
+    Parses and checks Python source code for security violations.
+    Returns (True, None) if safe, or (False, reason) if dangerous patterns exist.
+    """
+    if not code or not code.strip():
+        return True, None
+
+    try:
+        tree = ast.parse(code)
+    except SyntaxError:
+        # Syntax errors are handled downstream by the test runner
+        return True, None
+
+    visitor = CodeSafetyVisitor(is_test_code=is_test_code)
+    visitor.visit(tree)
+
+    if visitor.violations:
+        reason = "; ".join(visitor.violations)
+        logger.warning(f"Security validation blocked untrusted code: {reason}")
+        return False, reason
+
+    return True, None
+
+
+def get_sanitized_subprocess_env(workdir: str) -> Dict[str, str]:
+    """
+    Constructs an isolated, minimal environment dict for child execution processes.
+    Strips all API keys, database credentials, and secret environment variables.
+    """
+    clean_env: Dict[str, str] = {
+        "PATH": os.environ.get("PATH", "/usr/bin:/bin:/usr/local/bin"),
+        "HOME": workdir,
+        "TMPDIR": workdir,
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONHASHSEED": "0",
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONPATH": workdir,
+    }
+
+    # Only inherit benign host identity variables if present
+    for key in ("USER", "LOGNAME", "SHELL", "TERM", "VIRTUAL_ENV"):
+        if key in os.environ:
+            clean_env[key] = os.environ[key]
+
+    return clean_env
+
+
+def apply_sandbox_resource_limits() -> None:
+    """
+    POSIX preexec_fn for subprocesses: clamps CPU time, virtual memory,
+    and file size limits to prevent resource exhaustion and fork bombs.
+    """
+    if sys.platform == "win32":
+        return
+
+    try:
+        import resource
+
+        # Maximum CPU time: 10s soft, 15s hard
+        resource.setrlimit(resource.RLIMIT_CPU, (10, 15))
+
+        # Maximum file write size: 10 MB
+        resource.setrlimit(resource.RLIMIT_FSIZE, (10 * 1024 * 1024, 15 * 1024 * 1024))
+
+        # Virtual address space limit: 512 MB (if supported by OS)
+        try:
+            resource.setrlimit(resource.RLIMIT_AS, (512 * 1024 * 1024, 1024 * 1024 * 1024))
+        except (ValueError, OSError):
+            pass
+
+    except Exception as exc:
+        logger.debug(f"Could not apply POSIX rlimits in child process: {exc}")
