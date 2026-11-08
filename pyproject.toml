@@ -81,3 +81,23 @@ source = ["ai_service", "models"]
 
 [tool.coverage.report]
 show_missing = true
+
+[tool.pyrefly]
+preset = "basic"
+search-path = ["aema", "ai_service", "models", "backend"]
+python-interpreter-path = ".venv/bin/python"
+skip-lsp-config-indexing = true
+project-excludes = [
+    "**/.venv/**",
+    "**/venv/**",
+    "**/node_modules/**",
+    "**/benchmarks/data/**",
+    "**/kaggle_benchmarks/**",
+    "**/kaggle_datasets/**",
+    "**/dist/**",
+    "**/.pytest_cache/**",
+    "**/.hypothesis/**",
+    "**/brag-output/**",
+    "**/frontend/**",
+    "**/packages/**"
+]

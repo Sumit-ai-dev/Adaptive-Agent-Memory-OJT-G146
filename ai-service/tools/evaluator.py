@@ -22,6 +22,12 @@ from models.task import (
     EvaluationOutcome,
     EvaluatorName,
 )
+from ai_service.security import (
+    apply_sandbox_resource_limits,
+    get_sanitized_subprocess_env,
+    security_audit_logger,
+    validate_code_safety,
+)
 
 logger = logging.getLogger("ai_service.tools.evaluator")
 
@@ -276,6 +282,39 @@ class PytestExecutionEvaluator:
                 details={"error": "syntax_error", "lineno": e.lineno, "msg": e.msg},
             )
 
+        # Pre-execution static security verification (Sandboxing & RCE defense)
+        is_safe_cand, cand_violation = validate_code_safety(candidate, is_test_code=False)
+        if not is_safe_cand:
+            security_audit_logger.record_event(
+                event_type="BLOCKED_CODE_EXECUTION",
+                severity="CRITICAL",
+                details={"violation": cand_violation, "source": "candidate_code"},
+            )
+            return EvaluationOutcome.from_reward(
+                reward=0.0,
+                evaluator_name=self.name,
+                evaluator_version=self.version,
+                reason=f"Security violation: {cand_violation}",
+                outcome_threshold=effective_outcome_threshold(self.name),
+                details={"error": "security_violation", "violation": cand_violation},
+            )
+
+        is_safe_test, test_violation = validate_code_safety(test_code, is_test_code=True)
+        if not is_safe_test:
+            security_audit_logger.record_event(
+                event_type="BLOCKED_CODE_EXECUTION",
+                severity="HIGH",
+                details={"violation": test_violation, "source": "test_code"},
+            )
+            return EvaluationOutcome.from_reward(
+                reward=0.0,
+                evaluator_name=self.name,
+                evaluator_version=self.version,
+                reason=f"Security violation in test suite: {test_violation}",
+                outcome_threshold=effective_outcome_threshold(self.name),
+                details={"error": "security_violation", "violation": test_violation},
+            )
+
         workdir = tempfile.mkdtemp(prefix="pytest_eval_")
         try:
             if setup_code.strip():
@@ -297,17 +336,10 @@ class PytestExecutionEvaluator:
             with open(os.path.join(workdir, "test_solution.py"), "w", encoding="utf-8") as fh:
                 fh.write(test_content + "\n")
 
-            # Minimal, reproducible environment. Bytecode writing disabled and hash
-            # randomisation pinned so repeated runs of the same candidate are identical.
-            env = {
-                "PATH": os.environ.get("PATH", ""),
-                "HOME": workdir,
-                "TMPDIR": workdir,
-                "PYTHONDONTWRITEBYTECODE": "1",
-                "PYTHONHASHSEED": "0",
-                "PYTHONIOENCODING": "utf-8",
-                "PYTHONPATH": workdir,
-            }
+            # Sanitized, minimal execution environment. Purges API keys, tokens, and DB credentials.
+            env = get_sanitized_subprocess_env(workdir)
+
+            preexec = apply_sandbox_resource_limits if sys.platform != "win32" else None
 
             proc = subprocess.run(
                 [
@@ -322,6 +354,7 @@ class PytestExecutionEvaluator:
                 capture_output=True,
                 text=True,
                 timeout=timeout,
+                preexec_fn=preexec,
             )
             passed = proc.returncode == 0
             tail = (proc.stdout or "")[-800:] + (proc.stderr or "")[-400:]

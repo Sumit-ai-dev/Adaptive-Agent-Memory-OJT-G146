@@ -1,0 +1,22 @@
+# Pyrefly Configuration for AEMA
+skip-lsp-config-indexing = true
+
+project-excludes = [
+    "**/.venv/**",
+    "**/venv/**",
+    "**/node_modules/**",
+    "**/benchmarks/data/**",
+    "**/kaggle_benchmarks/**",
+    "**/kaggle_datasets/**",
+    "**/kaggle_models/**",
+    "**/kaggle_notebooks/**",
+    "**/dist/**",
+    "**/.pytest_cache/**",
+    "**/.hypothesis/**",
+    "**/brag-output/**",
+    "**/frontend/**",
+    "**/packages/**",
+    "**/paper/**",
+    "**/research_papers/**"
+]
+

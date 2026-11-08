@@ -175,8 +175,13 @@ async def get_memory(memory_id: str) -> Dict[str, Any]:
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete or Quarantine Experience",
 )
-async def delete_memory(memory_id: str):
-    """Removes an experience record from the store."""
+async def delete_memory(
+    memory_id: str,
+    authorization: Optional[str] = Header(None, description="Admin authorization header"),
+    x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token", description="Admin authorization token"),
+):
+    """Removes an experience record from the store. Requires admin authorization."""
+    verify_admin_auth(authorization, x_admin_token)
     exp = await shared_store.get_experience(memory_id)
     if not exp:
         raise HTTPException(

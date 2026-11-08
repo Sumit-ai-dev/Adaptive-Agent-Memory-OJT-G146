@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, Dict
 from fastapi import APIRouter
 
+from ai_service.config import settings
+from ai_service.security import security_audit_logger
 from backend.routes.agent import shared_store
 from models.domain import ExperienceStatus
 
@@ -98,8 +100,36 @@ async def get_telemetry() -> Dict[str, Any]:
         "trustDecayBeta": 0.70,
         "trustBoostAlpha": 0.85,
         "initialTrustScore": 0.75,
+        # -- Security & Observability --------------------------------------
+        "securitySummary": security_audit_logger.get_summary(),
         # -- Benchmark results (populated only when Phase 9 runs) -----------
         "latestBenchmarks": _load_benchmark_summary(),
+    }
+
+
+@router.get(
+    "/security",
+    response_model=Dict[str, Any],
+    summary="Get Security Telemetry: runtime audit metrics and blocked incident history",
+)
+async def get_security_telemetry() -> Dict[str, Any]:
+    """
+    Returns security telemetry derived from runtime security audit logger:
+    counters for blocked code executions, rate limit violations,
+    unauthorized attempts, prompt injection detections, and recent security logs.
+    """
+    summary = security_audit_logger.get_summary()
+    recent_events = security_audit_logger.get_recent_events(limit=25)
+    return {
+        "status": "active",
+        "ast_sandbox_enforced": getattr(settings, "SANDBOX_AST_STRICT", True),
+        "rate_limiting_enforced": True,
+        "rate_limit_per_minute": getattr(settings, "RATE_LIMIT_REQUESTS_PER_MINUTE", 60),
+        "agent_auth_required": getattr(settings, "REQUIRE_AGENT_AUTH", False),
+        "counters": summary["counters"],
+        "recentEventCount": summary["recentEventCount"],
+        "lastEventTimestamp": summary["lastEventTimestamp"],
+        "recentEvents": recent_events,
     }
 
 
