@@ -99,7 +99,7 @@ async def list_memories(
                 try:
                     resolved_status = ExperienceStatus(sf)
                 except ValueError:
-                    resolved_status = None
+                    return []
 
         if search:
             # P0-6: `LocalEmbedder` exposes `embed_text` / `embed_batch`; there is no
