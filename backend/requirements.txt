@@ -20,7 +20,7 @@ scipy>=1.11.0                     # ai_service/trust_math.py (scipy.special.beta
 
 # --- PostgreSQL / pgvector persistence ---
 asyncpg>=0.30.0                   # ai_service/memory/store.py (PostgresMemoryStore)
-pgvector>=0.3.0                   # ai_service/memory/store.py (pgvector integration)
+pgvector>=0.5.1                   # ai_service/memory/store.py (pgvector integration)
 
 # --- Embeddings ---
 sentence-transformers>=3.0.0      # ai_service/embedder.py (hash fallback if absent)
