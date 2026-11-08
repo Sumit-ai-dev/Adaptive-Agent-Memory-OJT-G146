@@ -19,7 +19,7 @@ numpy>=1.26.0                     # ai_service/embedder.py, memory/store.py
 scipy>=1.11.0                     # ai_service/trust_math.py (scipy.special.betainc)
 
 # --- PostgreSQL / pgvector persistence ---
-asyncpg>=0.30.0                   # ai_service/memory/store.py (PostgresMemoryStore)
+asyncpg>=0.32.0                   # ai_service/memory/store.py (PostgresMemoryStore)
 pgvector>=0.3.0                   # ai_service/memory/store.py (pgvector integration)
 
 # --- Embeddings ---
