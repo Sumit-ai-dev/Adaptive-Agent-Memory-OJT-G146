@@ -188,6 +188,23 @@ Evaluated across 100 complex multi-step reasoning, coding, and web research task
 
 ---
 
+### Package Registries (PyPI & npm)
+
+[![PyPI - Version](https://img.shields.io/pypi/v/aema.svg?logo=pypi&logoColor=white&label=PyPI)](https://pypi.org/project/aema/)
+[![npm - Version](https://img.shields.io/npm/v/%40sumitaidev%2Faema.svg?logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@sumitaidev/aema)
+
+Install AEMA directly from official package registries for standalone agent pipelines or MCP client integrations:
+
+```bash
+# Python Engine & Evaluator (PyPI)
+pip install aema
+
+# TypeScript SDK & Model Context Protocol (MCP) Server (npm)
+npm install @sumitaidev/aema
+```
+
+---
+
 ### Method A: One-Command Unified Launcher (Recommended)
 
 A single production launcher script manages dependencies, port safety, background processes, health readiness polling, and graceful termination:
