@@ -23,7 +23,7 @@ asyncpg>=0.30.0                   # ai_service/memory/store.py (PostgresMemorySt
 pgvector>=0.3.0                   # ai_service/memory/store.py (pgvector integration)
 
 # --- Embeddings ---
-sentence-transformers>=3.0.0      # ai_service/embedder.py (hash fallback if absent)
+sentence-transformers>=6.2.0      # ai_service/embedder.py (hash fallback if absent)
 
 # --- Model gateway ---
 openai>=1.40.0                    # ai_service/llm_client.py (AsyncOpenAI)
