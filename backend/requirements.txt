@@ -30,7 +30,7 @@ openai>=1.40.0                    # ai_service/llm_client.py (AsyncOpenAI)
 
 # --- Test runner ---
 pytest>=8.0.0
-pytest-asyncio>=0.24.0
+pytest-asyncio>=1.4.1.post1
 
 # --- Agent tools ---
 duckduckgo-search>=8.0.0          # ai_service/tools/search.py
