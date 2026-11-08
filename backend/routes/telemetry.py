@@ -89,6 +89,8 @@ async def get_telemetry() -> Dict[str, Any]:
         "activeMemories": len(active_exps),
         "candidateMemories": len(candidate_exps),
         "quarantinedMemories": len(quarantined_exps),
+        "deprecatedMemories": len(quarantined_exps),
+        "avgTrustScore": round(sum(e.trust_score for e in active_exps) / len(active_exps), 3) if active_exps else 0.0,
         "meanTrustScore": round(sum(e.trust_score for e in all_exps) / len(all_exps), 4) if all_exps else 0.75,
         # -- Execution history (persisted to SQLite) ------------------------
         "totalExecutions": total_executions,
@@ -137,9 +139,6 @@ async def get_security_telemetry(
                 token = authorization.strip()
         if token and secrets.compare_digest(token, configured_key):
             is_admin = True
-    else:
-        # Development mode without ADMIN_API_KEY
-        is_admin = True
 
     raw_events = security_audit_logger.get_recent_events(limit=25)
     if is_admin:

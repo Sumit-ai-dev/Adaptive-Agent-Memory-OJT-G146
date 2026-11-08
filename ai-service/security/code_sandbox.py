@@ -16,10 +16,11 @@ logger = logging.getLogger("ai_service.security.code_sandbox")
 
 # Modules strictly prohibited in untrusted candidate and test execution
 PROHIBITED_MODULES: Set[str] = {
-    # System and shell execution
+    # System, shell, and interpreter inspection
     "os",
     "posix",
     "nt",
+    "sys",
     "subprocess",
     "pty",
     "commands",
@@ -61,9 +62,10 @@ PROHIBITED_CALLS: Set[str] = {
     "locals",
     "vars",
     "dir",
+    "input",
 }
 
-# Python sandbox escape gadget attributes
+# Python sandbox escape gadget attributes and process-level execution methods
 PROHIBITED_ATTRIBUTES: Set[str] = {
     "__subclasses__",
     "__globals__",
@@ -74,9 +76,12 @@ PROHIBITED_ATTRIBUTES: Set[str] = {
     "__mro__",
     "__builtins__",
     "__class__",
+    "modules",
+    "environ",
+    "argv",
 }
 
-# Dangerous target names passed to dynamic getattr/setattr
+# Dangerous target names passed to dynamic getattr/setattr or invoked as attributes
 DANGEROUS_DYNAMIC_ATTRS: Set[str] = {
     "system",
     "popen",
@@ -158,19 +163,31 @@ class CodeSafetyVisitor(ast.NodeVisitor):
 
         self.generic_visit(node)
 
+    def visit_Name(self, node: ast.Name) -> None:
+        """Blocks direct reference to dangerous builtins or module introspection variables."""
+        if node.id in {"__builtins__", "__loader__", "__spec__"}:
+            self.violations.append(f"Prohibited builtin or introspective name '{node.id}' accessed (line {node.lineno})")
+        self.generic_visit(node)
+
     def visit_Attribute(self, node: ast.Attribute) -> None:
-        """Blocks access to sandbox-escape gadget attributes."""
-        if node.attr in PROHIBITED_ATTRIBUTES:
-            self.violations.append(f"Prohibited sandbox escape attribute '{node.attr}' accessed (line {node.lineno})")
+        """Blocks access to sandbox-escape gadget attributes and shell methods."""
+        attr_lower = node.attr.lower()
+        if node.attr in PROHIBITED_ATTRIBUTES or attr_lower in DANGEROUS_DYNAMIC_ATTRS:
+            self.violations.append(f"Prohibited sandbox escape or shell attribute '{node.attr}' accessed (line {node.lineno})")
         self.generic_visit(node)
 
     def visit_Subscript(self, node: ast.Subscript) -> None:
-        """Blocks dictionary indexing of builtins or globals gadgets."""
-        # e.g. globals()["__builtins__"] or obj["__subclasses__"]
+        """Blocks dictionary indexing of builtins, modules, or globals gadgets."""
+        # e.g. globals()["__builtins__"] or sys.modules["os"] or obj["__subclasses__"]
         if isinstance(node.slice, ast.Constant) and isinstance(node.slice.value, str):
-            val = node.slice.value
-            if val in PROHIBITED_ATTRIBUTES or val in PROHIBITED_CALLS:
-                self.violations.append(f"Prohibited gadget index '{val}' accessed via subscript (line {node.lineno})")
+            val = str(node.slice.value).lower()
+            if (
+                val in PROHIBITED_ATTRIBUTES
+                or val in PROHIBITED_CALLS
+                or val in PROHIBITED_MODULES
+                or val in DANGEROUS_DYNAMIC_ATTRS
+            ):
+                self.violations.append(f"Prohibited gadget or module index '{node.slice.value}' accessed via subscript (line {node.lineno})")
         self.generic_visit(node)
 
 

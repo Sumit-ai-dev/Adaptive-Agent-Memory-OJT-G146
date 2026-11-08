@@ -33,10 +33,11 @@ class SlidingWindowRateLimiter:
         if max_requests <= 0:
             return False, max(1, window_seconds)
 
+        client_ip = (client_ip or "unknown").strip()
         now = time.time()
         with self._lock:
-            # Active eviction when tracking pool exceeds maximum size
-            if len(self._requests) > self.max_tracked_ips:
+            # Active bounded eviction when tracking pool reaches or exceeds capacity
+            if len(self._requests) >= self.max_tracked_ips and client_ip not in self._requests:
                 cutoff_global = now - window_seconds
                 stale_ips = [
                     ip for ip, reqs in self._requests.items()
@@ -44,6 +45,18 @@ class SlidingWindowRateLimiter:
                 ]
                 for ip in stale_ips:
                     del self._requests[ip]
+
+                # If all tracked IPs are active and capacity is still saturated,
+                # evict the oldest entries to strictly enforce the hard memory bound.
+                if len(self._requests) >= self.max_tracked_ips:
+                    target_size = max(1, int(self.max_tracked_ips * 0.8))
+                    num_to_remove = len(self._requests) - target_size + 1
+                    oldest_ips = sorted(
+                        self._requests.keys(),
+                        key=lambda k: self._requests[k][-1] if self._requests[k] else 0.0,
+                    )[:num_to_remove]
+                    for ip in oldest_ips:
+                        self._requests.pop(ip, None)
 
             timestamps = self._requests.get(client_ip, [])
             cutoff = now - window_seconds

@@ -285,6 +285,11 @@ class PytestExecutionEvaluator:
         # Combine setup and candidate before verification and execution
         full_candidate = f"{setup_code.rstrip()}\n\n{candidate}" if setup_code.strip() else candidate
 
+        # Construct safe test content (solution is imported from PYTHONPATH without binding os/sys)
+        test_content = test_code
+        if "from solution import" not in test_code and "import solution" not in test_code:
+            test_content = f"from solution import *\n\n{test_code}"
+
         # Pre-execution static security verification (Sandboxing & RCE defense)
         from ai_service.config import settings
         if getattr(settings, "SANDBOX_AST_STRICT", True):
@@ -304,12 +309,12 @@ class PytestExecutionEvaluator:
                     details={"error": "security_violation", "violation": cand_violation},
                 )
 
-            is_safe_test, test_violation = validate_code_safety(test_code, is_test_code=True)
+            is_safe_test, test_violation = validate_code_safety(test_content, is_test_code=True)
             if not is_safe_test:
                 security_audit_logger.record_event(
                     event_type="BLOCKED_CODE_EXECUTION",
                     severity="HIGH",
-                    details={"violation": test_violation, "source": "test_code"},
+                    details={"violation": test_violation, "source": "test_content"},
                 )
                 return EvaluationOutcome.from_reward(
                     reward=0.0,
@@ -324,16 +329,6 @@ class PytestExecutionEvaluator:
         try:
             with open(os.path.join(workdir, solution_filename), "w", encoding="utf-8") as fh:
                 fh.write(full_candidate + "\n")
-
-            test_content = test_code
-            if "from solution import" not in test_code and "import solution" not in test_code:
-                test_content = (
-                    "import sys\n"
-                    "import os\n"
-                    "sys.path.insert(0, os.path.dirname(__file__))\n"
-                    "from solution import *\n\n"
-                    + test_code
-                )
 
             with open(os.path.join(workdir, "test_solution.py"), "w", encoding="utf-8") as fh:
                 fh.write(test_content + "\n")

@@ -10,11 +10,13 @@ from fastapi import APIRouter, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
 from ai_service.config import settings
-from ai_service.embedder import LocalEmbedder
+from ai_service.embedder import LocalEmbedder, local_embedder
 from ai_service.memory.probation import execute_probationary_probe
+from ai_service.nodes.retrieve_node import retrieve_experiences
+from ai_service.nodes.trust_node import update_experience_trust
 from backend.routes.agent import shared_store
 from models.domain import ExperienceStatus, TaskDomain
-from models.experience import Experience
+from models.experience import Experience, ExperienceMatch
 
 logger = logging.getLogger("backend.routes.memories")
 
@@ -39,40 +41,31 @@ def verify_admin_auth(
 ) -> str:
     """
     Validates administrative credentials for destructive memory mutations and quarantine recoveries.
-    Supports dedicated X-Admin-Token headers, admin Bearer tokens, authenticated Supabase sessions,
-    and graceful fallback in local developer environments.
+    Fails closed with HTTP 503 if ADMIN_API_KEY is not configured.
+    Requires constant-time token comparison via X-Admin-Token or Authorization: Bearer.
     """
     configured_key = (getattr(settings, "ADMIN_API_KEY", None) or "").strip()
+    if not configured_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ADMIN_API_KEY is not configured on the server. Administrative actions are disabled.",
+        )
 
     token = (x_admin_token or "").strip()
-    bearer_token = ""
-    if authorization:
+    if not token and authorization:
         if authorization.lower().startswith("bearer "):
-            bearer_token = authorization[7:].strip()
+            token = authorization[7:].strip()
         else:
-            bearer_token = authorization.strip()
+            token = authorization.strip()
 
-    # 1. Exact match with configured admin API key
-    if token and configured_key and secrets.compare_digest(token, configured_key):
-        return "system:admin_api_key"
+    if not token or not secrets.compare_digest(token, configured_key):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Admin authorization required.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
-    if bearer_token and configured_key and secrets.compare_digest(bearer_token, configured_key):
-        return "system:admin_api_key"
-
-    # 2. Support authenticated Supabase dashboard sessions
-    if bearer_token and len(bearer_token) >= 20:
-        return "user:authenticated_session"
-
-    # 3. Graceful dev fallback if ADMIN_API_KEY is not configured
-    if not configured_key:
-        logger.debug("ADMIN_API_KEY not set; allowing local administrative operation.")
-        return "local:development"
-
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Admin authorization required.",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
+    return "system:admin_api_key"
 
 
 @router.get(
@@ -304,3 +297,122 @@ async def validate_memory_probe(
     except Exception as e:
         logger.error(f"Error during validation probe: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+
+class MemoryRetrieveRequest(BaseModel):
+    """Payload for live composite memory retrieval (supports both API and SDK schemas)."""
+    task_input: Optional[str] = Field(default=None, description="Task prompt or query to match against memory index")
+    query: Optional[str] = Field(default=None, description="SDK/MCP alias for task_input")
+    domain: Optional[TaskDomain] = Field(default=None, description="Optional task domain filter")
+    min_similarity: float = Field(default=0.70, ge=0.0, le=1.0, description="Minimum cosine similarity cutoff")
+    min_trust: float = Field(default=0.35, ge=0.0, le=1.0, description="Minimum trust score cutoff (Theorem 1 boundary)")
+    top_k: int = Field(default=3, ge=1, le=10, description="Maximum number of memories to return")
+
+    @property
+    def effective_input(self) -> str:
+        return self.task_input or self.query or ""
+
+
+class TrustUpdateRequest(BaseModel):
+    """Payload for updating an experience trust score via Asymmetric EMA."""
+    experience_id: str = Field(..., description="ID of the experience to update")
+    outcome_score: float = Field(..., ge=0.0, le=1.0, description="Evaluated outcome reward (0.0=failure, 1.0=success)")
+    execution_id: Optional[str] = Field(default=None, description="Optional audit execution ID")
+
+
+class MemoryFeedbackRequest(BaseModel):
+    """Feedback payload used by AEMA TypeScript SDK and MCP clients."""
+    outcome: Optional[str] = Field(default="success", description="Outcome label: 'success' or 'failure'")
+    outcome_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+    new_score: Optional[float] = Field(default=None, ge=0.0, le=1.0)
+
+
+@router.post("/retrieve", response_model=List[ExperienceMatch], summary="Execute composite memory retrieval")
+async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
+    """
+    Executes live memory retrieval using composite scoring:
+        CompositeScore = 0.70 * Similarity + 0.30 * TrustScore
+    Applies Theorem 1 dual-threshold cutoffs (Sim >= 0.70, Trust >= 0.35).
+    """
+    query_emb = None
+    query_text = payload.effective_input
+    if query_text:
+        try:
+            query_emb = local_embedder.embed_text(query_text)
+        except Exception:
+            query_emb = None
+
+    all_candidates = await shared_store.list_experiences()
+    matches = retrieve_experiences(
+        query_embedding=query_emb,
+        candidates=all_candidates,
+        filter_domain=payload.domain,
+        min_similarity=payload.min_similarity,
+        min_trust=payload.min_trust,
+        top_k=payload.top_k,
+    )
+    return matches
+
+
+@router.post("/search", response_model=List[ExperienceMatch], summary="SDK/MCP alias for composite memory retrieval")
+async def search_memories_endpoint(payload: MemoryRetrieveRequest):
+    """Alias for /retrieve matching AEMA TypeScript SDK and MCP specification."""
+    return await retrieve_memories_endpoint(payload)
+
+
+@router.post("/trust-update", summary="Execute Asymmetric EMA trust update")
+async def trust_update_endpoint(payload: TrustUpdateRequest):
+    """
+    Updates experience trust score via Asymmetric EMA:
+    - Success (R >= 0.80): S_{t+1} = 0.85 * S_t + 0.15 (Steady climb)
+    - Failure (R <= 0.30): S_{t+1} = 0.70 * S_t (Aggressive penalty)
+    - Automatically deprecates memory if trust drops below theta = 0.35.
+    """
+    exp = await shared_store.get_experience(payload.experience_id)
+    if not exp:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Experience '{payload.experience_id}' not found.",
+        )
+
+    updated_exp, audit_record, trust_update = update_experience_trust(
+        experience=exp,
+        outcome_score=payload.outcome_score,
+        execution_id=payload.execution_id,
+    )
+
+    status_val = updated_exp.status.value if hasattr(updated_exp.status, "value") else str(updated_exp.status)
+    bin_outcome = 1 if payload.outcome_score >= 0.80 else (0 if payload.outcome_score <= 0.30 else None)
+    await shared_store.update_trust(
+        experience_id=payload.experience_id,
+        new_trust=updated_exp.trust_score,
+        reason=audit_record.reason,
+        execution_id=payload.execution_id,
+        status=status_val,
+        binary_outcome=bin_outcome,
+    )
+
+    return {
+        "experience": updated_exp,
+        "auditRecord": audit_record,
+        "trustUpdate": trust_update,
+    }
+
+
+@router.post("/{experience_id}/feedback", summary="Record feedback from AEMA SDK/MCP clients")
+async def record_feedback_endpoint(experience_id: str, payload: MemoryFeedbackRequest):
+    """
+    Direct feedback bridge for AEMAClient and MCP server.
+    Maps outcome ('success'/'failure') to Asymmetric EMA update.
+    """
+    score = payload.outcome_score
+    if score is None:
+        score = 1.0 if payload.outcome == "success" else 0.0
+
+    trust_req = TrustUpdateRequest(
+        experience_id=experience_id,
+        outcome_score=score,
+        execution_id=None,
+    )
+    return await trust_update_endpoint(trust_req)
+

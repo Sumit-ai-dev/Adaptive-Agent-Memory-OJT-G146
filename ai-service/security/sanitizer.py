@@ -49,15 +49,19 @@ def detect_prompt_injection_heuristic(text: str) -> Tuple[bool, Optional[str]]:
 
 def sanitize_memory_content(text: str) -> str:
     """
-    Escapes custom delimiter tags within memory strings to prevent closing
-    the prompt encapsulation boundary prematurely, matching case-insensitively
-    and tolerating arbitrary internal tag whitespace.
+    Sanitizes untrusted memory strings to prevent prompt injection and delimiter breakout:
+    1. Neutralizes common prompt injection directives (e.g. 'ignore previous instructions').
+    2. Escapes custom XML wrapper tags regardless of casing or inner whitespace.
+    3. Strips dangerous raw null bytes or ASCII control characters.
     """
     if not text:
         return ""
 
+    # Neutralize heuristic prompt injection directives in stored memory text
+    sanitized = INJECTION_REGEX.sub("[FILTERED_PROMPT_INJECTION]", text)
+
     # Escape custom XML wrapper tags regardless of casing or inner whitespace
-    sanitized = BOUNDARY_TAG_RE.sub(_escape_boundary_tag, text)
+    sanitized = BOUNDARY_TAG_RE.sub(_escape_boundary_tag, sanitized)
 
     # Strip dangerous raw null bytes or control characters
     sanitized = re.sub(r"[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]", "", sanitized)
@@ -71,6 +75,7 @@ def format_bilateral_constraints(
     """
     Wraps experiential strategies and anti-pattern constraints into
     isolated XML boundaries, neutralizing injection breakout attempts.
+    Treats memory text strictly as passive observational context.
     """
     constraints: List[str] = []
 

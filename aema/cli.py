@@ -384,7 +384,7 @@ def serve(host, port, reload):
     load_dotenv()
 
     uvicorn.run(
-        "backend.app.main:app",
+        "backend.main:app",
         host=host,
         port=port,
         reload=reload,
