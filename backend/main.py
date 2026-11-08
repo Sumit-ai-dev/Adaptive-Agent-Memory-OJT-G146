@@ -75,17 +75,23 @@ app.include_router(telemetry_router, prefix="/api")
 app.include_router(telemetry_router, prefix="/api/v1")
 
 
+@app.get("/", tags=["Root"])
+async def root():
+    return {
+        "service": "adaptive-agent-backend",
+        "version": "0.1.0",
+        "docs": "/docs",
+        "health": "/api/v1/health",
+    }
+
+
+@app.get("/api/v1/health", tags=["Health"])
 @app.get("/health", tags=["Health"])
 @app.get("/api/health", tags=["Health"])
 async def health_check():
     return {
-        "status": "healthy",
-        "version": "2.0.0",
-        "service": "adaptive-agent-memory-backend",
-        "memory_store": "sqlite_hybrid",
-        "quarantine_cutoff": settings.THETA_CUTOFF,
-        "asymmetric_alpha": settings.ALPHA_SUCCESS,
-        "asymmetric_beta": settings.BETA_FAILURE,
+        "status": "ok",
+        "service": "adaptive-agent-backend",
     }
 
 
