@@ -1671,7 +1671,7 @@ def get_memory_store(
     return SQLiteMemoryStore(db_path=db_path or settings.SQLITE_DB_PATH, auto_seed=auto_seed)
 
 
-# Global default store instance
-memory_store = get_memory_store()
+# Global default store instance (lazy / side-effect-free on empty directories)
+memory_store = get_memory_store(auto_seed=False)
 get_store = get_memory_store
 
