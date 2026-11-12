@@ -18,7 +18,7 @@ This guide explains how to connect **AEMA (Reliability-Aware Experiential Memory
   "mcpServers": {
     "aema-memory": {
       "command": "npx",
-      "args": ["-y", "aema-mcp"],
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"],
       "env": {
         "AEMA_API_URL": "http://localhost:8000"
       }
@@ -27,7 +27,7 @@ This guide explains how to connect **AEMA (Reliability-Aware Experiential Memory
 }
 ```
 
-3. Restart Claude Desktop. You will see the **AEMA tools** (`aema_retrieve`, `aema_store`, `aema_feedback`, `aema_status`) available in the tool list.
+3. Restart Claude Desktop. You will see the **AEMA tools** (`aema_retrieve`, `aema_store`, `aema_feedback`, `aema_forget`, `aema_recover`, `aema_audit`, `aema_dedup`, `aema_wal`, `aema_status`) available in the tool list.
 
 ---
 
@@ -40,7 +40,7 @@ This guide explains how to connect **AEMA (Reliability-Aware Experiential Memory
   "mcpServers": {
     "aema-memory": {
       "command": "npx",
-      "args": ["-y", "aema-mcp"]
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
 }
@@ -79,7 +79,12 @@ Or configure Claude Desktop using Docker:
 
 | Tool Name | Parameters | Description |
 | :--- | :--- | :--- |
-| `aema_retrieve` | `query`, `topK`, `minTrust` | Retrieves non-quarantined, verified experiences ranked by reliability |
-| `aema_store` | `task`, `solution`, `initialTrust`, `domain` | Records execution traces with initial trust score |
+| `aema_retrieve` | `query`, `topK`, `minTrust`, `domain`, `userId` | Retrieves non-quarantined, verified experiences ranked by reliability |
+| `aema_store` | `task`, `solution`, `initialTrust`, `domain`, `userId` | Records execution traces with initial trust score |
 | `aema_feedback` | `experienceId`, `outcome` (`success`/`failure`) | Updates trust via A-EMA; activates Theorem 1 quarantine if score decays below 0.35 |
+| `aema_forget` | `experienceId`, `hardDelete` | Soft-quarantines or permanently erases a memory entry (GDPR) |
+| `aema_recover` | `experienceId`, `reason` | Safely moves a quarantined memory into `candidate` probation |
+| `aema_audit` | `userId` | Computes health diagnostics, quarantine ratio, and negative transfer risk index |
+| `aema_dedup` | `threshold`, `dryRun`, `domain` | Scans and merges redundant experiences, preserving higher-trust records |
+| `aema_wal` | `limit` | Inspects immutable Write-Ahead Log audit records |
 | `aema_status` | *(none)* | Displays active trust parameters, quarantined count, and system health |

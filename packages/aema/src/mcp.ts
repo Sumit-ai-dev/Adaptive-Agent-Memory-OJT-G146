@@ -32,13 +32,15 @@ server.tool(
     topK: z.number().optional().describe('Maximum number of memories to return (default: 5)'),
     minTrust: z.number().optional().describe('Minimum trust threshold for retrieved memories (default: 0.35)'),
     domain: z.string().optional().describe('Optional scope/domain filter (e.g. coding, research, devops)'),
+    userId: z.string().optional().describe('Optional user/tenant namespace filter'),
   },
-  async ({ query, topK, minTrust, domain }) => {
+  async ({ query, topK, minTrust, domain, userId }) => {
     const results = await client.retrieve({
       query,
       topK: topK ?? 5,
       minTrustScore: minTrust ?? DEFAULT_QUARANTINE_THRESHOLD,
       domain,
+      userId,
     });
 
     if (results.length === 0) {
@@ -80,13 +82,15 @@ server.tool(
     solution: z.string().describe('Successful solution, code snippet, or execution trace'),
     initialTrust: z.number().optional().describe('Initial trust score between 0.0 and 1.0 (default: 1.0)'),
     domain: z.string().optional().describe('Problem domain or categorization (e.g., coding, research, devops)'),
+    userId: z.string().optional().describe('Optional user/tenant namespace owner'),
   },
-  async ({ task, solution, initialTrust, domain }) => {
+  async ({ task, solution, initialTrust, domain, userId }) => {
     const exp = await client.store({
       task,
       solution,
       outcome: 'success',
       initialTrust: initialTrust ?? 1.0,
+      userId,
       metadata: { domain },
     });
 
@@ -142,10 +146,12 @@ server.tool(
 server.tool(
   'aema_audit',
   'Perform full health diagnostics on the agent memory bank: compute average trust, quarantine ratios, domain distributions, and negative transfer risk score.',
-  {},
-  async () => {
-    await client.syncFromRemote();
-    const report = client.audit();
+  {
+    userId: z.string().optional().describe('Optional user/tenant namespace filter'),
+  },
+  async ({ userId }) => {
+    await client.syncFromRemote(200, userId);
+    const report = client.audit(userId);
     const formatted = `## AEMA Experiential Memory Bank Audit\n\n` +
       `- **Overall Health**: ${report.healthStatus}\n` +
       `- **Total Memories**: ${report.totalMemories}\n` +
@@ -251,6 +257,52 @@ server.tool(
         {
           type: 'text',
           text: statusText,
+        },
+      ],
+    };
+  }
+);
+
+// Tool 8: Forget / Quarantine or Permanently Erase Memory (GDPR)
+server.tool(
+  'aema_forget',
+  'Remove or soft-quarantine a memory entry. Set hardDelete=true for permanent GDPR/PII erasure.',
+  {
+    experienceId: z.string().describe('Unique ID of the experience memory to forget'),
+    hardDelete: z.boolean().optional().describe('If true, permanently delete instead of soft-quarantine (default: false)'),
+  },
+  async ({ experienceId, hardDelete }) => {
+    const removed = await client.forget(experienceId, hardDelete ?? false);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: removed
+            ? `Memory [${experienceId}] ${hardDelete ? 'permanently erased' : 'soft-quarantined'}.`
+            : `Memory [${experienceId}] was not found.`,
+        },
+      ],
+    };
+  }
+);
+
+// Tool 9: Recover Quarantined Memory into Probation
+server.tool(
+  'aema_recover',
+  'Safely transition a quarantined memory into candidate probation (honors deprecated -> candidate -> active invariant).',
+  {
+    experienceId: z.string().describe('Unique ID of the quarantined experience to recover'),
+    reason: z.string().optional().describe('Audit justification for recovery (min 15 chars recommended)'),
+  },
+  async ({ experienceId, reason }) => {
+    const recovered = await client.recover(experienceId, reason);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: recovered
+            ? `Recovered [${recovered.id}] into CANDIDATE probation (status=${String(recovered.metadata?.backendStatus ?? 'candidate')}, trust=${(recovered.trustScore * 100).toFixed(1)}%).`
+            : `Memory [${experienceId}] was not found.`,
         },
       ],
     };

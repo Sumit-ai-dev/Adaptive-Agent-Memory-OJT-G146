@@ -56,8 +56,15 @@ function mapBackendExperience(raw: Record<string, any>, fallback?: Partial<Exper
   const failuresCount = raw.failuresCount ?? raw.failures_count ?? fallback?.consecutiveFailures ?? 0;
   const usesCount = raw.usesCount ?? raw.uses_count ?? fallback?.totalTrials ?? 1;
 
+  const resolvedUserId =
+    (typeof raw.userId === 'string' ? raw.userId : undefined) ??
+    (typeof raw.user_id === 'string' ? raw.user_id : undefined) ??
+    fallback?.userId ??
+    (typeof fallback?.metadata?.userId === 'string' ? fallback.metadata.userId : undefined);
+
   return {
     id: String(raw.id ?? fallback?.id ?? `exp_${Date.now()}`),
+    ...(resolvedUserId ? { userId: resolvedUserId } : {}),
     task: String(raw.task ?? raw.triggerCondition ?? raw.trigger_condition ?? fallback?.task ?? ''),
     solution: String(
       raw.solution ?? raw.strategyLesson ?? raw.strategy_lesson ?? fallback?.solution ?? ''
@@ -74,6 +81,7 @@ function mapBackendExperience(raw: Record<string, any>, fallback?: Partial<Exper
         : status === 'deprecated' || isQuarantined(trustScore),
     metadata: {
       ...(fallback?.metadata ?? {}),
+      ...(resolvedUserId ? { userId: resolvedUserId } : {}),
       domain: raw.taskDomain ?? raw.task_domain ?? fallback?.metadata?.domain,
       pitfall: raw.pitfall ?? raw.pitfallWarning ?? fallback?.metadata?.pitfall,
       backendStatus: status,
@@ -111,6 +119,7 @@ function mapBackendMatch(item: Record<string, any>): RetrievalResult {
 export class AEMAClient {
   private baseUrl: string;
   private apiKey?: string;
+  private defaultUserId?: string;
   private timeoutMs: number;
   private storeFile: string | null;
   private localStore: Map<string, Experience> = new Map();
@@ -118,6 +127,7 @@ export class AEMAClient {
   constructor(config: AEMAClientConfig = {}) {
     this.baseUrl = config.baseUrl ?? (process.env.AEMA_API_URL || 'http://localhost:8000');
     this.apiKey = config.apiKey ?? process.env.AEMA_API_KEY;
+    this.defaultUserId = config.userId ?? (process.env.AEMA_USER_ID || undefined);
     this.timeoutMs = config.timeoutMs ?? 10000;
 
     if (config.persistPath === false) {
@@ -167,6 +177,17 @@ export class AEMAClient {
     }
   }
 
+  private resolveUser(userId?: string): string | undefined {
+    const resolved = userId ?? this.defaultUserId;
+    return resolved && resolved.trim().length > 0 ? resolved.trim() : undefined;
+  }
+
+  private getExperienceUser(exp: Experience): string | undefined {
+    if (exp.userId) return exp.userId;
+    const metaUser = exp.metadata?.userId;
+    return typeof metaUser === 'string' && metaUser.trim().length > 0 ? metaUser.trim() : undefined;
+  }
+
   /**
    * Store a new experiential memory and record WAL entry.
    */
@@ -174,9 +195,13 @@ export class AEMAClient {
     const initialTrust = newExp.initialTrust ?? 1.0;
     const now = new Date().toISOString();
     const isQuar = isQuarantined(initialTrust);
+    const effectiveUser = this.resolveUser(
+      newExp.userId ?? (typeof newExp.metadata?.userId === 'string' ? newExp.metadata.userId : undefined)
+    );
 
     const experience: Experience = {
       id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      ...(effectiveUser ? { userId: effectiveUser } : {}),
       task: newExp.task,
       solution: newExp.solution,
       outcome: newExp.outcome ?? 'success',
@@ -184,7 +209,9 @@ export class AEMAClient {
       totalTrials: 1,
       consecutiveFailures: newExp.outcome === 'failure' ? 1 : 0,
       isQuarantined: isQuar,
-      metadata: newExp.metadata,
+      metadata: effectiveUser
+        ? { ...(newExp.metadata ?? {}), userId: effectiveUser }
+        : newExp.metadata,
       createdAt: now,
       updatedAt: now,
     };
@@ -196,7 +223,10 @@ export class AEMAClient {
       domain: newExp.metadata?.domain as string | undefined,
       newTrust: initialTrust,
       quarantined: isQuar,
-      metadata: { taskLength: newExp.task.length },
+      metadata: {
+        taskLength: newExp.task.length,
+        ...(effectiveUser ? { userId: effectiveUser } : {}),
+      },
     });
 
     // Sync with FastAPI /api/v1/memories using backend Experience schema
@@ -207,6 +237,7 @@ export class AEMAClient {
           headers: this.getHeaders(),
           body: JSON.stringify({
             id: experience.id,
+            ...(effectiveUser ? { userId: effectiveUser } : {}),
             taskDomain: normalizeBackendDomain(newExp.metadata?.domain) ?? 'general',
             triggerCondition: newExp.task,
             strategyLesson: newExp.solution,
@@ -239,6 +270,7 @@ export class AEMAClient {
     const options: RetrievalQuery = typeof query === 'string' ? { query } : query;
     const topK = options.topK ?? 5;
     const minTrust = options.minTrustScore ?? DEFAULT_QUARANTINE_THRESHOLD;
+    const effectiveUser = this.resolveUser(options.userId);
     const backendDomain =
       options.domain && VALID_BACKEND_DOMAINS.has(options.domain.toLowerCase())
         ? options.domain.toLowerCase()
@@ -254,6 +286,7 @@ export class AEMAClient {
             top_k: topK,
             min_trust: minTrust,
             ...(backendDomain ? { domain: backendDomain } : {}),
+            ...(effectiveUser ? { userId: effectiveUser } : {}),
           }),
         });
         if (res.ok) {
@@ -267,8 +300,11 @@ export class AEMAClient {
       // Fallback to local ranking
     }
 
-    // Local semantic matching via keyword overlap & domain filtering
+    // Local semantic matching via keyword overlap, domain & userId filtering
     let candidatesList = Array.from(this.localStore.values());
+    if (effectiveUser) {
+      candidatesList = candidatesList.filter((e) => this.getExperienceUser(e) === effectiveUser);
+    }
     if (options.domain) {
       candidatesList = candidatesList.filter((e) => e.metadata?.domain === options.domain);
     }
@@ -291,12 +327,17 @@ export class AEMAClient {
    * Synchronize local cache with remote FastAPI /api/v1/memories store when reachable.
    * Ensures audit(), status, and dedup() reflect remote database state.
    */
-  async syncFromRemote(limit = 200): Promise<boolean> {
+  async syncFromRemote(limit = 200, userId?: string): Promise<boolean> {
     try {
       if (!this.baseUrl || this.baseUrl.includes('localhost:0')) {
         return false;
       }
-      const res = await this.fetchWithTimeout(`${this.baseUrl}/api/v1/memories?limit=${limit}`, {
+      const effectiveUser = this.resolveUser(userId);
+      const qs = new URLSearchParams({ limit: String(limit) });
+      if (effectiveUser) {
+        qs.set('userId', effectiveUser);
+      }
+      const res = await this.fetchWithTimeout(`${this.baseUrl}/api/v1/memories?${qs.toString()}`, {
         method: 'GET',
         headers: this.getHeaders(),
       });
@@ -420,10 +461,145 @@ export class AEMAClient {
   }
 
   /**
-   * Memory bank health audit report.
+   * Soft-quarantine or permanently erase a memory (GDPR / lifecycle control).
    */
-  audit(): AuditReport {
-    return auditMemoryBank(Array.from(this.localStore.values()));
+  async forget(experienceId: string, hardDelete = false): Promise<boolean> {
+    let remoteHandled = false;
+    try {
+      if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
+        const qs = hardDelete ? '?hard_delete=true' : '';
+        const res = await this.fetchWithTimeout(
+          `${this.baseUrl}/api/v1/memories/${experienceId}${qs}`,
+          {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+          }
+        );
+        if (res.status === 404) return false;
+        if (res.ok) remoteHandled = true;
+      }
+    } catch {
+      // Fall back to local persistence
+    }
+
+    const exp = this.localStore.get(experienceId);
+    if (!exp && !remoteHandled) {
+      return false;
+    }
+
+    const previousTrust = exp?.trustScore;
+    if (exp) {
+      if (hardDelete) {
+        this.localStore.delete(experienceId);
+      } else {
+        exp.trustScore = 0.0;
+        exp.isQuarantined = true;
+        exp.updatedAt = new Date().toISOString();
+        exp.metadata = { ...(exp.metadata ?? {}), backendStatus: 'deprecated' };
+        this.localStore.set(experienceId, exp);
+      }
+      this.saveLocalStore();
+    }
+
+    globalWAL.log({
+      eventType: hardDelete ? 'FORGET' : 'QUARANTINE',
+      experienceId,
+      domain: exp?.metadata?.domain as string | undefined,
+      previousTrust,
+      newTrust: hardDelete ? undefined : 0.0,
+      quarantined: !hardDelete,
+      metadata: { hardDelete },
+    });
+
+    return true;
+  }
+
+  /**
+   * Safely recover a quarantined (`deprecated`) memory into `candidate` probation.
+   * Honors the state-machine invariant (deprecated -> candidate -> active).
+   */
+  async recover(
+    experienceId: string,
+    reason = 'Developer requested probationary recovery'
+  ): Promise<Experience | null> {
+    const auditReason = reason.length >= 15 ? reason : `${reason} (SDK recovery)`;
+
+    try {
+      if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
+        const res = await this.fetchWithTimeout(
+          `${this.baseUrl}/api/v1/memories/${experienceId}/recover`,
+          {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ reason: auditReason }),
+          }
+        );
+        if (res.status === 404) return null;
+        if (res.ok) {
+          const remoteRaw = (await res.json()) as Record<string, any>;
+          const mapped = mapBackendExperience(remoteRaw, this.localStore.get(experienceId));
+          this.localStore.set(experienceId, mapped);
+          this.saveLocalStore();
+          globalWAL.log({
+            eventType: 'RECOVER',
+            experienceId,
+            domain: mapped.metadata?.domain as string | undefined,
+            newTrust: mapped.trustScore,
+            quarantined: false,
+            metadata: { status: mapped.metadata?.backendStatus ?? 'candidate', reason: auditReason },
+          });
+          return mapped;
+        }
+      }
+    } catch {
+      // Fall back to local transition
+    }
+
+    const exp = this.localStore.get(experienceId);
+    if (!exp) return null;
+
+    const previousTrust = exp.trustScore;
+    exp.isQuarantined = false;
+    exp.consecutiveFailures = 0;
+    exp.updatedAt = new Date().toISOString();
+    exp.metadata = { ...(exp.metadata ?? {}), backendStatus: 'candidate' };
+    this.localStore.set(experienceId, exp);
+    this.saveLocalStore();
+
+    globalWAL.log({
+      eventType: 'RECOVER',
+      experienceId,
+      domain: exp.metadata?.domain as string | undefined,
+      previousTrust,
+      newTrust: exp.trustScore,
+      quarantined: false,
+      metadata: { status: 'candidate', reason: auditReason },
+    });
+
+    return exp;
+  }
+
+  /**
+   * List locally cached/synced experiences, optionally scoped by userId or domain.
+   */
+  list(options?: { userId?: string; domain?: string; includeQuarantined?: boolean }): Experience[] {
+    const effectiveUser = this.resolveUser(options?.userId);
+    const includeQuarantined = options?.includeQuarantined ?? true;
+    return Array.from(this.localStore.values()).filter((e) => {
+      if (!includeQuarantined && e.isQuarantined) return false;
+      if (effectiveUser && this.getExperienceUser(e) !== effectiveUser) return false;
+      if (options?.domain && e.metadata?.domain !== options.domain) return false;
+      return true;
+    });
+  }
+
+  /**
+   * Memory bank health audit report (optionally scoped by userId).
+   */
+  audit(userId?: string): AuditReport {
+    const effectiveUser = this.resolveUser(userId);
+    const entries = effectiveUser ? this.list({ userId: effectiveUser }) : Array.from(this.localStore.values());
+    return auditMemoryBank(entries);
   }
 
   /**

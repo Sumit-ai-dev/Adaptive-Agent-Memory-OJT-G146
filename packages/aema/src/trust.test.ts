@@ -324,4 +324,57 @@ describe('AEMAClient Persistence & FastAPI Remote Mapping', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('isolates experiences by userId and supports forget() + recover() lifecycle', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { AEMAClient } = await import('./client.js');
+
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'aema-ts-life-'));
+    const storeFile = path.join(tmpDir, 'mem.json');
+
+    try {
+      const client = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: storeFile });
+      const aliceExp = await client.store({
+        userId: 'alice',
+        task: 'Voice TTS response format rule',
+        solution: 'Strip markdown symbols before synthesis',
+        metadata: { domain: 'general' },
+      });
+      await client.store({
+        userId: 'bob',
+        task: 'Voice TTS response format rule',
+        solution: 'Keep bullet lists short',
+        metadata: { domain: 'general' },
+      });
+
+      const aliceHits = await client.retrieve({ query: 'Voice TTS format', userId: 'alice' });
+      const bobHits = await client.retrieve({ query: 'Voice TTS format', userId: 'bob' });
+      assert.equal(aliceHits.length, 1);
+      assert.equal(aliceHits[0].experience.userId, 'alice');
+      assert.equal(bobHits.length, 1);
+      assert.equal(bobHits[0].experience.userId, 'bob');
+
+      // Soft quarantine via forget()
+      const softRemoved = await client.forget(aliceExp.id, false);
+      assert.equal(softRemoved, true);
+      const afterForget = await client.retrieve({ query: 'Voice TTS format', userId: 'alice' });
+      assert.equal(afterForget.length, 0);
+
+      // Recover into candidate probation
+      const recovered = await client.recover(aliceExp.id, 'Unit test verified recovery');
+      assert.ok(recovered);
+      assert.equal(recovered?.isQuarantined, false);
+      assert.equal(recovered?.metadata?.backendStatus, 'candidate');
+
+      // Permanent GDPR erasure
+      const hardRemoved = await client.forget(aliceExp.id, true);
+      assert.equal(hardRemoved, true);
+      assert.equal(client.list({ userId: 'alice' }).length, 0);
+      assert.equal(client.list({ userId: 'bob' }).length, 1);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

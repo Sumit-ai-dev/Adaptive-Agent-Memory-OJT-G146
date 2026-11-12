@@ -11,7 +11,7 @@ import type { OutcomeType } from './types.js';
 
 export interface WALEntry {
   timestamp: string;
-  eventType: 'STORE' | 'FEEDBACK' | 'QUARANTINE' | 'DEDUP' | 'PRUNE';
+  eventType: 'STORE' | 'FEEDBACK' | 'QUARANTINE' | 'DEDUP' | 'PRUNE' | 'FORGET' | 'RECOVER';
   experienceId: string;
   domain?: string;
   outcome?: OutcomeType;
