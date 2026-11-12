@@ -13,6 +13,7 @@ import sqlite3
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Header, HTTPException, Query, Request, status
 
+from aema._compat import resolve_db_path
 from ai_service.config import settings
 from ai_service.graph import execute_task
 from ai_service.memory.store import BaseMemoryStore, SQLiteMemoryStore, get_memory_store
@@ -25,17 +26,45 @@ logger = logging.getLogger("backend.routes.agent")
 router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 
 # Global shared memory store for API server
-shared_store: BaseMemoryStore = get_memory_store(db_path="data/adaptive_memory.db", auto_seed=False)
+shared_store: BaseMemoryStore = get_memory_store(db_path=resolve_db_path(), auto_seed=False)
 
 # In-memory session cache: populated from SQLite on startup, kept in sync after that
 _execution_history: List[TaskExecution] = []
 
 
+def _sqlite_db_path() -> Optional[str]:
+    """Return the SQLite file path when SQLiteMemoryStore is active, else None."""
+    return getattr(shared_store, "db_path", None)
+
+
+def _filter_in_memory_executions(
+    domain: Optional[str] = None,
+    memory_mode: Optional[str] = None,
+    session_id: Optional[str] = None,
+) -> List[TaskExecution]:
+    """Filter cached executions when using a non-SQLite store (Postgres/Supabase)."""
+    items: List[TaskExecution] = []
+    for ex in _execution_history:
+        ex_domain = ex.task_domain.value if hasattr(ex.task_domain, "value") else str(ex.task_domain)
+        ex_mode = ex.memory_mode.value if hasattr(ex.memory_mode, "value") else str(ex.memory_mode)
+        if domain and domain != "all" and ex_domain != domain:
+            continue
+        if memory_mode and memory_mode != "all" and ex_mode != memory_mode:
+            continue
+        if session_id and ex.session_id != session_id:
+            continue
+        items.append(ex)
+    return items
+
+
 # ─── SQLite Execution Persistence ────────────────────────────────────────────
 
 def _ensure_executions_table() -> None:
-    """Create task_executions table in the shared SQLite DB if it does not exist."""
-    conn = sqlite3.connect(shared_store.db_path)
+    """Create task_executions table in the shared SQLite DB if running on SQLite."""
+    db_path = _sqlite_db_path()
+    if not db_path:
+        return
+    conn = sqlite3.connect(db_path)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS task_executions (
@@ -69,10 +98,13 @@ def _ensure_executions_table() -> None:
 
 
 def _save_execution_to_db(execution: TaskExecution) -> None:
-    """Persist a TaskExecution to SQLite as a full JSON blob."""
+    """Persist a TaskExecution to SQLite as a full JSON blob when SQLite is active."""
+    db_path = _sqlite_db_path()
+    if not db_path:
+        return
     try:
         payload = execution.model_dump_json(by_alias=True)
-        conn = sqlite3.connect(shared_store.db_path)
+        conn = sqlite3.connect(db_path)
         conn.execute(
             """
             INSERT OR REPLACE INTO task_executions
@@ -111,11 +143,16 @@ def _load_executions_from_db(
     offset: int = 0,
 ) -> "tuple[int, List[TaskExecution]]":
     """
-    Load paginated executions from SQLite.
+    Load paginated executions from SQLite (or in-memory cache when using Postgres/Supabase).
     Returns (total_count, page_of_TaskExecution_objects).
     """
+    db_path = _sqlite_db_path()
+    if not db_path:
+        filtered = _filter_in_memory_executions(domain=domain, memory_mode=memory_mode, session_id=session_id)
+        return len(filtered), filtered[offset : offset + limit]
+
     try:
-        conn = sqlite3.connect(shared_store.db_path)
+        conn = sqlite3.connect(db_path)
         where_clauses: List[str] = []
         params: List[Any] = []
         if domain and domain != "all":
@@ -156,9 +193,13 @@ def _load_executions_from_db(
 
 
 def _get_execution_from_db(execution_id: str) -> Optional[TaskExecution]:
-    """Look up a single execution by ID from SQLite."""
+    """Look up a single execution by ID from SQLite (or session cache)."""
+    db_path = _sqlite_db_path()
+    if not db_path:
+        return next((ex for ex in _execution_history if ex.id == execution_id), None)
+
     try:
-        conn = sqlite3.connect(shared_store.db_path)
+        conn = sqlite3.connect(db_path)
         row = conn.execute(
             "SELECT payload_json FROM task_executions WHERE id = ?", (execution_id,)
         ).fetchone()
@@ -341,8 +382,24 @@ async def list_sessions(
     Returns unique recent conversation sessions with session ID, title, turn count,
     and last activity timestamp from persisted execution history.
     """
+    db_path = _sqlite_db_path()
+    if not db_path:
+        seen: Dict[str, Dict[str, Any]] = {}
+        for item in _execution_history:
+            sid = getattr(item, "session_id", None)
+            if sid and sid not in seen:
+                seen[sid] = {
+                    "sessionId": sid,
+                    "title": (item.task_input or "New Conversation")[:60],
+                    "lastActive": str(item.created_at),
+                    "turnCount": 1,
+                }
+            elif sid:
+                seen[sid]["turnCount"] += 1
+        return list(seen.values())[:limit]
+
     try:
-        conn = sqlite3.connect(shared_store.db_path)
+        conn = sqlite3.connect(db_path)
         rows = conn.execute(
             """
             SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
@@ -433,8 +490,12 @@ async def clear_executions(
 
     global _execution_history
     _execution_history.clear()
+    db_path = _sqlite_db_path()
+    if not db_path:
+        return {"status": "success", "message": "All execution runs cleared."}
+
     try:
-        conn = sqlite3.connect(shared_store.db_path)
+        conn = sqlite3.connect(db_path)
         conn.execute("DELETE FROM task_executions")
         conn.commit()
         conn.close()

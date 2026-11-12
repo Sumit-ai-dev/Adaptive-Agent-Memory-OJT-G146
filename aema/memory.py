@@ -342,6 +342,7 @@ class AdaptiveMemory:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.delete(
                     f"{self.api_url}/api/v1/memories/{experience_id}",
+                    params={"hard_delete": "true"} if hard_delete else None,
                     headers=self._headers(),
                 )
                 if res.status_code == 404:

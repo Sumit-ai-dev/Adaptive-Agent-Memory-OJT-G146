@@ -130,3 +130,71 @@ async def test_adaptive_memory_sync_wrappers_safe_inside_running_event_loop(tmp_
 
     hits = mem.recall("spoken turns", min_similarity=0.05)
     assert len(hits) == 1
+
+
+def test_backend_non_sqlite_store_and_create_memory_embedding(tmp_path, monkeypatch):
+    """
+    Verify FastAPI telemetry, agent routes, and memory creation/search do not crash
+    when shared_store is a non-SQLite store (no .db_path attribute, e.g. Postgres).
+    """
+    from fastapi.testclient import TestClient
+    import backend.main as backend_main
+    import backend.routes.agent as agent_routes
+    import backend.routes.memories as mem_routes
+    import backend.routes.telemetry as telemetry_routes
+
+    class _NoDbPathStore:
+        def __init__(self):
+            self.items = {}
+
+        async def list_experiences(self, domain=None, status=None, min_trust=0.0, user_id=None):
+            exps = list(self.items.values())
+            if user_id is not None:
+                exps = [e for e in exps if e.user_id == user_id]
+            return [e for e in exps if e.trust_score >= min_trust]
+
+        async def add_experience(self, exp):
+            self.items[exp.id] = exp
+            return exp
+
+        async def get_experience(self, exp_id):
+            return self.items.get(exp_id)
+
+        async def search_similar(self, query_embedding, domain=None, top_k=5, user_id=None):
+            return [(e, 0.8) for e in self.items.values() if user_id is None or e.user_id == user_id][:top_k]
+
+    stub = _NoDbPathStore()
+    monkeypatch.setattr(agent_routes, "shared_store", stub)
+    monkeypatch.setattr(mem_routes, "shared_store", stub)
+    monkeypatch.setattr(telemetry_routes, "shared_store", stub)
+
+    with TestClient(backend_main.app) as client:
+        assert client.get("/api/v1/telemetry").status_code == 200
+        assert client.get("/api/v1/agent/executions").status_code == 200
+        assert client.get("/api/v1/agent/sessions").status_code == 200
+
+        created = client.post(
+            "/api/v1/memories",
+            json={
+                "userId": "startup_tenant",
+                "taskDomain": "coding",
+                "triggerCondition": "Asyncpg connection pool exhausted",
+                "strategyLesson": "Bound max_size and release connections in async with pool.acquire()",
+            },
+        )
+        assert created.status_code == 201
+        created_body = created.json()
+        assert len(stub.items[created_body["id"]].embedding or []) == 384
+
+        # Verify adaptive min_similarity on /search (omitted min_similarity still works)
+        from models.domain import ExperienceStatus
+        stub.items[created_body["id"]].status = ExperienceStatus.ACTIVE
+        search_res = client.post(
+            "/api/v1/memories/search",
+            json={
+                "query": "Asyncpg connection pool exhausted",
+                "userId": "startup_tenant",
+            },
+        )
+        assert search_res.status_code == 200
+        assert len(search_res.json()) == 1

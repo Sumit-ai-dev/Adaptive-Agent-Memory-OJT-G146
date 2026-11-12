@@ -28,7 +28,11 @@ logger = logging.getLogger("backend.main")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing Adaptive Agent Memory Backend Engine...")
-    logger.info(f"Database path: {shared_store.db_path}")
+    db_path = getattr(shared_store, "db_path", None)
+    if db_path:
+        logger.info(f"Database path: {db_path}")
+    else:
+        logger.info(f"Memory backend: {type(shared_store).__name__}")
     logger.info(f"Groq Provider Key: {'CONFIGURED' if settings.GROQ_API_KEY else 'NOT SET (falls back to mock if empty)'}")
     logger.info(f"Gemini Provider Key: {'CONFIGURED' if settings.GEMINI_API_KEY else 'NOT SET (falls back to mock if empty)'}")
     logger.info(f"OpenAI Provider Key: {'CONFIGURED' if settings.OPENAI_API_KEY else 'NOT SET'}")
