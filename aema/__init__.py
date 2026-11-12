@@ -4,6 +4,7 @@ Reliability-aware experiential memory for autonomous AI agents.
 """
 
 from aema._compat import import_pkg
+from aema.memory import AdaptiveMemory
 
 __version__ = "0.1.1"
 
@@ -36,6 +37,7 @@ def __getattr__(name: str):
 
 __all__ = [
     "__version__",
+    "AdaptiveMemory",
     "get_memory_store",
     "execute_task",
     "Experience",

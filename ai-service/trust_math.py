@@ -7,8 +7,69 @@ beta integral hypothesis testing for quarantine.
 
 import math
 from typing import Tuple
-import numpy as np
-import scipy.special as sc
+
+try:
+    import scipy.special as sc
+except ImportError:
+    sc = None
+
+
+def _betacf(a: float, b: float, x: float) -> float:
+    """Continued fraction evaluation for incomplete beta function (Lentz's method)."""
+    max_iter = 200
+    eps = 3.0e-12
+    fpmin = 1.0e-30
+    qab = a + b
+    qap = a + 1.0
+    qam = a - 1.0
+    c = 1.0
+    d = 1.0 - qab * x / qap
+    if abs(d) < fpmin:
+        d = fpmin
+    d = 1.0 / d
+    h = d
+    for m in range(1, max_iter + 1):
+        m2 = 2 * m
+        aa = m * (b - m) * x / ((qam + m2) * (a + m2))
+        d = 1.0 + aa * d
+        if abs(d) < fpmin:
+            d = fpmin
+        c = 1.0 + aa / c
+        if abs(c) < fpmin:
+            c = fpmin
+        d = 1.0 / d
+        h *= d * c
+        aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2))
+        d = 1.0 + aa * d
+        if abs(d) < fpmin:
+            d = fpmin
+        c = 1.0 + aa / c
+        if abs(c) < fpmin:
+            c = fpmin
+        d = 1.0 / d
+        delta = d * c
+        h *= delta
+        if abs(delta - 1.0) < eps:
+            break
+    return h
+
+
+def _betainc_pure(a: float, b: float, x: float) -> float:
+    """Pure-Python regularized incomplete beta function I_x(a, b)."""
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    bt = math.exp(
+        math.lgamma(a + b)
+        - math.lgamma(a)
+        - math.lgamma(b)
+        + a * math.log(x)
+        + b * math.log(1.0 - x)
+    )
+    if x < (a + 1.0) / (a + b + 2.0):
+        return bt * _betacf(a, b, x) / a
+    return 1.0 - bt * _betacf(b, a, 1.0 - x) / b
 
 
 def beta_trust_mean(
@@ -111,7 +172,10 @@ def posterior_probability_reliable(
 
     alpha_post = alpha_0 + float(successes)
     beta_post = beta_0 + float(failures)
-    cdf_at_thresh = float(sc.betainc(alpha_post, beta_post, threshold))
+    if sc is not None:
+        cdf_at_thresh = float(sc.betainc(alpha_post, beta_post, threshold))
+    else:
+        cdf_at_thresh = _betainc_pure(alpha_post, beta_post, threshold)
     return float(max(0.0, min(1.0, 1.0 - cdf_at_thresh)))
 
 
