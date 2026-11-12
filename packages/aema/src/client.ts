@@ -159,7 +159,9 @@ export class AEMAClient {
         fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       }
       const data = JSON.stringify(Array.from(this.localStore.values()), null, 2);
-      fs.writeFileSync(this.storeFile, data, { encoding: 'utf-8', mode: 0o600 });
+      const tmpFile = `${this.storeFile}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+      fs.writeFileSync(tmpFile, data, { encoding: 'utf-8', mode: 0o600 });
+      fs.renameSync(tmpFile, this.storeFile);
     } catch {
       // Never crash execution if filesystem persistence fails
     }

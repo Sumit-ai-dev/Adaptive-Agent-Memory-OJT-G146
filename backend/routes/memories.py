@@ -78,6 +78,7 @@ async def list_memories(
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (active, candidate, deprecated)"),
     min_trust: float = Query(0.0, ge=0.0, le=1.0, description="Minimum trust threshold"),
     search: Optional[str] = Query(None, description="Semantic or keyword search query"),
+    user_id: Optional[str] = Query(None, alias="userId", description="Optional user/tenant namespace filter"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> List[Dict[str, Any]]:
@@ -110,6 +111,7 @@ async def list_memories(
                 query_embedding=query_emb,
                 domain=TaskDomain(domain) if domain and domain != "all" else None,
                 top_k=limit,
+                user_id=user_id,
             )
             out = []
             for exp, sim in results:
@@ -127,6 +129,7 @@ async def list_memories(
             domain=TaskDomain(domain) if domain and domain != "all" else None,
             status=resolved_status,
             min_trust=min_trust,
+            user_id=user_id,
         )
 
         paged = all_exps[offset : offset + limit]
@@ -304,6 +307,7 @@ class MemoryRetrieveRequest(BaseModel):
     task_input: Optional[str] = Field(default=None, description="Task prompt or query to match against memory index")
     query: Optional[str] = Field(default=None, description="SDK/MCP alias for task_input")
     domain: Optional[TaskDomain] = Field(default=None, description="Optional task domain filter")
+    user_id: Optional[str] = Field(default=None, alias="userId", description="Optional user/tenant namespace filter")
     min_similarity: float = Field(default=0.70, ge=0.0, le=1.0, description="Minimum cosine similarity cutoff")
     min_trust: float = Field(default=0.35, ge=0.0, le=1.0, description="Minimum trust score cutoff (Theorem 1 boundary)")
     top_k: int = Field(default=3, ge=1, le=10, description="Maximum number of memories to return")
@@ -342,7 +346,7 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
         except Exception:
             query_emb = None
 
-    all_candidates = await shared_store.list_experiences()
+    all_candidates = await shared_store.list_experiences(user_id=payload.user_id)
     matches = retrieve_experiences(
         query_embedding=query_emb,
         candidates=all_candidates,

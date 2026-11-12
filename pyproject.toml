@@ -44,8 +44,12 @@ embeddings = [
     "sentence-transformers>=3.0.0",
     "scipy>=1.11.0",
 ]
+postgres = [
+    "asyncpg>=0.29.0",
+    "pgvector>=0.3.0",
+]
 full = [
-    "aema[agent,server,embeddings]",
+    "aema[agent,server,embeddings,postgres]",
 ]
 dev = [
     "pytest>=8.0.0",

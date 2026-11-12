@@ -6,11 +6,12 @@ voice/chat servers, or connected to a remote AEMA HTTP/Postgres backend.
 
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+import json
 import os
 from pathlib import Path
 from typing import Any, Coroutine, Dict, List, Optional, TypeVar
 
-from aema._compat import import_pkg
+from aema._compat import import_pkg, resolve_db_path
 
 _T = TypeVar("_T")
 
@@ -26,13 +27,6 @@ def _run_sync(coro: Coroutine[Any, Any, _T]) -> _T:
         return pool.submit(asyncio.run, coro).result()
 
 
-def _default_db_path() -> str:
-    env_path = os.environ.get("AEMA_DB_PATH") or os.environ.get("SQLITE_DB_PATH")
-    if env_path:
-        return env_path
-    return str(Path.home() / ".aema" / "memory.db")
-
-
 class AdaptiveMemory:
     """
     Lightweight, plug-and-play experiential memory with Theorem 1 quarantine protection.
@@ -40,7 +34,7 @@ class AdaptiveMemory:
     Example:
         from aema import AdaptiveMemory
 
-        mem = AdaptiveMemory()
+        mem = AdaptiveMemory(user_id="user_123")
         item = mem.remember("Voice agent shouldn't read markdown symbols aloud")
         hits = mem.recall("Format reply for voice TTS")
         mem.feedback(item["id"], success=True)
@@ -52,11 +46,13 @@ class AdaptiveMemory:
         api_url: Optional[str] = None,
         api_key: Optional[str] = None,
         database_url: Optional[str] = None,
+        user_id: Optional[str] = None,
         quarantine_threshold: float = 0.35,
         initial_trust: float = 0.75,
     ) -> None:
         self.api_url = (api_url or os.environ.get("AEMA_API_URL") or "").strip().rstrip("/") or None
         self.api_key = (api_key or os.environ.get("AEMA_API_KEY") or "").strip() or None
+        self.default_user_id = user_id
         self.quarantine_threshold = quarantine_threshold
         self.initial_trust = initial_trust
         self._store = None
@@ -70,7 +66,7 @@ class AdaptiveMemory:
                     auto_seed=False,
                 )
             else:
-                resolved_path = db_path or _default_db_path()
+                resolved_path = db_path or resolve_db_path()
                 self._store = store_mod.get_memory_store(
                     engine="sqlite",
                     db_path=resolved_path,
@@ -83,6 +79,9 @@ class AdaptiveMemory:
             headers["Authorization"] = f"Bearer {self.api_key}"
             headers["X-API-Key"] = self.api_key
         return headers
+
+    def _resolve_user(self, user_id: Optional[str]) -> Optional[str]:
+        return user_id if user_id is not None else self.default_user_id
 
     def _embed(self, text: str) -> tuple[List[float], bool]:
         embedder_mod = import_pkg("ai_service.embedder")
@@ -104,6 +103,7 @@ class AdaptiveMemory:
         """Store a reusable lesson/strategy in AEMA memory."""
         trust = self.initial_trust if initial_trust is None else max(0.0, min(1.0, float(initial_trust)))
         effective_strategy = strategy or task
+        effective_user = self._resolve_user(user_id)
 
         if self.api_url:
             import httpx
@@ -113,6 +113,7 @@ class AdaptiveMemory:
                     f"{self.api_url}/api/v1/memories",
                     headers=self._headers(),
                     json={
+                        "userId": effective_user,
                         "taskDomain": domain,
                         "triggerCondition": task,
                         "strategyLesson": effective_strategy,
@@ -125,6 +126,7 @@ class AdaptiveMemory:
                 d = res.json()
                 return {
                     "id": d["id"],
+                    "user_id": d.get("userId", effective_user),
                     "task": d.get("triggerCondition", task),
                     "strategy": d.get("strategyLesson", effective_strategy),
                     "pitfall": d.get("pitfall"),
@@ -143,7 +145,7 @@ class AdaptiveMemory:
 
         embedding, _ = self._embed(f"{task} {effective_strategy}")
         exp = exp_mod.Experience(
-            user_id=user_id,
+            user_id=effective_user,
             task_domain=resolved_domain,
             trigger_condition=task,
             strategy_lesson=effective_strategy,
@@ -156,6 +158,7 @@ class AdaptiveMemory:
         await self._store.add_experience(exp)
         return {
             "id": exp.id,
+            "user_id": exp.user_id,
             "task": exp.trigger_condition,
             "strategy": exp.strategy_lesson,
             "pitfall": exp.pitfall,
@@ -171,9 +174,11 @@ class AdaptiveMemory:
         top_k: int = 5,
         min_trust: Optional[float] = None,
         min_similarity: Optional[float] = None,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
-        """Retrieve reliable, non-quarantined experiences relevant to `query`."""
+        """Retrieve reliable, non-quarantined experiences scoped to `user_id` if provided."""
         trust_cutoff = self.quarantine_threshold if min_trust is None else float(min_trust)
+        effective_user = self._resolve_user(user_id)
 
         if self.api_url:
             import httpx
@@ -188,6 +193,8 @@ class AdaptiveMemory:
                     payload["min_similarity"] = min_similarity
                 if domain and domain != "all":
                     payload["domain"] = domain
+                if effective_user is not None:
+                    payload["user_id"] = effective_user
                 res = await client.post(
                     f"{self.api_url}/api/v1/memories/search",
                     headers=self._headers(),
@@ -202,6 +209,7 @@ class AdaptiveMemory:
                     tr = float(e.get("trustScore", e.get("trust_score", 0.0)))
                     out.append({
                         "id": e["id"],
+                        "user_id": e.get("userId", e.get("user_id")),
                         "task": e.get("triggerCondition", e.get("trigger_condition", "")),
                         "strategy": e.get("strategyLesson", e.get("strategy_lesson", "")),
                         "pitfall": e.get("pitfall"),
@@ -228,11 +236,11 @@ class AdaptiveMemory:
             else (0.45 if using_neural else 0.12)
         )
 
-        # Fetch generous candidate pool, then enforce Theorem 1 + composite ranking
         raw_hits = await self._store.search_similar(
             query_embedding=query_emb,
             domain=resolved_domain,
             top_k=max(top_k * 4, 20),
+            user_id=effective_user,
         )
         ranked: List[Dict[str, Any]] = []
         for exp, sim in raw_hits:
@@ -244,6 +252,7 @@ class AdaptiveMemory:
             composite = 0.70 * sim + 0.30 * exp.trust_score
             ranked.append({
                 "id": exp.id,
+                "user_id": exp.user_id,
                 "task": exp.trigger_condition,
                 "strategy": exp.strategy_lesson,
                 "pitfall": exp.pitfall,
@@ -322,40 +331,170 @@ class AdaptiveMemory:
             "status": new_status,
         }
 
-    async def astatus(self) -> Dict[str, Any]:
-        """Return memory store health counts and mean trust score."""
+    async def aforget(self, experience_id: str, hard_delete: bool = False) -> bool:
+        """
+        Remove or quarantine a memory entry.
+        Set `hard_delete=True` for permanent GDPR/PII erasure; otherwise soft-quarantines.
+        """
         if self.api_url:
             import httpx
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.delete(
+                    f"{self.api_url}/api/v1/memories/{experience_id}",
+                    headers=self._headers(),
+                )
+                if res.status_code == 404:
+                    return False
+                res.raise_for_status()
+                return True
+
+        if hard_delete:
+            return await self._store.delete_experience(experience_id)
+
+        exp = await self._store.get_experience(experience_id)
+        if not exp:
+            return False
+        await self._store.update_trust(
+            experience_id=experience_id,
+            new_trust=0.0,
+            reason="sdk_forget_soft_quarantine",
+            status="deprecated",
+        )
+        return True
+
+    async def arecover(
+        self,
+        experience_id: str,
+        reason: str = "Developer requested probationary recovery",
+    ) -> Dict[str, Any]:
+        """
+        Safely transition a quarantined (`deprecated`) memory into `candidate` probation.
+        Honors AEMA's state machine invariant (deprecated -> candidate -> active).
+        """
+        audit_reason = reason if len(reason) >= 15 else f"{reason} (SDK recovery)"
+
+        if self.api_url:
+            import httpx
+
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                res = await client.post(
+                    f"{self.api_url}/api/v1/memories/{experience_id}/recover",
+                    headers=self._headers(),
+                    json={"reason": audit_reason},
+                )
+                res.raise_for_status()
+                d = res.json()
+                return {
+                    "id": d["id"],
+                    "trust": float(d.get("trustScore", 0.5)),
+                    "status": str(d.get("status", "candidate")),
+                }
+
+        recovered = await self._store.admin_recover_to_probation(
+            experience_id=experience_id,
+            reason=audit_reason,
+            actor_id="sdk:developer",
+        )
+        return {
+            "id": recovered.id,
+            "trust": round(recovered.trust_score, 4),
+            "status": recovered.status.value if hasattr(recovered.status, "value") else str(recovered.status),
+        }
+
+    async def alist(
+        self,
+        domain: Optional[str] = None,
+        status: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """List stored memories with optional domain, status, and user_id filters."""
+        effective_user = self._resolve_user(user_id)
+
+        if self.api_url:
+            import httpx
+
+            params: Dict[str, Any] = {"limit": 200}
+            if domain and domain != "all":
+                params["domain"] = domain
+            if status and status != "all":
+                params["status"] = status
+            if effective_user is not None:
+                params["userId"] = effective_user
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.get(
                     f"{self.api_url}/api/v1/memories",
                     headers=self._headers(),
-                    params={"limit": 200},
+                    params=params,
                 )
                 res.raise_for_status()
                 items = res.json()
-                active = [e for e in items if e.get("status") == "active" and e.get("trustScore", 0) >= self.quarantine_threshold]
-                quarantined = [e for e in items if e.get("status") == "deprecated" or e.get("trustScore", 1) < self.quarantine_threshold]
-                avg = sum(float(e.get("trustScore", 0)) for e in items) / len(items) if items else 0.0
-                return {
-                    "total": len(items),
-                    "active": len(active),
-                    "quarantined": len(quarantined),
-                    "average_trust": round(avg, 4),
-                    "backend": "http",
-                }
+                return [
+                    {
+                        "id": e["id"],
+                        "user_id": e.get("userId", e.get("user_id")),
+                        "task": e.get("triggerCondition", e.get("trigger_condition", "")),
+                        "strategy": e.get("strategyLesson", e.get("strategy_lesson", "")),
+                        "pitfall": e.get("pitfall"),
+                        "domain": e.get("taskDomain", e.get("task_domain", "general")),
+                        "trust": float(e.get("trustScore", e.get("trust_score", 0.0))),
+                        "status": str(e.get("status", "active")),
+                    }
+                    for e in items
+                ]
 
-        exps = await self._store.list_experiences()
-        active = [e for e in exps if (e.status.value if hasattr(e.status, "value") else e.status) == "active" and e.trust_score >= self.quarantine_threshold]
-        quarantined = [e for e in exps if (e.status.value if hasattr(e.status, "value") else e.status) == "deprecated" or e.trust_score < self.quarantine_threshold]
-        avg = sum(e.trust_score for e in exps) / len(exps) if exps else 0.0
+        dom_mod = import_pkg("models.domain")
+        resolved_domain = None
+        if domain and domain != "all":
+            try:
+                resolved_domain = dom_mod.TaskDomain(domain.lower())
+            except ValueError:
+                resolved_domain = None
+
+        resolved_status = None
+        if status and status != "all":
+            try:
+                resolved_status = dom_mod.ExperienceStatus(status.lower())
+            except ValueError:
+                resolved_status = None
+
+        exps = await self._store.list_experiences(
+            domain=resolved_domain,
+            status=resolved_status,
+            user_id=effective_user,
+        )
+        return [
+            {
+                "id": e.id,
+                "user_id": e.user_id,
+                "task": e.trigger_condition,
+                "strategy": e.strategy_lesson,
+                "pitfall": e.pitfall,
+                "domain": e.task_domain.value if hasattr(e.task_domain, "value") else str(e.task_domain),
+                "trust": round(e.trust_score, 4),
+                "status": e.status.value if hasattr(e.status, "value") else str(e.status),
+            }
+            for e in exps
+        ]
+
+    async def astatus(self, user_id: Optional[str] = None) -> Dict[str, Any]:
+        """Return memory store health counts and mean trust score."""
+        items = await self.alist(user_id=user_id)
+        active = [e for e in items if e["status"] == "active" and e["trust"] >= self.quarantine_threshold]
+        quarantined = [e for e in items if e["status"] == "deprecated" or e["trust"] < self.quarantine_threshold]
+        avg = sum(e["trust"] for e in items) / len(items) if items else 0.0
+        backend = (
+            "http"
+            if self.api_url
+            else ("postgres" if "Postgres" in type(self._store).__name__ else "sqlite")
+        )
         return {
-            "total": len(exps),
+            "total": len(items),
             "active": len(active),
             "quarantined": len(quarantined),
             "average_trust": round(avg, 4),
-            "backend": "postgres" if "Postgres" in type(self._store).__name__ else "sqlite",
+            "backend": backend,
         }
 
     # ── Sync Wrappers (Safe inside both sync scripts and running async loops) ──
@@ -387,6 +526,7 @@ class AdaptiveMemory:
         top_k: int = 5,
         min_trust: Optional[float] = None,
         min_similarity: Optional[float] = None,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         return _run_sync(
             self.arecall(
@@ -395,6 +535,7 @@ class AdaptiveMemory:
                 top_k=top_k,
                 min_trust=min_trust,
                 min_similarity=min_similarity,
+                user_id=user_id,
             )
         )
 
@@ -408,17 +549,44 @@ class AdaptiveMemory:
             self.afeedback(experience_id=experience_id, success=success, reward=reward)
         )
 
-    def status(self) -> Dict[str, Any]:
-        return _run_sync(self.astatus())
+    def forget(self, experience_id: str, hard_delete: bool = False) -> bool:
+        return _run_sync(self.aforget(experience_id=experience_id, hard_delete=hard_delete))
+
+    def recover(
+        self,
+        experience_id: str,
+        reason: str = "Developer requested probationary recovery",
+    ) -> Dict[str, Any]:
+        return _run_sync(self.arecover(experience_id=experience_id, reason=reason))
+
+    def list(
+        self,
+        domain: Optional[str] = None,
+        status: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        return _run_sync(self.alist(domain=domain, status=status, user_id=user_id))
+
+    def status(self, user_id: Optional[str] = None) -> Dict[str, Any]:
+        return _run_sync(self.astatus(user_id=user_id))
+
+    def export_json(self, output_path: str, user_id: Optional[str] = None) -> int:
+        """Export memories (optionally scoped to `user_id`) to a JSON file."""
+        items = self.list(user_id=user_id)
+        out = Path(output_path)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps(items, indent=2), encoding="utf-8")
+        return len(items)
 
     def format_for_prompt(
         self,
         query: str,
         domain: Optional[str] = None,
         top_k: int = 3,
+        user_id: Optional[str] = None,
     ) -> str:
         """Retrieve verified memories and format them into a ready-to-inject prompt block."""
-        hits = self.recall(query=query, domain=domain, top_k=top_k)
+        hits = self.recall(query=query, domain=domain, top_k=top_k, user_id=user_id)
         if not hits:
             return ""
         lines = ["Verified Experiential Memory Guidance:"]

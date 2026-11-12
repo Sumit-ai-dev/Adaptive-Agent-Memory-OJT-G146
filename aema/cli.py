@@ -21,7 +21,7 @@ from pathlib import Path
 
 import click
 from aema import __version__
-from aema._compat import has_internal_bundle, import_pkg
+from aema._compat import has_internal_bundle, import_pkg, resolve_db_path
 
 if not has_internal_bundle():
     _repo_root = Path(__file__).resolve().parent.parent
@@ -182,7 +182,7 @@ def status():
     async def _status():
         try:
             store_mod = import_pkg("ai_service.memory.store")
-            store = store_mod.get_memory_store(auto_seed=False)
+            store = store_mod.get_memory_store(db_path=resolve_db_path(), auto_seed=False)
             exps = await store.list_experiences()
             active = [e for e in exps if not getattr(e, "is_quarantined", False) and e.trust_score >= 0.35]
             quarantined = [e for e in exps if getattr(e, "is_quarantined", False) or e.trust_score < 0.35]
@@ -241,7 +241,7 @@ def search(query, top_k, domain):
         embedder_mod = import_pkg("ai_service.embedder")
         store_mod = import_pkg("ai_service.memory.store")
         domain_mod = import_pkg("models.domain")
-        store = store_mod.get_memory_store()
+        store = store_mod.get_memory_store(db_path=resolve_db_path(), auto_seed=False)
         embedding = embedder_mod.local_embedder.embed_text(query)
         resolved_domain = domain_mod.TaskDomain(domain) if domain and domain != "all" else None
         results = await store.search_similar(
@@ -321,7 +321,7 @@ def memories(domain, quarantined):
     async def _list():
         store_mod = import_pkg("ai_service.memory.store")
         domain_mod = import_pkg("models.domain")
-        store = store_mod.get_memory_store(auto_seed=False)
+        store = store_mod.get_memory_store(db_path=resolve_db_path(), auto_seed=False)
         resolved_domain = domain_mod.TaskDomain(domain) if domain and domain != "all" else None
         return await store.list_experiences(domain=resolved_domain)
 
