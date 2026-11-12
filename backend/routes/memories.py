@@ -5,7 +5,7 @@ Provides CRUD and semantic retrieval operations over stored agent experiences.
 
 import logging
 import secrets
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
@@ -78,7 +78,7 @@ async def list_memories(
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (active, candidate, deprecated)"),
     min_trust: float = Query(0.0, ge=0.0, le=1.0, description="Minimum trust threshold"),
     search: Optional[str] = Query(None, description="Semantic or keyword search query"),
-    user_id: Optional[str] = Query(None, alias="userId", description="Optional user/tenant namespace filter"),
+    user_id: Annotated[Optional[str], Query(alias="userId", description="Optional user/tenant namespace filter")] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> List[Dict[str, Any]]:
@@ -192,7 +192,7 @@ async def get_memory(memory_id: str) -> Dict[str, Any]:
 )
 async def delete_memory(
     memory_id: str,
-    hard_delete: bool = Query(False, description="When true, permanently delete from storage instead of soft quarantine"),
+    hard_delete: Annotated[bool, Query(description="When true, permanently delete from storage instead of soft quarantine")] = False,
     authorization: Optional[str] = Header(None, description="Admin authorization header"),
     x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token", description="Admin authorization token"),
 ):
