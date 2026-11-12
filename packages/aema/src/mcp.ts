@@ -20,7 +20,7 @@ const client = new AEMAClient();
 
 const server = new McpServer({
   name: 'aema-memory',
-  version: '0.1.0',
+  version: '0.1.1',
 });
 
 // Tool 1: Retrieve Reliable Memories
@@ -90,11 +90,17 @@ server.tool(
       metadata: { domain },
     });
 
+    const backendStatus = String(exp.metadata?.backendStatus ?? '').toLowerCase();
+    const statusLine =
+      backendStatus === 'candidate'
+        ? 'Status: CANDIDATE (Synced to FastAPI probation; trust capped at 50.0% until validated)'
+        : 'Status: ACTIVE (Logged to WAL)';
+
     return {
       content: [
         {
           type: 'text',
-          text: `Successfully registered experience [${exp.id}] in AEMA memory.\nInitial Trust Score: ${(exp.trustScore * 100).toFixed(1)}%\nStatus: ACTIVE (Logged to WAL)`,
+          text: `Successfully registered experience [${exp.id}] in AEMA memory.\nTrust Score: ${(exp.trustScore * 100).toFixed(1)}%\n${statusLine}`,
         },
       ],
     };
@@ -138,6 +144,7 @@ server.tool(
   'Perform full health diagnostics on the agent memory bank: compute average trust, quarantine ratios, domain distributions, and negative transfer risk score.',
   {},
   async () => {
+    await client.syncFromRemote();
     const report = client.audit();
     const formatted = `## AEMA Experiential Memory Bank Audit\n\n` +
       `- **Overall Health**: ${report.healthStatus}\n` +
@@ -225,6 +232,7 @@ server.tool(
   'Inspect the mathematical parameters and quarantine state of AEMA experiential memory.',
   {},
   async () => {
+    await client.syncFromRemote();
     const quarantined = client.getQuarantined();
     const stepsToQuarantine = computeQuarantineSteps(1.0, DEFAULT_QUARANTINE_THRESHOLD, DEFAULT_BETA);
 

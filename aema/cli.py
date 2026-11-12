@@ -157,8 +157,9 @@ def run(task_input, mode, domain, provider, model, api_key, temperature, seed):
                     + (f"  [red]⚠ QUARANTINED[/red]" if tu.new_score < 0.35 else "")
                 )
     else:
+        score = result.outcome_score if result.outcome_score is not None else 0.0
         print(f"\nAnswer: {result.final_answer or result.final_output}")
-        print(f"Score : {result.outcome_score:.3f}  Binary: {result.binary_outcome}")
+        print(f"Score : {score:.3f}  Binary: {result.binary_outcome}")
         print(f"Latency: {result.latency_ms}ms")
 
 

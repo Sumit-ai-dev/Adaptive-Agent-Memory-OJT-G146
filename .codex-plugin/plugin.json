@@ -18,6 +18,7 @@
     "trust",
     "negative-transfer"
   ],
+  "skills": "./skills/",
   "mcpServers": "./.mcp.json",
   "interface": {
     "displayName": "AEMA Memory",

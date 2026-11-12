@@ -29,6 +29,14 @@ import { auditMemoryBank, type AuditReport } from './audit.js';
 
 const VALID_BACKEND_DOMAINS = new Set(['research', 'coding', 'analysis', 'planning', 'general']);
 
+function tokenizeNormalized(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+}
+
 function normalizeBackendDomain(domain?: unknown): string | undefined {
   if (typeof domain !== 'string' || !domain.trim()) return undefined;
   const d = domain.trim().toLowerCase();
@@ -263,15 +271,46 @@ export class AEMAClient {
       candidatesList = candidatesList.filter((e) => e.metadata?.domain === options.domain);
     }
 
-    const queryTokens = new Set(options.query.toLowerCase().split(/\s+/).filter(Boolean));
+    const queryTokens = new Set(tokenizeNormalized(options.query));
     const candidates = candidatesList.map((exp) => {
-      const taskTokens = exp.task.toLowerCase().split(/\s+/);
-      const overlap = taskTokens.filter((t) => queryTokens.has(t)).length;
+      const taskTokens = new Set(tokenizeNormalized(`${exp.task} ${exp.solution}`));
+      let overlap = 0;
+      for (const token of queryTokens) {
+        if (taskTokens.has(token)) overlap += 1;
+      }
       const semanticRelevance = queryTokens.size > 0 ? Math.min(1.0, overlap / queryTokens.size + 0.2) : 0.5;
       return { experience: exp, semanticRelevance };
     });
 
     return rankByReliability(candidates, { minTrust, topK });
+  }
+
+  /**
+   * Synchronize local cache with remote FastAPI /api/v1/memories store when reachable.
+   * Ensures audit(), status, and dedup() reflect remote database state.
+   */
+  async syncFromRemote(limit = 200): Promise<boolean> {
+    try {
+      if (!this.baseUrl || this.baseUrl.includes('localhost:0')) {
+        return false;
+      }
+      const res = await this.fetchWithTimeout(`${this.baseUrl}/api/v1/memories?limit=${limit}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      if (!res.ok) return false;
+      const items = (await res.json()) as Record<string, any>[];
+      if (!Array.isArray(items)) return false;
+
+      for (const raw of items) {
+        const mapped = mapBackendExperience(raw);
+        this.localStore.set(mapped.id, mapped);
+      }
+      this.saveLocalStore();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**

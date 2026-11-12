@@ -15,9 +15,12 @@ import { WriteAheadLog } from './wal.js';
 import type { Experience } from './types.js';
 
 describe('AEMA Mathematical Guarantees (Theorem 1)', () => {
-  it('correctly calculates Theorem 1 deterministic quarantine failure count k*=3', () => {
+  it('correctly calculates Theorem 1 deterministic quarantine failure count k*=3 and exact integer boundaries', () => {
     const kStar = computeQuarantineSteps(1.0, DEFAULT_QUARANTINE_THRESHOLD, DEFAULT_BETA);
     assert.equal(kStar, 3);
+    assert.equal(computeQuarantineSteps(0.75, DEFAULT_QUARANTINE_THRESHOLD, DEFAULT_BETA), 3);
+    // Exact integer boundary: ln(0.5 / 1.0) / ln(0.5) = 1.0, must require 2 steps for strict < 0.5
+    assert.equal(computeQuarantineSteps(1.0, 0.5, 0.5), 2);
   });
 
   it('quarantines experience after exactly 3 consecutive failures from S0=1.0', () => {
@@ -186,13 +189,49 @@ describe('AEMAClient Persistence & FastAPI Remote Mapping', () => {
       });
 
       const reader = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: tmpStore });
-      const hits = await reader.retrieve('SQLite WAL');
+      const hits = await reader.retrieve('sqlite wal');
       assert.equal(hits.length, 1);
       assert.equal(hits[0].experience.id, stored.id);
       assert.equal(hits[0].experience.solution, 'Run PRAGMA wal_checkpoint(TRUNCATE)');
     } finally {
       if (fs.existsSync(tmpStore)) fs.unlinkSync(tmpStore);
     }
+  });
+
+  it('syncs remote memories into localStore for audit() and matches punctuation-normalized tokens', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = (async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: 'exp-sync-1',
+            taskDomain: 'coding',
+            triggerCondition: 'SQLite, WAL mode deadlock!',
+            strategyLesson: 'Use busy_timeout=30000.',
+            trustScore: 0.9,
+            status: 'active',
+          },
+        ]),
+        { status: 200 }
+      )) as typeof fetch;
+
+    try {
+      const client = new AEMAClient({ baseUrl: 'http://mock-aema.local', persistPath: false });
+      const synced = await client.syncFromRemote();
+      assert.equal(synced, true);
+      assert.equal(client.audit().totalMemories, 1);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+
+    const offlineClient = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: false });
+    await offlineClient.store({
+      task: 'SQLite, WAL-mode deadlock!',
+      solution: 'Enable WAL.',
+    });
+    const hits = await offlineClient.retrieve('sqlite wal');
+    assert.equal(hits.length, 1);
   });
 
   it('maps store/retrieve/feedback cleanly with FastAPI /api/v1 ExperienceMatch schemas', async () => {
