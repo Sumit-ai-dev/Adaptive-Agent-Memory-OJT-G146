@@ -1,6 +1,6 @@
 [project]
 name = "aema"
-version = "0.1.0"
+version = "0.1.1"
 description = "Adaptive Experience Memory Agent — reliability-aware experiential memory with trust scoring."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -17,25 +17,40 @@ classifiers = [
     "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = [
-    "fastapi>=0.115.0",
-    "uvicorn>=0.30.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.5.0",
     "httpx>=0.27.0",
-    "langgraph>=0.2.0",
     "typing-extensions>=4.12.0",
     "numpy>=1.26.0",
-    "scipy>=1.11.0",
-    "sentence-transformers>=3.0.0",
-    "openai>=1.40.0",
     "python-dotenv>=1.0.0",
     "rich>=13.0.0",
     "click>=8.1.0",
-    "ddgs>=9.0.0",
-    "duckduckgo-search>=8.0.0",
 ]
 
 [project.optional-dependencies]
+agent = [
+    "langgraph>=0.2.0",
+    "openai>=1.40.0",
+    "ddgs>=9.0.0",
+]
+server = [
+    "fastapi>=0.115.0",
+    "uvicorn>=0.30.0",
+    "langgraph>=0.2.0",
+    "openai>=1.40.0",
+    "ddgs>=9.0.0",
+]
+embeddings = [
+    "sentence-transformers>=3.0.0",
+    "scipy>=1.11.0",
+]
+postgres = [
+    "asyncpg>=0.29.0",
+    "pgvector>=0.3.0",
+]
+full = [
+    "aema[agent,server,embeddings,postgres]",
+]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
@@ -49,7 +64,7 @@ Homepage = "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146"
 Repository = "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146"
 
 # ── CLI entry point ──────────────────────────────────────────────────────────
-# After `pip install -e .`, typing `aema` in terminal calls aema/cli.py:main()
+# After `pip install aema` or `pip install -e .`, typing `aema` calls aema/cli.py:main()
 [project.scripts]
 aema = "aema.cli:main"
 
@@ -58,7 +73,26 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["aema", "models", "ai_service"]
+packages = ["aema"]
+
+[tool.hatch.build.targets.wheel.hooks.custom]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "aema/**",
+    "models/**",
+    "ai-service/**",
+    "backend/*.py",
+    "backend/app/**",
+    "backend/routes/**",
+    "backend/requirements.txt",
+    "backend/schema.sql",
+    "hatch_build.py",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+]
+exclude = ["backend/venv/**", "**/__pycache__/**", "*.pyc"]
 
 [tool.ruff]
 line-length = 100
@@ -81,4 +115,3 @@ source = ["ai_service", "models"]
 
 [tool.coverage.report]
 show_missing = true
-

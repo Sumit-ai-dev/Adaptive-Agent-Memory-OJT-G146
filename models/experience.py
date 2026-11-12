@@ -4,25 +4,17 @@ Corresponds to public.experiences and public.trust_history in Supabase.
 """
 
 from datetime import datetime, timezone
-from enum import Enum
 from typing import Optional
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from models.domain import TaskDomain
+from models.domain import ExperienceStatus, TaskDomain
 
 
 def utc_now_iso() -> str:
     """Returns current UTC timestamp in ISO 8601 string format."""
     return datetime.now(timezone.utc).isoformat()
-
-
-class ExperienceStatus(str, Enum):
-    """Lifecycle status of a memory experience."""
-    ACTIVE = "active"
-    DEPRECATED = "deprecated"
-    CANDIDATE = "candidate"
 
 
 class Experience(BaseModel):

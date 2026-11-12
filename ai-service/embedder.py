@@ -21,7 +21,6 @@ class LocalEmbedder:
         self.dimension = 384
         self._model = None
         self._load_attempted = False
-        self._load_model()
 
     def _load_model(self) -> None:
         self._load_attempted = True

@@ -83,23 +83,24 @@ export default function LandingPage() {
 
   const mcpConfigCode = `{
   "mcpServers": {
-    "aema": {
+    "aema-memory": {
       "command": "npx",
-      "args": ["-y", "-p", "aema-memory", "aema-mcp"]
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
 }`
 
-  const pythonSnippet = `from aema import AEMAMemoryManager
+  const pythonSnippet = `from aema import AdaptiveMemory
 
-# Initialize reliability-aware memory manager (canonical defaults)
-manager = AEMAMemoryManager(alpha=0.85, beta=0.70, theta=0.35, s0=0.75)
+# Initialize reliability-aware memory (zero-config local SQLite)
+mem = AdaptiveMemory(user_id="dev_1")
+item = mem.remember("Enable SQLite WAL mode for concurrent async workers")
 
-# Record experiential outcome
-manager.record_outcome(memory_id="mem_42", success=False)
+# Record verified outcome (3 failures trigger Theorem 1 quarantine)
+mem.feedback(item["id"], success=True)
 
 # Retrieve only empirical, non-quarantined memories
-safe_memories = manager.get_active_memories()`
+safe_memories = mem.recall("Fix SQLite locked error")`
 
   return (
     <div className="min-h-screen bg-[#F8F8F6] dark:bg-[#0D0F12] text-[#1A1A1A] dark:text-[#F4F4F6] transition-colors selection:bg-indigo-100 dark:selection:bg-indigo-950 font-sans">
@@ -121,7 +122,7 @@ safe_memories = manager.get_active_memories()`
                 </span>
                 <span className="text-zinc-300 dark:text-zinc-700">/</span>
                 <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
-                  v0.1.0 Released
+                  v0.1.1 Released
                 </span>
               </div>
 
@@ -192,9 +193,9 @@ safe_memories = manager.get_active_memories()`
 
                 <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832]">
                   <span className="text-zinc-400">$</span>
-                  <span className="text-zinc-800 dark:text-zinc-200">npm i aema-memory</span>
+                  <span className="text-zinc-800 dark:text-zinc-200">npm i @sumitaidev/aema</span>
                   <button
-                    onClick={() => copyToClipboard('npm i aema-memory', setCopiedNpm)}
+                    onClick={() => copyToClipboard('npm i @sumitaidev/aema', setCopiedNpm)}
                     className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-1 cursor-pointer"
                     title="Copy command"
                   >
@@ -612,11 +613,11 @@ safe_memories = manager.get_active_memories()`
               <ul className="text-xs space-y-2 text-zinc-600 dark:text-zinc-400">
                 <li className="flex items-center gap-2">
                   <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                  <span>PyPI Package <code>aema 0.1.0</code></span>
+                  <span>PyPI Package <code>aema 0.1.1</code></span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                  <span>npm Package <code>aema-memory 0.1.0</code></span>
+                  <span>npm Package <code>@sumitaidev/aema 0.1.1</code></span>
                 </li>
                 <li className="flex items-center gap-2">
                   <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />

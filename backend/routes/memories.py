@@ -5,7 +5,7 @@ Provides CRUD and semantic retrieval operations over stored agent experiences.
 
 import logging
 import secrets
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
 
@@ -21,7 +21,7 @@ from models.experience import Experience, ExperienceMatch
 logger = logging.getLogger("backend.routes.memories")
 
 router = APIRouter(prefix="/memories", tags=["Experiential Memories"])
-embedder = LocalEmbedder()
+embedder = local_embedder
 
 
 class RecoveryRequest(BaseModel):
@@ -78,6 +78,7 @@ async def list_memories(
     status_filter: Optional[str] = Query(None, alias="status", description="Filter by status (active, candidate, deprecated)"),
     min_trust: float = Query(0.0, ge=0.0, le=1.0, description="Minimum trust threshold"),
     search: Optional[str] = Query(None, description="Semantic or keyword search query"),
+    user_id: Annotated[Optional[str], Query(alias="userId", description="Optional user/tenant namespace filter")] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
 ) -> List[Dict[str, Any]]:
@@ -110,6 +111,7 @@ async def list_memories(
                 query_embedding=query_emb,
                 domain=TaskDomain(domain) if domain and domain != "all" else None,
                 top_k=limit,
+                user_id=user_id,
             )
             out = []
             for exp, sim in results:
@@ -127,6 +129,7 @@ async def list_memories(
             domain=TaskDomain(domain) if domain and domain != "all" else None,
             status=resolved_status,
             min_trust=min_trust,
+            user_id=user_id,
         )
 
         paged = all_exps[offset : offset + limit]
@@ -152,6 +155,10 @@ async def create_memory(experience: Experience) -> Dict[str, Any]:
         # start as CANDIDATE with capped initial trust to prevent injection
         experience.status = ExperienceStatus.CANDIDATE
         experience.trust_score = min(experience.trust_score, 0.50)
+        if not experience.embedding:
+            experience.embedding = embedder.embed_text(
+                f"{experience.trigger_condition} {experience.strategy_lesson}"
+            )
         await shared_store.add_experience(experience)
         return experience.model_dump(by_alias=True)
     except Exception as e:
@@ -185,10 +192,11 @@ async def get_memory(memory_id: str) -> Dict[str, Any]:
 )
 async def delete_memory(
     memory_id: str,
+    hard_delete: Annotated[bool, Query(description="When true, permanently delete from storage instead of soft quarantine")] = False,
     authorization: Optional[str] = Header(None, description="Admin authorization header"),
     x_admin_token: Optional[str] = Header(None, alias="X-Admin-Token", description="Admin authorization token"),
 ):
-    """Removes an experience record from the store. Requires admin authorization."""
+    """Removes or quarantines an experience record from the store. Requires admin authorization."""
     verify_admin_auth(authorization, x_admin_token)
     exp = await shared_store.get_experience(memory_id)
     if not exp:
@@ -196,11 +204,15 @@ async def delete_memory(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Experience '{memory_id}' not found.",
         )
-    await shared_store.update_trust(
-        experience_id=memory_id,
-        new_trust=0.0,
-        reason="manual_deletion",
-    )
+    if hard_delete:
+        await shared_store.delete_experience(memory_id)
+    else:
+        await shared_store.update_trust(
+            experience_id=memory_id,
+            new_trust=0.0,
+            reason="manual_deletion",
+            status="deprecated",
+        )
     return None
 
 
@@ -304,7 +316,13 @@ class MemoryRetrieveRequest(BaseModel):
     task_input: Optional[str] = Field(default=None, description="Task prompt or query to match against memory index")
     query: Optional[str] = Field(default=None, description="SDK/MCP alias for task_input")
     domain: Optional[TaskDomain] = Field(default=None, description="Optional task domain filter")
-    min_similarity: float = Field(default=0.70, ge=0.0, le=1.0, description="Minimum cosine similarity cutoff")
+    user_id: Optional[str] = Field(default=None, alias="userId", description="Optional user/tenant namespace filter")
+    min_similarity: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Minimum cosine similarity cutoff (defaults to 0.60 with neural embeddings or 0.15 with hash fallback)",
+    )
     min_trust: float = Field(default=0.35, ge=0.0, le=1.0, description="Minimum trust score cutoff (Theorem 1 boundary)")
     top_k: int = Field(default=3, ge=1, le=10, description="Maximum number of memories to return")
 
@@ -342,12 +360,17 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
         except Exception:
             query_emb = None
 
-    all_candidates = await shared_store.list_experiences()
+    effective_min_similarity = (
+        payload.min_similarity
+        if payload.min_similarity is not None
+        else (0.60 if local_embedder._model is not None else 0.15)
+    )
+    all_candidates = await shared_store.list_experiences(user_id=payload.user_id)
     matches = retrieve_experiences(
         query_embedding=query_emb,
         candidates=all_candidates,
         filter_domain=payload.domain,
-        min_similarity=payload.min_similarity,
+        min_similarity=effective_min_similarity,
         min_trust=payload.min_trust,
         top_k=payload.top_k,
     )

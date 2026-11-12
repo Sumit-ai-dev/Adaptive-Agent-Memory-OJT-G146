@@ -16,7 +16,7 @@ export default function Footer() {
               </div>
               <span className="font-semibold text-sm">AEMA</span>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-                v0.1.0
+                v0.1.1
               </span>
             </div>
             <p className="text-xs text-zinc-500 dark:text-zinc-400 max-w-md leading-relaxed">
@@ -52,23 +52,23 @@ export default function Footer() {
             <ul className="space-y-2 text-xs">
               <li>
                 <a
-                  href="https://pypi.org/project/aema/0.1.0/"
+                  href="https://pypi.org/project/aema/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors"
                 >
-                  <span>PyPI: aema 0.1.0</span>
+                  <span>PyPI: aema 0.1.1</span>
                   <ExternalLink size={11} />
                 </a>
               </li>
               <li>
                 <a
-                  href="https://www.npmjs.com/package/aema-memory"
+                  href="https://www.npmjs.com/package/@sumitaidev/aema"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-1.5 text-zinc-600 hover:text-indigo-600 dark:text-zinc-400 dark:hover:text-indigo-400 transition-colors"
                 >
-                  <span>npm: aema-memory 0.1.0</span>
+                  <span>npm: @sumitaidev/aema 0.1.1</span>
                   <ExternalLink size={11} />
                 </a>
               </li>

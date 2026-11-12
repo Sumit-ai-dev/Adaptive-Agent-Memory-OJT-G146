@@ -11,7 +11,7 @@ import type { OutcomeType } from './types.js';
 
 export interface WALEntry {
   timestamp: string;
-  eventType: 'STORE' | 'FEEDBACK' | 'QUARANTINE' | 'DEDUP' | 'PRUNE';
+  eventType: 'STORE' | 'FEEDBACK' | 'QUARANTINE' | 'DEDUP' | 'PRUNE' | 'FORGET' | 'RECOVER';
   experienceId: string;
   domain?: string;
   outcome?: OutcomeType;
@@ -22,8 +22,21 @@ export interface WALEntry {
 }
 
 function getDefaultWALDir(): string {
+  if (process.env.AEMA_WAL_DIR) {
+    return process.env.AEMA_WAL_DIR;
+  }
+  if (process.env.AEMA_STORE_PATH) {
+    return path.join(path.dirname(process.env.AEMA_STORE_PATH), 'wal');
+  }
   const homeDir = os.homedir();
-  return path.join(homeDir, '.aema', 'wal');
+  const homeWal = path.join(homeDir, '.aema', 'wal');
+  try {
+    fs.mkdirSync(homeWal, { recursive: true, mode: 0o700 });
+    fs.accessSync(homeWal, fs.constants.W_OK);
+    return homeWal;
+  } catch {
+    return path.join(os.tmpdir(), '.aema', 'wal');
+  }
 }
 
 export class WriteAheadLog {

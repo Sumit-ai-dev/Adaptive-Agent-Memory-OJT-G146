@@ -7,6 +7,7 @@ export type OutcomeType = 'success' | 'failure';
 
 export interface ExperienceMetadata {
   domain?: string;
+  userId?: string;
   source?: string;
   author?: string;
   tags?: string[];
@@ -16,6 +17,7 @@ export interface ExperienceMetadata {
 
 export interface Experience {
   id: string;
+  userId?: string;
   task: string;
   solution: string;
   outcome: OutcomeType;
@@ -33,6 +35,7 @@ export interface NewExperience {
   solution: string;
   outcome?: OutcomeType;
   initialTrust?: number;
+  userId?: string;
   metadata?: ExperienceMetadata;
 }
 
@@ -56,6 +59,7 @@ export interface RetrievalQuery {
   minTrustScore?: number;
   includeQuarantined?: boolean;
   domain?: string;
+  userId?: string;
 }
 
 export interface RetrievalResult {
@@ -68,5 +72,7 @@ export interface RetrievalResult {
 export interface AEMAClientConfig {
   baseUrl?: string;
   apiKey?: string;
+  userId?: string;
   timeoutMs?: number;
+  persistPath?: string | false;
 }

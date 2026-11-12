@@ -18,12 +18,15 @@ Usage:
 
 import sys
 from pathlib import Path
-REPO_ROOT = Path(__file__).resolve().parent.parent
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
 
 import click
 from aema import __version__
+from aema._compat import has_internal_bundle, import_pkg, resolve_db_path
+
+if not has_internal_bundle():
+    _repo_root = Path(__file__).resolve().parent.parent
+    if (_repo_root / "models").is_dir() and str(_repo_root) not in sys.path:
+        sys.path.insert(0, str(_repo_root))
 
 
 # ── Colour helpers (uses rich if installed, falls back to plain) ──────────────
@@ -107,14 +110,17 @@ def run(task_input, mode, domain, provider, model, api_key, temperature, seed):
 
     # Lazy import — keeps CLI startup fast
     try:
-        from ai_service.graph import run_agent_task
+        graph_mod = import_pkg("ai_service.graph")
+        execute_task = graph_mod.execute_task
+        task_mod = import_pkg("models.task")
+        TaskExecuteRequest = task_mod.TaskExecuteRequest
+        MemoryMode = task_mod.MemoryMode
     except ImportError as e:
-        click.echo(f"❌ Import error: {e}", err=True)
-        click.echo("Run: pip install -e . && pip install -r backend/requirements.txt", err=True)
+        click.echo(f"❌ Missing dependency: {e}", err=True)
+        click.echo("Run: pip install 'aema[agent]' (or pip install 'aema[full]')", err=True)
         sys.exit(1)
 
     async def _run():
-        from models.task import TaskExecuteRequest, MemoryMode
         req = TaskExecuteRequest(
             task_input=task_input,
             task_domain=domain,
@@ -125,7 +131,7 @@ def run(task_input, mode, domain, provider, model, api_key, temperature, seed):
             temperature=temperature,
             seed=seed,
         )
-        result = await run_agent_task(req)
+        result = await execute_task(req)
         return result
 
     try:
@@ -157,8 +163,9 @@ def run(task_input, mode, domain, provider, model, api_key, temperature, seed):
                     + (f"  [red]⚠ QUARANTINED[/red]" if tu.new_score < 0.35 else "")
                 )
     else:
+        score = result.outcome_score if result.outcome_score is not None else 0.0
         print(f"\nAnswer: {result.final_answer or result.final_output}")
-        print(f"Score : {result.outcome_score:.3f}  Binary: {result.binary_outcome}")
+        print(f"Score : {score:.3f}  Binary: {result.binary_outcome}")
         print(f"Latency: {result.latency_ms}ms")
 
 
@@ -174,10 +181,21 @@ def status():
 
     async def _status():
         try:
-            from ai_service.memory.store import get_store
-            store = await get_store()
-            stats = await store.stats()
-            return stats
+            store_mod = import_pkg("ai_service.memory.store")
+            store = store_mod.get_memory_store(db_path=resolve_db_path(), auto_seed=False)
+            exps = await store.list_experiences()
+            active = [e for e in exps if not getattr(e, "is_quarantined", False) and e.trust_score >= 0.35]
+            quarantined = [e for e in exps if getattr(e, "is_quarantined", False) or e.trust_score < 0.35]
+            probationary = [e for e in exps if getattr(e, "is_probationary", False)]
+            avg_trust = sum(e.trust_score for e in exps) / len(exps) if exps else 0.0
+            return {
+                "Total Experiences": len(exps),
+                "Active Memories": len(active),
+                "Quarantined Memories": len(quarantined),
+                "Probationary Memories": len(probationary),
+                "Average Trust Score": f"{avg_trust:.3f}",
+                "Storage Engine": getattr(store, "engine_name", "sqlite"),
+            }
         except Exception as e:
             return {"error": str(e)}
 
@@ -220,14 +238,16 @@ def search(query, top_k, domain):
     load_dotenv()
 
     async def _search():
-        from ai_service.embedder import local_embedder
-        from ai_service.memory.store import get_store
-        store = await get_store()
-        embedding = local_embedder.embed_text(query)
+        embedder_mod = import_pkg("ai_service.embedder")
+        store_mod = import_pkg("ai_service.memory.store")
+        domain_mod = import_pkg("models.domain")
+        store = store_mod.get_memory_store(db_path=resolve_db_path(), auto_seed=False)
+        embedding = embedder_mod.local_embedder.embed_text(query)
+        resolved_domain = domain_mod.TaskDomain(domain) if domain and domain != "all" else None
         results = await store.search_similar(
             query_embedding=embedding,
             top_k=top_k,
-            domain=domain,
+            domain=resolved_domain,
         )
         return results
 
@@ -299,9 +319,11 @@ def memories(domain, quarantined):
     load_dotenv()
 
     async def _list():
-        from ai_service.memory.store import get_store
-        store = await get_store()
-        return await store.list_experiences(domain=domain)
+        store_mod = import_pkg("ai_service.memory.store")
+        domain_mod = import_pkg("models.domain")
+        store = store_mod.get_memory_store(db_path=resolve_db_path(), auto_seed=False)
+        resolved_domain = domain_mod.TaskDomain(domain) if domain and domain != "all" else None
+        return await store.list_experiences(domain=resolved_domain)
 
     try:
         exps = asyncio.run(_list())
@@ -376,15 +398,23 @@ def serve(host, port, reload):
         aema serve --port 9000
     """
     _print_header()
+    try:
+        import uvicorn
+        import fastapi  # noqa: F401
+    except ImportError as e:
+        click.echo(f"❌ Missing server dependency: {e}", err=True)
+        click.echo("Run: pip install 'aema[server]' (or pip install 'aema[full]')", err=True)
+        sys.exit(1)
+
     click.echo(f"🚀 Starting server at http://{host}:{port}")
     click.echo(f"   Docs: http://{host}:{port}/docs\n")
 
-    import uvicorn
     from dotenv import load_dotenv
     load_dotenv()
 
+    app_target = "aema._internal.backend.main:app" if has_internal_bundle() else "backend.main:app"
     uvicorn.run(
-        "backend.main:app",
+        app_target,
         host=host,
         port=port,
         reload=reload,

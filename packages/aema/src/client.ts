@@ -1,8 +1,12 @@
 /**
  * AEMA Client: Connects to local or remote AEMA Memory Gateway.
- * Supports standalone in-memory mode, remote API mode, WAL audit trails, and dedup.
+ * Supports persistent local JSON fallback store, remote FastAPI /api/v1 sync,
+ * WAL audit trails, and deduplication.
  */
 
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import type {
   AEMAClientConfig,
   Experience,
@@ -23,16 +27,165 @@ import { globalWAL, type WALEntry } from './wal.js';
 import { deduplicateExperiences, type DedupResult } from './dedup.js';
 import { auditMemoryBank, type AuditReport } from './audit.js';
 
+const VALID_BACKEND_DOMAINS = new Set(['research', 'coding', 'analysis', 'planning', 'general']);
+
+function tokenizeNormalized(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^a-z0-9_]+/g, ' ')
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+}
+
+function normalizeBackendDomain(domain?: unknown): string | undefined {
+  if (typeof domain !== 'string' || !domain.trim()) return undefined;
+  const d = domain.trim().toLowerCase();
+  return VALID_BACKEND_DOMAINS.has(d) ? d : 'general';
+}
+
+function mapBackendExperience(raw: Record<string, any>, fallback?: Partial<Experience>): Experience {
+  const trustScore =
+    typeof raw.trustScore === 'number'
+      ? raw.trustScore
+      : typeof raw.trust_score === 'number'
+        ? raw.trust_score
+        : (fallback?.trustScore ?? 0.75);
+  const status = String(raw.status ?? 'active').toLowerCase();
+  const consecutiveFailures =
+    raw.consecutiveFailures ?? raw.consecutive_failures ?? fallback?.consecutiveFailures ?? 0;
+  const failuresCount = raw.failuresCount ?? raw.failures_count ?? fallback?.consecutiveFailures ?? 0;
+  const usesCount = raw.usesCount ?? raw.uses_count ?? fallback?.totalTrials ?? 1;
+
+  const resolvedUserId =
+    (typeof raw.userId === 'string' ? raw.userId : undefined) ??
+    (typeof raw.user_id === 'string' ? raw.user_id : undefined) ??
+    fallback?.userId ??
+    (typeof fallback?.metadata?.userId === 'string' ? fallback.metadata.userId : undefined);
+
+  return {
+    id: String(raw.id ?? fallback?.id ?? `exp_${Date.now()}`),
+    ...(resolvedUserId ? { userId: resolvedUserId } : {}),
+    task: String(raw.task ?? raw.triggerCondition ?? raw.trigger_condition ?? fallback?.task ?? ''),
+    solution: String(
+      raw.solution ?? raw.strategyLesson ?? raw.strategy_lesson ?? fallback?.solution ?? ''
+    ),
+    outcome:
+      raw.outcome ??
+      (failuresCount > 0 && status === 'deprecated' ? 'failure' : (fallback?.outcome ?? 'success')),
+    trustScore,
+    totalTrials: Number(raw.totalTrials ?? usesCount),
+    consecutiveFailures: Number(consecutiveFailures),
+    isQuarantined:
+      typeof raw.isQuarantined === 'boolean'
+        ? raw.isQuarantined
+        : status === 'deprecated' || isQuarantined(trustScore),
+    metadata: {
+      ...(fallback?.metadata ?? {}),
+      ...(resolvedUserId ? { userId: resolvedUserId } : {}),
+      domain: raw.taskDomain ?? raw.task_domain ?? fallback?.metadata?.domain,
+      pitfall: raw.pitfall ?? raw.pitfallWarning ?? fallback?.metadata?.pitfall,
+      backendStatus: status,
+    },
+    createdAt: String(raw.createdAt ?? raw.created_at ?? fallback?.createdAt ?? new Date().toISOString()),
+    updatedAt: String(raw.updatedAt ?? raw.updated_at ?? fallback?.updatedAt ?? new Date().toISOString()),
+  };
+}
+
+function mapBackendMatch(item: Record<string, any>): RetrievalResult {
+  const rawExp = (item.experience ?? item) as Record<string, any>;
+  const experience = mapBackendExperience(rawExp);
+  const relevanceScore = Number(
+    item.relevanceScore ?? item.similarity ?? item.similarityScore ?? 0.8
+  );
+  const effectiveScore = Number(
+    item.effectiveScore ??
+      item.compositeScore ??
+      item.composite_score ??
+      0.7 * relevanceScore + 0.3 * experience.trustScore
+  );
+  const isReliable =
+    typeof item.isReliable === 'boolean'
+      ? item.isReliable
+      : !experience.isQuarantined && experience.trustScore >= DEFAULT_QUARANTINE_THRESHOLD;
+
+  return {
+    experience,
+    relevanceScore,
+    effectiveScore,
+    isReliable,
+  };
+}
+
 export class AEMAClient {
   private baseUrl: string;
   private apiKey?: string;
+  private defaultUserId?: string;
   private timeoutMs: number;
+  private storeFile: string | null;
   private localStore: Map<string, Experience> = new Map();
 
   constructor(config: AEMAClientConfig = {}) {
     this.baseUrl = config.baseUrl ?? (process.env.AEMA_API_URL || 'http://localhost:8000');
     this.apiKey = config.apiKey ?? process.env.AEMA_API_KEY;
+    this.defaultUserId = config.userId ?? (process.env.AEMA_USER_ID || undefined);
     this.timeoutMs = config.timeoutMs ?? 10000;
+
+    if (config.persistPath === false) {
+      this.storeFile = null;
+    } else if (typeof config.persistPath === 'string') {
+      this.storeFile = config.persistPath;
+    } else if (process.env.AEMA_STORE_PATH) {
+      this.storeFile = process.env.AEMA_STORE_PATH;
+    } else {
+      this.storeFile = path.join(os.homedir(), '.aema', 'memories.json');
+    }
+
+    this.loadLocalStore();
+  }
+
+  private loadLocalStore(): void {
+    if (!this.storeFile) return;
+    try {
+      if (!fs.existsSync(this.storeFile)) return;
+      const raw = fs.readFileSync(this.storeFile, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item && typeof item.id === 'string') {
+            this.localStore.set(item.id, item as Experience);
+          }
+        }
+      }
+    } catch {
+      // Side-effect-free fallback if local cache is unreadable
+    }
+  }
+
+  private saveLocalStore(): void {
+    if (!this.storeFile) return;
+    try {
+      const dir = path.dirname(this.storeFile);
+      if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      }
+      const data = JSON.stringify(Array.from(this.localStore.values()), null, 2);
+      const tmpFile = `${this.storeFile}.${process.pid}.${Math.random().toString(36).slice(2, 8)}.tmp`;
+      fs.writeFileSync(tmpFile, data, { encoding: 'utf-8', mode: 0o600 });
+      fs.renameSync(tmpFile, this.storeFile);
+    } catch {
+      // Never crash execution if filesystem persistence fails
+    }
+  }
+
+  private resolveUser(userId?: string): string | undefined {
+    const resolved = userId ?? this.defaultUserId;
+    return resolved && resolved.trim().length > 0 ? resolved.trim() : undefined;
+  }
+
+  private getExperienceUser(exp: Experience): string | undefined {
+    if (exp.userId) return exp.userId;
+    const metaUser = exp.metadata?.userId;
+    return typeof metaUser === 'string' && metaUser.trim().length > 0 ? metaUser.trim() : undefined;
   }
 
   /**
@@ -42,9 +195,13 @@ export class AEMAClient {
     const initialTrust = newExp.initialTrust ?? 1.0;
     const now = new Date().toISOString();
     const isQuar = isQuarantined(initialTrust);
+    const effectiveUser = this.resolveUser(
+      newExp.userId ?? (typeof newExp.metadata?.userId === 'string' ? newExp.metadata.userId : undefined)
+    );
 
     const experience: Experience = {
       id: `exp_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      ...(effectiveUser ? { userId: effectiveUser } : {}),
       task: newExp.task,
       solution: newExp.solution,
       outcome: newExp.outcome ?? 'success',
@@ -52,7 +209,9 @@ export class AEMAClient {
       totalTrials: 1,
       consecutiveFailures: newExp.outcome === 'failure' ? 1 : 0,
       isQuarantined: isQuar,
-      metadata: newExp.metadata,
+      metadata: effectiveUser
+        ? { ...(newExp.metadata ?? {}), userId: effectiveUser }
+        : newExp.metadata,
       createdAt: now,
       updatedAt: now,
     };
@@ -64,28 +223,43 @@ export class AEMAClient {
       domain: newExp.metadata?.domain as string | undefined,
       newTrust: initialTrust,
       quarantined: isQuar,
-      metadata: { taskLength: newExp.task.length },
+      metadata: {
+        taskLength: newExp.task.length,
+        ...(effectiveUser ? { userId: effectiveUser } : {}),
+      },
     });
 
-    // If remote API is available, attempt remote sync; otherwise save locally
+    // Sync with FastAPI /api/v1/memories using backend Experience schema
     try {
       if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
         const res = await this.fetchWithTimeout(`${this.baseUrl}/api/v1/memories`, {
           method: 'POST',
           headers: this.getHeaders(),
-          body: JSON.stringify(experience),
+          body: JSON.stringify({
+            id: experience.id,
+            ...(effectiveUser ? { userId: effectiveUser } : {}),
+            taskDomain: normalizeBackendDomain(newExp.metadata?.domain) ?? 'general',
+            triggerCondition: newExp.task,
+            strategyLesson: newExp.solution,
+            pitfall: typeof newExp.metadata?.pitfall === 'string' ? newExp.metadata.pitfall : null,
+            confidence: initialTrust,
+            trustScore: initialTrust,
+          }),
         });
         if (res.ok) {
-          const remoteExp = (await res.json()) as Experience;
+          const remoteRaw = (await res.json()) as Record<string, any>;
+          const remoteExp = mapBackendExperience(remoteRaw, experience);
           this.localStore.set(remoteExp.id, remoteExp);
+          this.saveLocalStore();
           return remoteExp;
         }
       }
     } catch {
-      // Remote unavailable; fall back to local store
+      // Remote unavailable; fall back to local persistent store
     }
 
     this.localStore.set(experience.id, experience);
+    this.saveLocalStore();
     return experience;
   }
 
@@ -96,6 +270,11 @@ export class AEMAClient {
     const options: RetrievalQuery = typeof query === 'string' ? { query } : query;
     const topK = options.topK ?? 5;
     const minTrust = options.minTrustScore ?? DEFAULT_QUARANTINE_THRESHOLD;
+    const effectiveUser = this.resolveUser(options.userId);
+    const backendDomain =
+      options.domain && VALID_BACKEND_DOMAINS.has(options.domain.toLowerCase())
+        ? options.domain.toLowerCase()
+        : undefined;
 
     try {
       if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
@@ -106,32 +285,75 @@ export class AEMAClient {
             query: options.query,
             top_k: topK,
             min_trust: minTrust,
-            domain: options.domain,
+            ...(backendDomain ? { domain: backendDomain } : {}),
+            ...(effectiveUser ? { userId: effectiveUser } : {}),
           }),
         });
         if (res.ok) {
-          return (await res.json()) as RetrievalResult[];
+          const rawList = (await res.json()) as Record<string, any>[];
+          if (Array.isArray(rawList)) {
+            return rawList.map(mapBackendMatch);
+          }
         }
       }
     } catch {
       // Fallback to local ranking
     }
 
-    // Local semantic mock matching via keyword overlap & domain filtering
+    // Local semantic matching via keyword overlap, domain & userId filtering
     let candidatesList = Array.from(this.localStore.values());
+    if (effectiveUser) {
+      candidatesList = candidatesList.filter((e) => this.getExperienceUser(e) === effectiveUser);
+    }
     if (options.domain) {
       candidatesList = candidatesList.filter((e) => e.metadata?.domain === options.domain);
     }
 
-    const queryTokens = new Set(options.query.toLowerCase().split(/\s+/).filter(Boolean));
+    const queryTokens = new Set(tokenizeNormalized(options.query));
     const candidates = candidatesList.map((exp) => {
-      const taskTokens = exp.task.toLowerCase().split(/\s+/);
-      const overlap = taskTokens.filter((t) => queryTokens.has(t)).length;
+      const taskTokens = new Set(tokenizeNormalized(`${exp.task} ${exp.solution}`));
+      let overlap = 0;
+      for (const token of queryTokens) {
+        if (taskTokens.has(token)) overlap += 1;
+      }
       const semanticRelevance = queryTokens.size > 0 ? Math.min(1.0, overlap / queryTokens.size + 0.2) : 0.5;
       return { experience: exp, semanticRelevance };
     });
 
     return rankByReliability(candidates, { minTrust, topK });
+  }
+
+  /**
+   * Synchronize local cache with remote FastAPI /api/v1/memories store when reachable.
+   * Ensures audit(), status, and dedup() reflect remote database state.
+   */
+  async syncFromRemote(limit = 200, userId?: string): Promise<boolean> {
+    try {
+      if (!this.baseUrl || this.baseUrl.includes('localhost:0')) {
+        return false;
+      }
+      const effectiveUser = this.resolveUser(userId);
+      const qs = new URLSearchParams({ limit: String(limit) });
+      if (effectiveUser) {
+        qs.set('userId', effectiveUser);
+      }
+      const res = await this.fetchWithTimeout(`${this.baseUrl}/api/v1/memories?${qs.toString()}`, {
+        method: 'GET',
+        headers: this.getHeaders(),
+      });
+      if (!res.ok) return false;
+      const items = (await res.json()) as Record<string, any>[];
+      if (!Array.isArray(items)) return false;
+
+      for (const raw of items) {
+        const mapped = mapBackendExperience(raw);
+        this.localStore.set(mapped.id, mapped);
+      }
+      this.saveLocalStore();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -144,10 +366,50 @@ export class AEMAClient {
   ): Promise<TrustUpdateResult> {
     const exp = this.localStore.get(experienceId);
     const currentScore = exp ? exp.trustScore : 1.0;
+    let result = calculateAsymmetricEMA(currentScore, outcome, options);
+    let syncedFromRemote = false;
 
-    const result = calculateAsymmetricEMA(currentScore, outcome, options);
+    try {
+      if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
+        const res = await this.fetchWithTimeout(
+          `${this.baseUrl}/api/v1/memories/${experienceId}/feedback`,
+          {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ outcome }),
+          }
+        );
+        if (res.ok) {
+          const payload = (await res.json()) as Record<string, any>;
+          const remoteExpRaw = payload.experience as Record<string, any> | undefined;
+          const tu = (payload.trustUpdate ?? payload.trust_update) as Record<string, any> | undefined;
 
-    if (exp) {
+          if (tu) {
+            const previousScore = Number(tu.oldScore ?? tu.old_score ?? currentScore);
+            const newScore = Number(tu.newScore ?? tu.new_score ?? result.newScore);
+            const threshold = options?.quarantineThreshold ?? DEFAULT_QUARANTINE_THRESHOLD;
+            result = {
+              previousScore,
+              newScore,
+              outcome,
+              isQuarantined: newScore < threshold,
+              decayDelta: Number((tu.delta ?? newScore - previousScore).toFixed(4)),
+            };
+          }
+
+          if (remoteExpRaw) {
+            const mapped = mapBackendExperience(remoteExpRaw, exp);
+            this.localStore.set(experienceId, mapped);
+            this.saveLocalStore();
+            syncedFromRemote = true;
+          }
+        }
+      }
+    } catch {
+      // Remote unavailable; rely on local A-EMA computation below
+    }
+
+    if (!syncedFromRemote && exp) {
       exp.trustScore = result.newScore;
       exp.totalTrials += 1;
       exp.outcome = outcome;
@@ -159,6 +421,7 @@ export class AEMAClient {
       exp.isQuarantined = result.isQuarantined;
       exp.updatedAt = new Date().toISOString();
       this.localStore.set(experienceId, exp);
+      this.saveLocalStore();
     }
 
     // Write-Ahead Log audit
@@ -171,18 +434,6 @@ export class AEMAClient {
       newTrust: result.newScore,
       quarantined: result.isQuarantined,
     });
-
-    try {
-      if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
-        await this.fetchWithTimeout(`${this.baseUrl}/api/v1/memories/${experienceId}/feedback`, {
-          method: 'POST',
-          headers: this.getHeaders(),
-          body: JSON.stringify({ outcome, new_score: result.newScore }),
-        });
-      }
-    } catch {
-      // Ignore remote errors
-    }
 
     return result;
   }
@@ -203,16 +454,152 @@ export class AEMAClient {
       for (const item of cleaned) {
         this.localStore.set(item.id, item);
       }
+      this.saveLocalStore();
     }
 
     return report;
   }
 
   /**
-   * Memory bank health audit report.
+   * Soft-quarantine or permanently erase a memory (GDPR / lifecycle control).
    */
-  audit(): AuditReport {
-    return auditMemoryBank(Array.from(this.localStore.values()));
+  async forget(experienceId: string, hardDelete = false): Promise<boolean> {
+    let remoteHandled = false;
+    try {
+      if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
+        const qs = hardDelete ? '?hard_delete=true' : '';
+        const res = await this.fetchWithTimeout(
+          `${this.baseUrl}/api/v1/memories/${experienceId}${qs}`,
+          {
+            method: 'DELETE',
+            headers: this.getHeaders(),
+          }
+        );
+        if (res.status === 404) return false;
+        if (res.ok) remoteHandled = true;
+      }
+    } catch {
+      // Fall back to local persistence
+    }
+
+    const exp = this.localStore.get(experienceId);
+    if (!exp && !remoteHandled) {
+      return false;
+    }
+
+    const previousTrust = exp?.trustScore;
+    if (exp) {
+      if (hardDelete) {
+        this.localStore.delete(experienceId);
+      } else {
+        exp.trustScore = 0.0;
+        exp.isQuarantined = true;
+        exp.updatedAt = new Date().toISOString();
+        exp.metadata = { ...(exp.metadata ?? {}), backendStatus: 'deprecated' };
+        this.localStore.set(experienceId, exp);
+      }
+      this.saveLocalStore();
+    }
+
+    globalWAL.log({
+      eventType: hardDelete ? 'FORGET' : 'QUARANTINE',
+      experienceId,
+      domain: exp?.metadata?.domain as string | undefined,
+      previousTrust,
+      newTrust: hardDelete ? undefined : 0.0,
+      quarantined: !hardDelete,
+      metadata: { hardDelete },
+    });
+
+    return true;
+  }
+
+  /**
+   * Safely recover a quarantined (`deprecated`) memory into `candidate` probation.
+   * Honors the state-machine invariant (deprecated -> candidate -> active).
+   */
+  async recover(
+    experienceId: string,
+    reason = 'Developer requested probationary recovery'
+  ): Promise<Experience | null> {
+    const auditReason = reason.length >= 15 ? reason : `${reason} (SDK recovery)`;
+
+    try {
+      if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
+        const res = await this.fetchWithTimeout(
+          `${this.baseUrl}/api/v1/memories/${experienceId}/recover`,
+          {
+            method: 'POST',
+            headers: this.getHeaders(),
+            body: JSON.stringify({ reason: auditReason }),
+          }
+        );
+        if (res.status === 404) return null;
+        if (res.ok) {
+          const remoteRaw = (await res.json()) as Record<string, any>;
+          const mapped = mapBackendExperience(remoteRaw, this.localStore.get(experienceId));
+          this.localStore.set(experienceId, mapped);
+          this.saveLocalStore();
+          globalWAL.log({
+            eventType: 'RECOVER',
+            experienceId,
+            domain: mapped.metadata?.domain as string | undefined,
+            newTrust: mapped.trustScore,
+            quarantined: false,
+            metadata: { status: mapped.metadata?.backendStatus ?? 'candidate', reason: auditReason },
+          });
+          return mapped;
+        }
+      }
+    } catch {
+      // Fall back to local transition
+    }
+
+    const exp = this.localStore.get(experienceId);
+    if (!exp) return null;
+
+    const previousTrust = exp.trustScore;
+    exp.isQuarantined = false;
+    exp.consecutiveFailures = 0;
+    exp.updatedAt = new Date().toISOString();
+    exp.metadata = { ...(exp.metadata ?? {}), backendStatus: 'candidate' };
+    this.localStore.set(experienceId, exp);
+    this.saveLocalStore();
+
+    globalWAL.log({
+      eventType: 'RECOVER',
+      experienceId,
+      domain: exp.metadata?.domain as string | undefined,
+      previousTrust,
+      newTrust: exp.trustScore,
+      quarantined: false,
+      metadata: { status: 'candidate', reason: auditReason },
+    });
+
+    return exp;
+  }
+
+  /**
+   * List locally cached/synced experiences, optionally scoped by userId or domain.
+   */
+  list(options?: { userId?: string; domain?: string; includeQuarantined?: boolean }): Experience[] {
+    const effectiveUser = this.resolveUser(options?.userId);
+    const includeQuarantined = options?.includeQuarantined ?? true;
+    return Array.from(this.localStore.values()).filter((e) => {
+      if (!includeQuarantined && e.isQuarantined) return false;
+      if (effectiveUser && this.getExperienceUser(e) !== effectiveUser) return false;
+      if (options?.domain && e.metadata?.domain !== options.domain) return false;
+      return true;
+    });
+  }
+
+  /**
+   * Memory bank health audit report (optionally scoped by userId).
+   */
+  audit(userId?: string): AuditReport {
+    const effectiveUser = this.resolveUser(userId);
+    const entries = effectiveUser ? this.list({ userId: effectiveUser }) : Array.from(this.localStore.values());
+    return auditMemoryBank(entries);
   }
 
   /**
