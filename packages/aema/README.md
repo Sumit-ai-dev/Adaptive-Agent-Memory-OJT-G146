@@ -36,16 +36,16 @@ Or run directly with `npx`:
 
 ```bash
 # Start MCP server over stdio
-npx aema-mcp
+npx -y --package=@sumitaidev/aema aema-mcp
 
 # Or inspect system status via CLI
-npx aema status
+npx -y --package=@sumitaidev/aema aema status
 
 # Run full memory bank health audit
-npx aema audit
+npx -y --package=@sumitaidev/aema aema audit
 
 # Deduplicate redundant memory traces
-npx aema dedup --dry-run
+npx -y --package=@sumitaidev/aema aema dedup --dry-run
 ```
 
 ---
@@ -61,7 +61,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "aema-memory": {
       "command": "npx",
-      "args": ["-y", "aema-mcp"]
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
 }
@@ -74,7 +74,7 @@ Add to `.cursor/mcp.json` or enable the included `.cursor-plugin`:
   "mcpServers": {
     "aema-memory": {
       "command": "npx",
-      "args": ["-y", "aema-mcp"]
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
 }

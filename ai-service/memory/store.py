@@ -1673,3 +1673,5 @@ def get_memory_store(
 
 # Global default store instance
 memory_store = get_memory_store()
+get_store = get_memory_store
+

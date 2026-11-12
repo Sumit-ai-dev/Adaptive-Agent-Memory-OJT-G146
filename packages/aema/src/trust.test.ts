@@ -168,3 +168,121 @@ describe('Multi-LLM Adapters (Claude, Cursor, OpenAI, Grok, Gemini)', () => {
     assert.ok(res.totalMemories !== undefined);
   });
 });
+
+describe('AEMAClient Persistence & FastAPI Remote Mapping', () => {
+  it('persists offline memories to disk across client restarts', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const { AEMAClient } = await import('./client.js');
+
+    const tmpStore = path.join(os.tmpdir(), `aema_persist_test_${Date.now()}.json`);
+    try {
+      const writer = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: tmpStore });
+      const stored = await writer.store({
+        task: 'Handle SQLite WAL checkpointing',
+        solution: 'Run PRAGMA wal_checkpoint(TRUNCATE)',
+        metadata: { domain: 'coding' },
+      });
+
+      const reader = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: tmpStore });
+      const hits = await reader.retrieve('SQLite WAL');
+      assert.equal(hits.length, 1);
+      assert.equal(hits[0].experience.id, stored.id);
+      assert.equal(hits[0].experience.solution, 'Run PRAGMA wal_checkpoint(TRUNCATE)');
+    } finally {
+      if (fs.existsSync(tmpStore)) fs.unlinkSync(tmpStore);
+    }
+  });
+
+  it('maps store/retrieve/feedback cleanly with FastAPI /api/v1 ExperienceMatch schemas', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const originalFetch = globalThis.fetch;
+    let postedStoreBody: Record<string, any> = {};
+
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url.endsWith('/api/v1/memories')) {
+        postedStoreBody = JSON.parse(String(init?.body || '{}'));
+        return new Response(
+          JSON.stringify({
+            id: postedStoreBody.id,
+            taskDomain: 'coding',
+            triggerCondition: postedStoreBody.triggerCondition,
+            strategyLesson: postedStoreBody.strategyLesson,
+            trustScore: 0.5,
+            status: 'candidate',
+          }),
+          { status: 201 }
+        );
+      }
+      if (url.endsWith('/api/v1/memories/search')) {
+        return new Response(
+          JSON.stringify([
+            {
+              experience: {
+                id: 'exp-remote-1',
+                taskDomain: 'coding',
+                triggerCondition: 'Async PG connection pool exhaustion',
+                strategyLesson: 'Use max_overflow with pool_pre_ping=True',
+                trustScore: 0.88,
+                usesCount: 5,
+                failuresCount: 0,
+                status: 'active',
+              },
+              similarity: 0.92,
+              compositeScore: 0.908,
+            },
+          ]),
+          { status: 200 }
+        );
+      }
+      if (url.includes('/feedback')) {
+        return new Response(
+          JSON.stringify({
+            experience: {
+              id: 'exp-remote-1',
+              taskDomain: 'coding',
+              triggerCondition: 'Async PG connection pool exhaustion',
+              strategyLesson: 'Use max_overflow with pool_pre_ping=True',
+              trustScore: 0.616,
+              status: 'active',
+            },
+            trustUpdate: {
+              oldScore: 0.88,
+              newScore: 0.616,
+              delta: -0.264,
+            },
+          }),
+          { status: 200 }
+        );
+      }
+      return new Response('{}', { status: 404 });
+    }) as typeof fetch;
+
+    try {
+      const client = new AEMAClient({ baseUrl: 'http://mock-aema.local', persistPath: false });
+      const created = await client.store({
+        task: 'Async PG connection pool exhaustion',
+        solution: 'Use max_overflow with pool_pre_ping=True',
+        metadata: { domain: 'coding' },
+      });
+      assert.equal(postedStoreBody.triggerCondition, 'Async PG connection pool exhaustion');
+      assert.equal(postedStoreBody.strategyLesson, 'Use max_overflow with pool_pre_ping=True');
+      assert.equal(created.trustScore, 0.5);
+
+      const hits = await client.retrieve({ query: 'connection pool', domain: 'coding' });
+      assert.equal(hits.length, 1);
+      assert.equal(hits[0].experience.task, 'Async PG connection pool exhaustion');
+      assert.equal(hits[0].effectiveScore, 0.908);
+      assert.equal(hits[0].isReliable, true);
+
+      const fb = await client.recordFeedback('exp-remote-1', 'failure');
+      assert.equal(fb.previousScore, 0.88);
+      assert.equal(fb.newScore, 0.616);
+      assert.equal(fb.isQuarantined, false);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+});

@@ -69,4 +69,5 @@ export interface AEMAClientConfig {
   baseUrl?: string;
   apiKey?: string;
   timeoutMs?: number;
+  persistPath?: string | false;
 }

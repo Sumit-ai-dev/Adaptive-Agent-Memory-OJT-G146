@@ -58,7 +58,27 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["aema", "models", "ai_service"]
+packages = ["aema", "models", "ai-service", "backend"]
+exclude = ["backend/venv/**", "**/__pycache__/**", "*.pyc"]
+
+[tool.hatch.build.targets.wheel.sources]
+"ai-service" = "ai_service"
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "aema/**",
+    "models/**",
+    "ai-service/**",
+    "backend/*.py",
+    "backend/app/**",
+    "backend/routes/**",
+    "backend/requirements.txt",
+    "backend/schema.sql",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+]
+exclude = ["backend/venv/**", "**/__pycache__/**", "*.pyc"]
 
 [tool.ruff]
 line-length = 100

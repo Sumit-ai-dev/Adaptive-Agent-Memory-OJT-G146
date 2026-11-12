@@ -107,7 +107,7 @@ def run(task_input, mode, domain, provider, model, api_key, temperature, seed):
 
     # Lazy import — keeps CLI startup fast
     try:
-        from ai_service.graph import run_agent_task
+        from ai_service.graph import execute_task
     except ImportError as e:
         click.echo(f"❌ Import error: {e}", err=True)
         click.echo("Run: pip install -e . && pip install -r backend/requirements.txt", err=True)
@@ -125,7 +125,7 @@ def run(task_input, mode, domain, provider, model, api_key, temperature, seed):
             temperature=temperature,
             seed=seed,
         )
-        result = await run_agent_task(req)
+        result = await execute_task(req)
         return result
 
     try:
@@ -174,10 +174,21 @@ def status():
 
     async def _status():
         try:
-            from ai_service.memory.store import get_store
-            store = await get_store()
-            stats = await store.stats()
-            return stats
+            from ai_service.memory.store import get_memory_store
+            store = get_memory_store()
+            exps = await store.list_experiences()
+            active = [e for e in exps if not getattr(e, "is_quarantined", False) and e.trust_score >= 0.35]
+            quarantined = [e for e in exps if getattr(e, "is_quarantined", False) or e.trust_score < 0.35]
+            probationary = [e for e in exps if getattr(e, "is_probationary", False)]
+            avg_trust = sum(e.trust_score for e in exps) / len(exps) if exps else 0.0
+            return {
+                "Total Experiences": len(exps),
+                "Active Memories": len(active),
+                "Quarantined Memories": len(quarantined),
+                "Probationary Memories": len(probationary),
+                "Average Trust Score": f"{avg_trust:.3f}",
+                "Storage Engine": getattr(store, "engine_name", "sqlite"),
+            }
         except Exception as e:
             return {"error": str(e)}
 
@@ -221,13 +232,15 @@ def search(query, top_k, domain):
 
     async def _search():
         from ai_service.embedder import local_embedder
-        from ai_service.memory.store import get_store
-        store = await get_store()
+        from ai_service.memory.store import get_memory_store
+        from models.domain import TaskDomain
+        store = get_memory_store()
         embedding = local_embedder.embed_text(query)
+        resolved_domain = TaskDomain(domain) if domain and domain != "all" else None
         results = await store.search_similar(
             query_embedding=embedding,
             top_k=top_k,
-            domain=domain,
+            domain=resolved_domain,
         )
         return results
 
@@ -299,9 +312,11 @@ def memories(domain, quarantined):
     load_dotenv()
 
     async def _list():
-        from ai_service.memory.store import get_store
-        store = await get_store()
-        return await store.list_experiences(domain=domain)
+        from ai_service.memory.store import get_memory_store
+        from models.domain import TaskDomain
+        store = get_memory_store()
+        resolved_domain = TaskDomain(domain) if domain and domain != "all" else None
+        return await store.list_experiences(domain=resolved_domain)
 
     try:
         exps = asyncio.run(_list())
