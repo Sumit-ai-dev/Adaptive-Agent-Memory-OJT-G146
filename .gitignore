@@ -52,8 +52,7 @@ scripts/verify_paper_compliance.py
 
 
 # ──────────────────────────────────────────────────────────────────────────
-# S7: generated runtime artifacts — never source, must not be tracked
-# ──────────────────────────────────────────────────────────────────────────
+# S7: generated runtime artifacts: never source, must not be tracked
 # SQLite stores created by the legacy memory store and benchmark runners
 *.db
 *.sqlite
@@ -84,3 +83,8 @@ logbooks/
 .agents/
 .statwrap/
 ojt/
+
+# Internal Docs & Preparation Guides
+docs/AEMA_MASTER_REVISION_AND_VIVA_GUIDE.md
+docs/MCP_INTEGRATION_GUIDE.md
+docs/RFC-001-month2-architecture.md

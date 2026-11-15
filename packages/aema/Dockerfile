@@ -1,6 +1,7 @@
 # Generated Dockerfile for AEMA MCP Server
 # Multi-stage lightweight build for production execution
-FROM node:22-alpine AS builder
+# Pinned to immutable multi-arch digest for OpenSSF Scorecard compliance
+FROM node:22-alpine@sha256:947e5454e08bfe0b8ddda604915ad76275276c774f47da90d0137252c793a778 AS builder
 
 WORKDIR /app
 
@@ -13,7 +14,7 @@ COPY src ./src
 RUN npm run build
 
 # --- Production Image ---
-FROM node:22-alpine AS runner
+FROM node:22-alpine@sha256:947e5454e08bfe0b8ddda604915ad76275276c774f47da90d0137252c793a778 AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production

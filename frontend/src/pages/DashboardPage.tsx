@@ -393,24 +393,24 @@ export default function DashboardPage() {
                     <div className="pt-2 border-t border-[#E6E6E1] dark:border-[#252B3B] flex items-center justify-between">
                       <span className="text-zinc-500 font-mono">PyPI SDK:</span>
                       <a
-                        href="https://pypi.org/project/aema/0.1.0/"
+                        href="https://pypi.org/project/aema/"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                       >
-                        <span>aema 0.1.0</span>
+                        <span>aema 0.1.1</span>
                         <ExternalLink size={11} />
                       </a>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-zinc-500 font-mono">npm & MCP:</span>
                       <a
-                        href="https://www.npmjs.com/package/aema-memory"
+                        href="https://www.npmjs.com/package/@sumitaidev/aema"
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
                       >
-                        <span>aema-memory 0.1.0</span>
+                        <span>@sumitaidev/aema 0.1.1</span>
                         <ExternalLink size={11} />
                       </a>
                     </div>

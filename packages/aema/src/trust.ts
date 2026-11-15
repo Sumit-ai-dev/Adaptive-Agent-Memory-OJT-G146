@@ -55,16 +55,21 @@ export function isQuarantined(score: number, threshold = DEFAULT_QUARANTINE_THRE
 
 /**
  * Compute Theorem 1 deterministic quarantine failure count:
- * k* = ceil( ln(theta / S_0) / ln(beta) )
+ * k* = floor( ln(theta / S_0) / ln(beta) ) + 1
  */
 export function computeQuarantineSteps(
   initialScore = 1.0,
   threshold = DEFAULT_QUARANTINE_THRESHOLD,
   beta = DEFAULT_BETA
 ): number {
-  if (initialScore <= threshold) return 0;
+  if (initialScore < threshold) return 0;
   if (beta <= 0 || beta >= 1.0) throw new Error('Beta must be strictly between 0 and 1');
-  return Math.ceil(Math.log(threshold / initialScore) / Math.log(beta));
+  let k = Math.max(1, Math.floor(Math.log(threshold / initialScore) / Math.log(beta)) + 1);
+  // Guard against IEEE-754 log rounding on exact boundary cases (e.g., S0=1.0, theta=0.5, beta=0.5)
+  while (initialScore * Math.pow(beta, k) >= threshold && k < 10000) {
+    k += 1;
+  }
+  return k;
 }
 
 /**
