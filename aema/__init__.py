@@ -1,5 +1,5 @@
 """
-AEMA — Adaptive Experience Memory Agent.
+AEMA: Adaptive Experience Memory Agent.
 Reliability-aware experiential memory for autonomous AI agents.
 """
 
