@@ -11,7 +11,7 @@ Provides:
 
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from models.domain import TaskDomain
 from models.experience import Experience, ExperienceMatch, ExperienceStatus
@@ -31,9 +31,12 @@ router = APIRouter(prefix="/memories", tags=["Memories"])
 
 class MemoryRetrieveRequest(BaseModel):
     """Payload for live composite memory retrieval (supports both API and SDK schemas)."""
+    model_config = ConfigDict(populate_by_name=True)
+
     task_input: Optional[str] = Field(default=None, description="Task prompt or query to match against memory index")
     query: Optional[str] = Field(default=None, description="SDK/MCP alias for task_input")
     domain: Optional[TaskDomain] = Field(default=None, description="Optional task domain filter")
+    user_id: Optional[str] = Field(default=None, alias="userId", description="Optional user/tenant namespace filter")
     min_similarity: float = Field(default=0.70, ge=0.0, le=1.0, description="Minimum cosine similarity cutoff")
     min_trust: float = Field(default=0.35, ge=0.0, le=1.0, description="Minimum trust score cutoff (Theorem 1 boundary)")
     top_k: int = Field(default=3, ge=1, le=10, description="Maximum number of memories to return")

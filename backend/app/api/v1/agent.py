@@ -136,33 +136,35 @@ async def list_sessions(
     limit: int = Query(50, ge=1, le=100),
 ) -> List[Dict[str, Any]]:
     """Lists unique recent conversation sessions persisted in SQLite."""
-    try:
-        conn = sqlite3.connect(shared_store.db_path)
-        rows = conn.execute(
-            """
-            SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-            FROM task_executions
-            WHERE session_id IS NOT NULL AND session_id != ''
-            GROUP BY session_id
-            ORDER BY last_active DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
-        conn.close()
+    db_path = getattr(shared_store, "db_path", None)
+    if db_path:
+        try:
+            conn = sqlite3.connect(db_path)
+            rows = conn.execute(
+                """
+                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                FROM task_executions
+                WHERE session_id IS NOT NULL AND session_id != ''
+                GROUP BY session_id
+                ORDER BY last_active DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+            conn.close()
 
-        if rows:
-            sessions = []
-            for row in rows:
-                sessions.append({
-                    "sessionId": row[0],
-                    "title": (row[1] or "New Conversation")[:60],
-                    "lastActive": row[2],
-                    "turnCount": row[3],
-                })
-            return sessions
-    except Exception as exc:
-        logger.warning(f"Could not load sessions from SQLite: {exc}")
+            if rows:
+                sessions = []
+                for row in rows:
+                    sessions.append({
+                        "sessionId": row[0],
+                        "title": (row[1] or "New Conversation")[:60],
+                        "lastActive": row[2],
+                        "turnCount": row[3],
+                    })
+                return sessions
+        except Exception as exc:
+            logger.warning(f"Could not load sessions from SQLite: {exc}")
 
     seen: Dict[str, Dict[str, Any]] = {}
     for item in _execution_history:

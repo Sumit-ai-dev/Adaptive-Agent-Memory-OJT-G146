@@ -14,7 +14,7 @@ from fastapi import APIRouter, Header
 
 from ai_service.config import settings
 from ai_service.security import security_audit_logger
-from backend.routes.agent import shared_store
+from backend.routes.agent import _execution_history, shared_store
 from models.domain import ExperienceStatus
 
 logger = logging.getLogger("backend.routes.telemetry")
@@ -48,40 +48,50 @@ async def get_telemetry() -> Dict[str, Any]:
         if all_exps else 0.0
     )
 
-    # ── Execution metrics from SQLite task_executions table ───────────────────
+    # ── Execution metrics from SQLite task_executions (or session cache) ──────
     total_executions = 0
     executions_with_memory_hit = 0
     memory_hit_rate: float = 0.0
 
-    try:
-        conn = sqlite3.connect(shared_store.db_path)
-        total_executions = conn.execute(
-            "SELECT COUNT(*) FROM task_executions"
-        ).fetchone()[0]
+    db_path = getattr(shared_store, "db_path", None)
+    if db_path:
+        try:
+            conn = sqlite3.connect(db_path)
+            total_executions = conn.execute(
+                "SELECT COUNT(*) FROM task_executions"
+            ).fetchone()[0]
 
-        rows = conn.execute(
-            "SELECT payload_json FROM task_executions"
-        ).fetchall()
-        conn.close()
+            rows = conn.execute(
+                "SELECT payload_json FROM task_executions"
+            ).fetchall()
+            conn.close()
 
-        for (payload_json,) in rows:
-            try:
-                data = json.loads(payload_json)
-                retrieved = (
-                    data.get("retrievedExperiences")
-                    or data.get("retrievedMemories")
-                    or []
-                )
-                if retrieved:
-                    executions_with_memory_hit += 1
-            except Exception:
-                pass
+            for (payload_json,) in rows:
+                try:
+                    data = json.loads(payload_json)
+                    retrieved = (
+                        data.get("retrievedExperiences")
+                        or data.get("retrievedMemories")
+                        or []
+                    )
+                    if retrieved:
+                        executions_with_memory_hit += 1
+                except Exception:
+                    pass
 
+            if total_executions > 0:
+                memory_hit_rate = round(executions_with_memory_hit / total_executions * 100, 1)
+
+        except Exception as exc:
+            logger.warning(f"Could not compute execution metrics from SQLite: {exc}")
+    else:
+        total_executions = len(_execution_history)
+        for ex in _execution_history:
+            retrieved = getattr(ex, "retrieved_experiences", None) or getattr(ex, "retrieved_memories", None) or []
+            if retrieved:
+                executions_with_memory_hit += 1
         if total_executions > 0:
             memory_hit_rate = round(executions_with_memory_hit / total_executions * 100, 1)
-
-    except Exception as exc:
-        logger.warning(f"Could not compute execution metrics from SQLite: {exc}")
 
     return {
         # -- Memory store (always real) -------------------------------------

@@ -504,3 +504,7 @@ async def execute_task(
             loop_count=final_state.get("loop_count", 1),
         ),
     )
+
+
+# Alias preserved for CLI / external SDK ergonomics
+run_agent_task = execute_task
