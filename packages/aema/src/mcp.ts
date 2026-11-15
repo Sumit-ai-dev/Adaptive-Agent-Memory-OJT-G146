@@ -270,16 +270,17 @@ server.tool(
   {
     experienceId: z.string().describe('Unique ID of the experience memory to forget'),
     hardDelete: z.boolean().optional().describe('If true, permanently delete instead of soft-quarantine (default: false)'),
+    userId: z.string().optional().describe('Optional tenant/user ID for multi-tenant isolation'),
   },
-  async ({ experienceId, hardDelete }) => {
-    const removed = await client.forget(experienceId, hardDelete ?? false);
+  async ({ experienceId, hardDelete, userId }) => {
+    const removed = await client.forget(experienceId, hardDelete ?? false, userId);
     return {
       content: [
         {
           type: 'text',
           text: removed
             ? `Memory [${experienceId}] ${hardDelete ? 'permanently erased' : 'soft-quarantined'}.`
-            : `Memory [${experienceId}] was not found.`,
+            : `Memory [${experienceId}] was not found or not owned by user.`,
         },
       ],
     };
@@ -293,16 +294,17 @@ server.tool(
   {
     experienceId: z.string().describe('Unique ID of the quarantined experience to recover'),
     reason: z.string().optional().describe('Audit justification for recovery (min 15 chars recommended)'),
+    userId: z.string().optional().describe('Optional tenant/user ID for multi-tenant isolation'),
   },
-  async ({ experienceId, reason }) => {
-    const recovered = await client.recover(experienceId, reason);
+  async ({ experienceId, reason, userId }) => {
+    const recovered = await client.recover(experienceId, reason, userId);
     return {
       content: [
         {
           type: 'text',
           text: recovered
             ? `Recovered [${recovered.id}] into CANDIDATE probation (status=${String(recovered.metadata?.backendStatus ?? 'candidate')}, trust=${(recovered.trustScore * 100).toFixed(1)}%).`
-            : `Memory [${experienceId}] was not found.`,
+            : `Memory [${experienceId}] was not found, not owned, or not in quarantined state.`,
         },
       ],
     };

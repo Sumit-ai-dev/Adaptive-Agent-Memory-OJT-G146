@@ -5,13 +5,20 @@ lifecycle management (forget/recover/export), unified path resolution, and pure-
 
 import json
 import pytest
-import scipy.special as sc
+
+try:
+    import scipy.special as sc
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
+    sc = None
 
 from aema import AdaptiveMemory
 from aema._compat import resolve_db_path
 from ai_service.trust_math import _betainc_pure
 
 
+@pytest.mark.skipif(not HAS_SCIPY, reason="scipy not installed; skipping pure-Python vs scipy comparison")
 @pytest.mark.parametrize(
     "a,b,x",
     [
@@ -24,6 +31,7 @@ from ai_service.trust_math import _betainc_pure
     ],
 )
 def test_pure_python_betainc_matches_scipy(a: float, b: float, x: float):
+    assert sc is not None
     assert abs(_betainc_pure(a, b, x) - float(sc.betainc(a, b, x))) < 1e-11
 
 

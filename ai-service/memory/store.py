@@ -761,6 +761,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
             cursor = conn.cursor()
             cursor.execute("BEGIN IMMEDIATE")
             try:
+                cursor.execute("DELETE FROM probation_task_fingerprints WHERE experience_id = ?", (experience_id,))
                 cursor.execute("DELETE FROM trust_history WHERE experience_id = ?", (experience_id,))
                 cursor.execute("DELETE FROM experiences WHERE id = ?", (experience_id,))
                 deleted = cursor.rowcount > 0
@@ -1426,8 +1427,11 @@ class PostgresMemoryStore(BaseMemoryStore):
     async def delete_experience(self, experience_id: str) -> bool:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
-            res = await conn.execute("DELETE FROM experiences WHERE id = $1", experience_id)
-            return not res.endswith(" 0")
+            async with conn.transaction():
+                await conn.execute("DELETE FROM probation_task_fingerprints WHERE experience_id = $1", experience_id)
+                await conn.execute("DELETE FROM trust_history WHERE experience_id = $1", experience_id)
+                res = await conn.execute("DELETE FROM experiences WHERE id = $1", experience_id)
+                return not res.endswith(" 0")
 
     async def close(self) -> None:
         if self._pool is not None:
@@ -1648,7 +1652,9 @@ class SupabaseMemoryStore(BaseMemoryStore):
                         results.append((exp, sim))
                         if len(results) >= top_k:
                             break
-                    return results
+                    # If tenant-scoped search found top_k or RPC wasn't truncated, return
+                    if user_id is None or len(results) >= top_k or len(rows) < (top_k * 4):
+                        return results
             except Exception as e:
                 logger.warning(f"Supabase RPC match_experiences call failed ({e}); falling back to client-side cosine")
 

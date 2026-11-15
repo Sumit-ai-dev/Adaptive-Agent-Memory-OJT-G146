@@ -7,7 +7,7 @@ import logging
 import secrets
 from typing import Annotated, Any, Dict, List, Optional
 from fastapi import APIRouter, Header, HTTPException, Query, status
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 from ai_service.config import settings
 from ai_service.embedder import LocalEmbedder, local_embedder
@@ -313,6 +313,8 @@ async def validate_memory_probe(
 
 class MemoryRetrieveRequest(BaseModel):
     """Payload for live composite memory retrieval (supports both API and SDK schemas)."""
+    model_config = ConfigDict(populate_by_name=True)
+
     task_input: Optional[str] = Field(default=None, description="Task prompt or query to match against memory index")
     query: Optional[str] = Field(default=None, description="SDK/MCP alias for task_input")
     domain: Optional[TaskDomain] = Field(default=None, description="Optional task domain filter")

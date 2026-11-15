@@ -221,6 +221,13 @@ describe('AEMAClient Persistence & FastAPI Remote Mapping', () => {
       const synced = await client.syncFromRemote();
       assert.equal(synced, true);
       assert.equal(client.audit().totalMemories, 1);
+
+      // Deletion reconciliation test: remote now has empty list after GDPR deletion
+      globalThis.fetch = (async () =>
+        new Response(JSON.stringify([]), { status: 200 })) as typeof fetch;
+      const syncedEmpty = await client.syncFromRemote();
+      assert.equal(syncedEmpty, true);
+      assert.equal(client.audit().totalMemories, 0, 'syncFromRemote reconciles remote deletions');
     } finally {
       globalThis.fetch = originalFetch;
     }
@@ -356,20 +363,32 @@ describe('AEMAClient Persistence & FastAPI Remote Mapping', () => {
       assert.equal(bobHits.length, 1);
       assert.equal(bobHits[0].experience.userId, 'bob');
 
+      // Invariant check: recovering an ACTIVE memory must return null
+      const activeRecover = await client.recover(aliceExp.id, 'Illegal active recovery');
+      assert.equal(activeRecover, null, 'Active memory cannot be recovered to candidate');
+
+      // Tenant isolation: bob cannot forget alice's memory
+      const unauthorizedForget = await client.forget(aliceExp.id, false, 'bob');
+      assert.equal(unauthorizedForget, false, 'Tenant cannot forget another tenant memory');
+
       // Soft quarantine via forget()
-      const softRemoved = await client.forget(aliceExp.id, false);
+      const softRemoved = await client.forget(aliceExp.id, false, 'alice');
       assert.equal(softRemoved, true);
       const afterForget = await client.retrieve({ query: 'Voice TTS format', userId: 'alice' });
       assert.equal(afterForget.length, 0);
 
+      // Tenant isolation: bob cannot recover alice's quarantined memory
+      const unauthorizedRecover = await client.recover(aliceExp.id, 'Unauthorized recovery', 'bob');
+      assert.equal(unauthorizedRecover, null, 'Tenant cannot recover another tenant memory');
+
       // Recover into candidate probation
-      const recovered = await client.recover(aliceExp.id, 'Unit test verified recovery');
+      const recovered = await client.recover(aliceExp.id, 'Unit test verified recovery', 'alice');
       assert.ok(recovered);
       assert.equal(recovered?.isQuarantined, false);
       assert.equal(recovered?.metadata?.backendStatus, 'candidate');
 
       // Permanent GDPR erasure
-      const hardRemoved = await client.forget(aliceExp.id, true);
+      const hardRemoved = await client.forget(aliceExp.id, true, 'alice');
       assert.equal(hardRemoved, true);
       assert.equal(client.list({ userId: 'alice' }).length, 0);
       assert.equal(client.list({ userId: 'bob' }).length, 1);

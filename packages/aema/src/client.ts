@@ -345,9 +345,21 @@ export class AEMAClient {
       const items = (await res.json()) as Record<string, any>[];
       if (!Array.isArray(items)) return false;
 
+      const remoteIds = new Set(items.map((raw) => String(raw.id)));
       for (const raw of items) {
         const mapped = mapBackendExperience(raw);
         this.localStore.set(mapped.id, mapped);
+      }
+
+      // Reconcile deletions: if not truncated by pagination limit, remove local entries in this scope that were deleted remotely
+      if (items.length < limit) {
+        for (const [id, localExp] of this.localStore.entries()) {
+          const expUser = (localExp.metadata?.userId ?? localExp.metadata?.user_id) as string | undefined;
+          const inScope = effectiveUser ? expUser === effectiveUser : true;
+          if (inScope && !remoteIds.has(id)) {
+            this.localStore.delete(id);
+          }
+        }
       }
       this.saveLocalStore();
       return true;
@@ -463,11 +475,15 @@ export class AEMAClient {
   /**
    * Soft-quarantine or permanently erase a memory (GDPR / lifecycle control).
    */
-  async forget(experienceId: string, hardDelete = false): Promise<boolean> {
+  async forget(experienceId: string, hardDelete = false, userId?: string): Promise<boolean> {
+    const effectiveUser = this.resolveUser(userId);
     let remoteHandled = false;
     try {
       if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
-        const qs = hardDelete ? '?hard_delete=true' : '';
+        const params = new URLSearchParams();
+        if (hardDelete) params.set('hard_delete', 'true');
+        if (effectiveUser) params.set('userId', effectiveUser);
+        const qs = params.toString() ? `?${params.toString()}` : '';
         const res = await this.fetchWithTimeout(
           `${this.baseUrl}/api/v1/memories/${experienceId}${qs}`,
           {
@@ -476,15 +492,27 @@ export class AEMAClient {
           }
         );
         if (res.status === 404) return false;
-        if (res.ok) remoteHandled = true;
+        if (res.ok) {
+          remoteHandled = true;
+        } else {
+          // Explicit remote failure (401, 403, 500) must not silently fall through to local deletion
+          return false;
+        }
       }
     } catch {
-      // Fall back to local persistence
+      // Fall back to local persistence on network failure
     }
 
     const exp = this.localStore.get(experienceId);
     if (!exp && !remoteHandled) {
       return false;
+    }
+
+    if (exp && effectiveUser) {
+      const expUser = (exp.metadata?.userId ?? exp.metadata?.user_id) as string | undefined;
+      if (expUser && expUser !== effectiveUser) {
+        return false; // Multi-tenant isolation: cannot delete another tenant's memory
+      }
     }
 
     const previousTrust = exp?.trustScore;
@@ -508,7 +536,7 @@ export class AEMAClient {
       previousTrust,
       newTrust: hardDelete ? undefined : 0.0,
       quarantined: !hardDelete,
-      metadata: { hardDelete },
+      metadata: { hardDelete, ...(effectiveUser ? { userId: effectiveUser } : {}) },
     });
 
     return true;
@@ -520,9 +548,11 @@ export class AEMAClient {
    */
   async recover(
     experienceId: string,
-    reason = 'Developer requested probationary recovery'
+    reason = 'Developer requested probationary recovery',
+    userId?: string
   ): Promise<Experience | null> {
     const auditReason = reason.length >= 15 ? reason : `${reason} (SDK recovery)`;
+    const effectiveUser = this.resolveUser(userId);
 
     try {
       if (this.baseUrl && !this.baseUrl.includes('localhost:0')) {
@@ -531,7 +561,10 @@ export class AEMAClient {
           {
             method: 'POST',
             headers: this.getHeaders(),
-            body: JSON.stringify({ reason: auditReason }),
+            body: JSON.stringify({
+              reason: auditReason,
+              ...(effectiveUser ? { userId: effectiveUser } : {}),
+            }),
           }
         );
         if (res.status === 404) return null;
@@ -546,17 +579,40 @@ export class AEMAClient {
             domain: mapped.metadata?.domain as string | undefined,
             newTrust: mapped.trustScore,
             quarantined: false,
-            metadata: { status: mapped.metadata?.backendStatus ?? 'candidate', reason: auditReason },
+            metadata: {
+              status: mapped.metadata?.backendStatus ?? 'candidate',
+              reason: auditReason,
+              ...(effectiveUser ? { userId: effectiveUser } : {}),
+            },
           });
           return mapped;
+        } else {
+          // Explicit remote failure must not silently recover locally
+          return null;
         }
       }
     } catch {
-      // Fall back to local transition
+      // Fall back to local transition on network failure
     }
 
     const exp = this.localStore.get(experienceId);
     if (!exp) return null;
+
+    if (effectiveUser) {
+      const expUser = (exp.metadata?.userId ?? exp.metadata?.user_id) as string | undefined;
+      if (expUser && expUser !== effectiveUser) {
+        return null; // Multi-tenant isolation: cannot recover another tenant's memory
+      }
+    }
+
+    // Invariant: only quarantined or deprecated memories can be recovered into candidate probation
+    const isQuarantined =
+      exp.isQuarantined ||
+      exp.metadata?.backendStatus === 'deprecated' ||
+      exp.trustScore < DEFAULT_QUARANTINE_THRESHOLD;
+    if (!isQuarantined) {
+      return null;
+    }
 
     const previousTrust = exp.trustScore;
     exp.isQuarantined = false;
@@ -573,7 +629,11 @@ export class AEMAClient {
       previousTrust,
       newTrust: exp.trustScore,
       quarantined: false,
-      metadata: { status: 'candidate', reason: auditReason },
+      metadata: {
+        status: 'candidate',
+        reason: auditReason,
+        ...(effectiveUser ? { userId: effectiveUser } : {}),
+      },
     });
 
     return exp;

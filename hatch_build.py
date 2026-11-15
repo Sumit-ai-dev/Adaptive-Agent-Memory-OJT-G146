@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Hatchling custom build hook for AEMA.
 Namespaces `ai-service`, `models`, and `backend` under `aema._internal` inside
@@ -9,7 +11,7 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
@@ -46,7 +48,7 @@ def _rewrite_internal_imports(py_file: Path) -> None:
 class CustomBuildHook(BuildHookInterface):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
-        self._tmp_dir: str | None = None
+        self._tmp_dir: Optional[str] = None
 
     def initialize(self, version: str, build_data: Dict[str, Any]) -> None:
         if self.target_name != "wheel":

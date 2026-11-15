@@ -194,6 +194,7 @@ class AdaptiveMemory:
                 if domain and domain != "all":
                     payload["domain"] = domain
                 if effective_user is not None:
+                    payload["userId"] = effective_user
                     payload["user_id"] = effective_user
                 res = await client.post(
                     f"{self.api_url}/api/v1/memories/search",
@@ -233,7 +234,7 @@ class AdaptiveMemory:
         sim_cutoff = (
             float(min_similarity)
             if min_similarity is not None
-            else (0.45 if using_neural else 0.12)
+            else (0.60 if using_neural else 0.15)
         )
 
         raw_hits = await self._store.search_similar(
@@ -331,24 +332,41 @@ class AdaptiveMemory:
             "status": new_status,
         }
 
-    async def aforget(self, experience_id: str, hard_delete: bool = False) -> bool:
+    async def aforget(
+        self,
+        experience_id: str,
+        hard_delete: bool = False,
+        user_id: Optional[str] = None,
+    ) -> bool:
         """
         Remove or quarantine a memory entry.
         Set `hard_delete=True` for permanent GDPR/PII erasure; otherwise soft-quarantines.
         """
+        effective_user = self._resolve_user(user_id)
         if self.api_url:
             import httpx
+
+            params: Dict[str, Any] = {}
+            if hard_delete:
+                params["hard_delete"] = "true"
+            if effective_user:
+                params["userId"] = effective_user
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.delete(
                     f"{self.api_url}/api/v1/memories/{experience_id}",
-                    params={"hard_delete": "true"} if hard_delete else None,
+                    params=params or None,
                     headers=self._headers(),
                 )
                 if res.status_code == 404:
                     return False
                 res.raise_for_status()
                 return True
+
+        if effective_user:
+            exp = await self._store.get_experience(experience_id)
+            if not exp or (exp.user_id and exp.user_id != effective_user):
+                return False
 
         if hard_delete:
             return await self._store.delete_experience(experience_id)
@@ -368,21 +386,27 @@ class AdaptiveMemory:
         self,
         experience_id: str,
         reason: str = "Developer requested probationary recovery",
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Safely transition a quarantined (`deprecated`) memory into `candidate` probation.
         Honors AEMA's state machine invariant (deprecated -> candidate -> active).
         """
         audit_reason = reason if len(reason) >= 15 else f"{reason} (SDK recovery)"
+        effective_user = self._resolve_user(user_id)
 
         if self.api_url:
             import httpx
+
+            body: Dict[str, Any] = {"reason": audit_reason}
+            if effective_user:
+                body["userId"] = effective_user
 
             async with httpx.AsyncClient(timeout=10.0) as client:
                 res = await client.post(
                     f"{self.api_url}/api/v1/memories/{experience_id}/recover",
                     headers=self._headers(),
-                    json={"reason": audit_reason},
+                    json=body,
                 )
                 res.raise_for_status()
                 d = res.json()
@@ -391,6 +415,11 @@ class AdaptiveMemory:
                     "trust": float(d.get("trustScore", 0.5)),
                     "status": str(d.get("status", "candidate")),
                 }
+
+        if effective_user:
+            exp = await self._store.get_experience(experience_id)
+            if not exp or (exp.user_id and exp.user_id != effective_user):
+                raise ValueError(f"Experience '{experience_id}' does not belong to user '{effective_user}'.")
 
         recovered = await self._store.admin_recover_to_probation(
             experience_id=experience_id,
@@ -550,15 +579,25 @@ class AdaptiveMemory:
             self.afeedback(experience_id=experience_id, success=success, reward=reward)
         )
 
-    def forget(self, experience_id: str, hard_delete: bool = False) -> bool:
-        return _run_sync(self.aforget(experience_id=experience_id, hard_delete=hard_delete))
+    def forget(
+        self,
+        experience_id: str,
+        hard_delete: bool = False,
+        user_id: Optional[str] = None,
+    ) -> bool:
+        return _run_sync(
+            self.aforget(experience_id=experience_id, hard_delete=hard_delete, user_id=user_id)
+        )
 
     def recover(
         self,
         experience_id: str,
         reason: str = "Developer requested probationary recovery",
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
-        return _run_sync(self.arecover(experience_id=experience_id, reason=reason))
+        return _run_sync(
+            self.arecover(experience_id=experience_id, reason=reason, user_id=user_id)
+        )
 
     def list(
         self,
