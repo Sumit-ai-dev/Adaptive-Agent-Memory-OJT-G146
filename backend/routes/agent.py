@@ -26,7 +26,7 @@ logger = logging.getLogger("backend.routes.agent")
 router = APIRouter(prefix="/agent", tags=["Agent Execution"])
 
 # Global shared memory store for API server
-shared_store: BaseMemoryStore = get_memory_store(db_path=resolve_db_path(), auto_seed=False)
+shared_store: BaseMemoryStore = get_memory_store(db_path=resolve_db_path(), auto_seed=True)
 
 # In-memory session cache: populated from SQLite on startup, kept in sync after that
 _execution_history: List[TaskExecution] = []
