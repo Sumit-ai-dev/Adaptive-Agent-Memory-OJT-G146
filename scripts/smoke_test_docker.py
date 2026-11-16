@@ -108,9 +108,11 @@ def main():
     assert len(matches) > 0, f"Expected non-empty search matches: {matches}"
     match_ids = [m.get("experience", {}).get("id") for m in matches if isinstance(m, dict)]
     assert "exp-coding-001" in match_ids, f"Expected exp-coding-001 in search matches: {match_ids}"
-    assert matches[0].get("similarity", 0) > 0.0, f"Expected positive similarity: {matches[0]}"
-    assert matches[0].get("composite_score", 0) > 0.0, f"Expected positive composite score: {matches[0]}"
-    print(f"Semantic search against pgvector verified: returned {len(matches)} matches (top: {match_ids[0]}).")
+    similarity = matches[0].get("similarity", 0.0)
+    composite = matches[0].get("compositeScore") or matches[0].get("composite_score") or 0.0
+    assert similarity > 0.0, f"Expected positive similarity: {matches[0]}"
+    assert composite > 0.0, f"Expected positive composite score: {matches[0]}"
+    print(f"Semantic search against pgvector verified: returned {len(matches)} matches (top: {match_ids[0]}, sim: {similarity}, composite: {composite}).")
 
     # 6. Observability & system telemetry
     print("Step 6: Verifying telemetry endpoint...")
