@@ -4,8 +4,6 @@
 # Example: docker compose -f docker-compose.mcp.yml up
 # ==============================================================================
 
-version: '3.8'
-
 services:
   aema-mcp:
     build:

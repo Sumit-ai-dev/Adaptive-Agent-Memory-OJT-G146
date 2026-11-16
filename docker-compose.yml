@@ -7,8 +7,6 @@
 #   - aema-mcp: Node.js Model Context Protocol Server for external AI clients
 # ==============================================================================
 
-version: '3.8'
-
 services:
   # ─────────────────────────────────────────────────────────────────────────────
   # Database Service: PostgreSQL 16 + pgvector
