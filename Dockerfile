@@ -17,14 +17,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Optional CPU-only PyTorch + sentence-transformers for baked-in embeddings
+COPY backend/requirements.txt ./backend/requirements.txt
+
+# When WITH_EMBEDDINGS=true, install CPU PyTorch and sentence-transformers.
+# By default (false), filter out sentence-transformers to yield a fast, lightweight image.
 RUN if [ "$WITH_EMBEDDINGS" = "true" ]; then \
         pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu && \
-        pip install --no-cache-dir sentence-transformers; \
+        pip install --no-cache-dir -r backend/requirements.txt; \
+    else \
+        grep -v "^sentence-transformers" backend/requirements.txt > /tmp/reqs-light.txt && \
+        pip install --no-cache-dir -r /tmp/reqs-light.txt && \
+        rm -f /tmp/reqs-light.txt; \
     fi
-
-COPY backend/requirements.txt ./backend/requirements.txt
-RUN pip install --no-cache-dir -r backend/requirements.txt
 
 # --- Stage 2: Hardened Runtime ---
 FROM python:3.11-slim AS runner
@@ -49,13 +53,13 @@ RUN groupadd -g 10001 appgroup && \
 RUN mkdir -p /data /app && chown -R appuser:appgroup /data /app
 VOLUME ["/data"]
 
-# Copy application sources
-COPY README.md pyproject.toml ./
-COPY backend ./backend
-COPY ai-service ./ai-service
-COPY ai_service ./ai_service
-COPY models ./models
+# Copy project definition, build hook, and application sources
+COPY README.md pyproject.toml hatch_build.py ./
 COPY aema ./aema
+COPY models ./models
+COPY backend ./backend
+COPY ai-service ./ai_service
+RUN ln -s ai_service /app/ai-service
 
 # Install project editable link without pulling unpinned transitive deps
 RUN pip install --no-cache-dir -e . --no-deps

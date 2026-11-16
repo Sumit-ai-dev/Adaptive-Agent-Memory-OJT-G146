@@ -36,11 +36,15 @@ flowchart TD
 Run the memory backend in standalone SQLite mode with persistent data on your host machine:
 
 ```bash
+# 1. Build the local image
+docker build -t aema-server:latest .
+
+# 2. Run the container
 docker run -d \
   --name aema-server \
   -p 8000:8000 \
   -v aema_data:/data \
-  aema/server:0.1.1
+  aema-server:latest
 ```
 
 * Verify health:

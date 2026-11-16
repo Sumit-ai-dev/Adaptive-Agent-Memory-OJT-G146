@@ -9,9 +9,18 @@ on:
       - 'Dockerfile*'
       - 'docker-compose*.yml'
       - '.dockerignore'
+      - 'frontend/.dockerignore'
+      - 'packages/aema/.dockerignore'
       - 'backend/**'
       - 'frontend/**'
       - 'packages/aema/**'
+      - 'ai_service/**'
+      - 'ai-service/**'
+      - 'models/**'
+      - 'aema/**'
+      - 'pyproject.toml'
+      - 'hatch_build.py'
+      - 'scripts/**'
       - '.github/workflows/docker.yml'
   pull_request:
     branches:
@@ -20,9 +29,18 @@ on:
       - 'Dockerfile*'
       - 'docker-compose*.yml'
       - '.dockerignore'
+      - 'frontend/.dockerignore'
+      - 'packages/aema/.dockerignore'
       - 'backend/**'
       - 'frontend/**'
       - 'packages/aema/**'
+      - 'ai_service/**'
+      - 'ai-service/**'
+      - 'models/**'
+      - 'aema/**'
+      - 'pyproject.toml'
+      - 'hatch_build.py'
+      - 'scripts/**'
       - '.github/workflows/docker.yml'
 
 permissions: read-all
@@ -45,39 +63,14 @@ jobs:
           docker compose -f docker-compose.yml config --quiet
           docker compose -f docker-compose.mcp.yml config --quiet
 
-      - name: Build Backend Container
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
-        with:
-          context: .
-          file: ./Dockerfile
-          push: false
-          load: true
-          tags: aema/server:0.1.1
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build Frontend Container
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
-        with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: false
-          tags: aema/frontend:0.1.1
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Build MCP Server Container
-        uses: docker/build-push-action@471d1dc4e07e5cdedd4c2171150001c434f0b7a4 # v6.15.0
-        with:
-          context: ./packages/aema
-          file: ./packages/aema/Dockerfile
-          push: false
-          tags: aema/mcp:0.1.1
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
-      - name: Run Full-Stack Compose Smoke Test
+      - name: Build All Container Images with Compose
         run: |
+          docker compose build
+
+      - name: Run Full-Stack Compose Smoke Test with CRUD & Tenant Isolation
+        run: |
+          export ADMIN_API_KEY="ci-smoke-admin-key"
+
           # Start PostgreSQL + pgvector and wait for health
           docker compose up -d db
           timeout 60 bash -c 'until docker compose ps db | grep -q "healthy"; do sleep 2; done'
@@ -86,8 +79,9 @@ jobs:
           docker compose up -d backend
           timeout 90 bash -c 'until docker compose ps backend | grep -q "healthy"; do sleep 2; done'
 
-          # Verify backend health endpoint
-          curl --fail --retry 5 --retry-delay 2 http://localhost:8000/api/v1/health
+          # Execute end-to-end Python smoke test suite:
+          # Asserts health, pgvector persistence, cosine search, and user tenant isolation
+          python3 scripts/smoke_test_docker.py http://localhost:8000 "$ADMIN_API_KEY"
 
           # Teardown
           docker compose down -v

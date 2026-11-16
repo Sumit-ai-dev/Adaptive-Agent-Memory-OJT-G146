@@ -22,7 +22,8 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-aema}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aema_password}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Bound to loopback interface only to prevent public network exposure
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -51,7 +52,7 @@ services:
       - STORAGE_ENGINE=postgres
       - DATABASE_URL=postgresql://${POSTGRES_USER:-aema}:${POSTGRES_PASSWORD:-aema_password}@db:5432/${POSTGRES_DB:-aema_db}
       - AEMA_DB_PATH=/data/adaptive_memory.db
-      - ADMIN_API_KEY=${ADMIN_API_KEY:-dev-admin-key}
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
@@ -127,4 +128,5 @@ volumes:
 
 networks:
   aema-network:
+    name: aema-network
     driver: bridge
