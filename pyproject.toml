@@ -33,7 +33,7 @@ agent = [
     "openai>=1.40.0",
     "tiktoken>=0.7.0",
     "langfuse>=2.0.0",
-    "ddgs>=9.0.0",
+    "ddgs>=9.16.1",
 ]
 server = [
     "fastapi>=0.115.0",
@@ -42,7 +42,7 @@ server = [
     "openai>=1.40.0",
     "tiktoken>=0.7.0",
     "langfuse>=2.0.0",
-    "ddgs>=9.0.0",
+    "ddgs>=9.16.1",
 ]
 embeddings = [
     "sentence-transformers>=3.0.0",
