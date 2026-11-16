@@ -66,6 +66,39 @@ class AIServiceSettings(BaseSettings):
     MAX_CYCLICAL_LOOPS: int = Field(default=3, description="Maximum reflection loops before forced exit")
     REQUEST_TIMEOUT_SECONDS: float = Field(default=15.0)
 
+    # Token Budgeting & Context Compaction Bounds (Issue #38)
+    MAX_PROMPT_TOKENS: int = Field(default=4096, description="Upper bound for total task prompt context tokens")
+    MAX_RETRIEVED_MEMORY_TOKENS: int = Field(default=800, description="Strict upper bound for injected experiential memories into prompts")
+    MAX_TASK_COST_USD: float = Field(default=0.05, description="Maximum allowed token expenditure in USD per task execution")
+    MAX_TASK_TOKENS: int = Field(default=8192, description="Upper bound for cumulative tokens across cyclical execution loops")
+    TOKENIZER_ENCODING: str = Field(default="cl100k_base", description="Default tokenizer encoding family for budget calculations")
+
+    # Security & API Protection
+    HOST: str = Field(default="127.0.0.1", description="Default network bind address for the API server")
+    PORT: int = Field(default=8000, description="Default port for the API server")
+    AGENT_API_KEY: Optional[str] = Field(default=None, description="API key required for agent execution when auth is enabled")
+    REQUIRE_AGENT_AUTH: bool = Field(default=False, description="When true, requires valid AGENT_API_KEY or ADMIN_API_KEY on /agent/execute")
+    RATE_LIMIT_REQUESTS_PER_MINUTE: int = Field(default=60, description="Max execution requests per minute per IP")
+    CORS_ALLOWED_ORIGINS: list[str] = Field(
+        default=[
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+        ],
+        description="Allowed CORS origin list",
+    )
+    SANDBOX_AST_STRICT: bool = Field(default=True, description="Enforce strict AST code safety verification before evaluation")
+
+    # Observability & Distributed Tracing (Issue #36)
+    OBSERVABILITY_ENABLED: bool = Field(default=True, description="Enable distributed tracing telemetry")
+    LANGFUSE_PUBLIC_KEY: Optional[str] = Field(default=None, description="Langfuse Cloud or Self-hosted Public Key")
+    LANGFUSE_SECRET_KEY: Optional[str] = Field(default=None, description="Langfuse Cloud or Self-hosted Secret Key")
+    LANGFUSE_HOST: str = Field(default="https://cloud.langfuse.com", description="Langfuse host URL")
+    LANGSMITH_TRACING: bool = Field(default=False, description="Enable LangSmith OpenTelemetry tracing")
+    LANGSMITH_API_KEY: Optional[str] = Field(default=None, description="LangSmith API Key")
+    LANGSMITH_PROJECT: str = Field(default="adaptive-agent-memory", description="LangSmith Project Name")
+
 
 # Global singleton settings instance
 settings = AIServiceSettings()

@@ -35,10 +35,18 @@ async def evaluate_node(state: AgentState) -> Dict[str, Any]:
     task_input = state.get("task_input", "")
     threshold = float(state.get("outcome_threshold") or DEFAULT_OUTCOME_THRESHOLD)
 
-    if final_answer.startswith("Execution encountered a model provider error:"):
+    if state.get("budget_exceeded") is True or state.get("budget_error"):
         outcome = EvaluationOutcome.from_reward(
             reward=0.50,
-            evaluator_name=EvaluatorName.HEURISTIC_RUBRIC,
+            evaluator_name=EvaluatorName.HEURISTIC,
+            reason=f"Inconclusive: {state.get('budget_error', 'Task budget ceiling exceeded')}. Trust preserved, no penalty.",
+            outcome_threshold=threshold,
+            details={"status": "inconclusive", "error": "budget_exceeded"},
+        )
+    elif final_answer.startswith("Execution encountered a model provider error:"):
+        outcome = EvaluationOutcome.from_reward(
+            reward=0.50,
+            evaluator_name=EvaluatorName.HEURISTIC,
             reason=f"Inconclusive: Model provider execution failed ({final_answer[:120]}). Trust preserved.",
             outcome_threshold=threshold,
             details={"status": "inconclusive", "error": "provider_error"},

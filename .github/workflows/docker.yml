@@ -1,0 +1,98 @@
+name: Docker / Container CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+    paths:
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - '.dockerignore'
+      - 'frontend/.dockerignore'
+      - 'packages/aema/.dockerignore'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'packages/aema/**'
+      - 'ai_service/**'
+      - 'ai-service/**'
+      - 'models/**'
+      - 'aema/**'
+      - 'pyproject.toml'
+      - 'hatch_build.py'
+      - 'scripts/**'
+      - '.github/workflows/docker.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'Dockerfile*'
+      - 'docker-compose*.yml'
+      - '.dockerignore'
+      - 'frontend/.dockerignore'
+      - 'packages/aema/.dockerignore'
+      - 'backend/**'
+      - 'frontend/**'
+      - 'packages/aema/**'
+      - 'ai_service/**'
+      - 'ai-service/**'
+      - 'models/**'
+      - 'aema/**'
+      - 'pyproject.toml'
+      - 'hatch_build.py'
+      - 'scripts/**'
+      - '.github/workflows/docker.yml'
+
+permissions: read-all
+
+jobs:
+  docker-build-and-smoke-test:
+    name: Build Images & Compose Smoke Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
+
+      - name: Validate Docker Compose Configuration
+        run: |
+          docker compose -f docker-compose.yml config --quiet
+          docker compose -f docker-compose.mcp.yml config --quiet
+
+      - name: Build All Container Images with Compose
+        run: |
+          docker compose build
+
+      - name: Run Full-Stack Compose Smoke Test with CRUD & Tenant Isolation
+        run: |
+          export ADMIN_API_KEY="ci-smoke-admin-key"
+
+          # Start PostgreSQL + pgvector and wait for database engine readiness
+          docker compose up -d db
+          echo "Waiting for PostgreSQL + pgvector container to be ready..."
+          timeout 60 bash -c 'until docker compose exec -T db pg_isready -U aema -d aema_db; do sleep 2; done' || {
+            echo "PostgreSQL failed to become ready! Container logs:"
+            docker compose logs db
+            exit 1
+          }
+
+          # Start Backend against containerized pgvector and wait for health endpoint
+          docker compose up -d backend
+          echo "Waiting for FastAPI backend to be ready..."
+          timeout 90 bash -c 'until curl -s http://localhost:8000/api/v1/health | grep -q "\"status\":\"ok\""; do sleep 2; done' || {
+            echo "Backend failed to become healthy! Container logs:"
+            docker compose logs backend
+            exit 1
+          }
+
+          # Execute end-to-end Python smoke test suite:
+          # Asserts health, pgvector persistence, cosine search, and user tenant isolation
+          python3 scripts/smoke_test_docker.py http://localhost:8000 "$ADMIN_API_KEY"
+
+      - name: Teardown Compose Stack
+        if: always()
+        run: docker compose down -v

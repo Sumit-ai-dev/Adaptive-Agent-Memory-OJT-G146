@@ -102,17 +102,26 @@ class BaseMemoryStore(ABC):
         domain: Optional[TaskDomain] = None,
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
+        user_id: Optional[str] = None,
     ) -> List[Experience]:
         pass
 
     @abstractmethod
     async def search_similar(
-        self, query_embedding: List[float], domain: Optional[TaskDomain] = None, top_k: int = 5
+        self,
+        query_embedding: List[float],
+        domain: Optional[TaskDomain] = None,
+        top_k: int = 5,
+        user_id: Optional[str] = None,
     ) -> List[Tuple[Experience, float]]:
         """
         Returns list of (Experience, cosine_similarity) tuples.
         """
         pass
+
+    async def delete_experience(self, experience_id: str) -> bool:
+        """Hard-delete an experience record (for GDPR/PII compliance)."""
+        raise NotImplementedError("delete_experience is not implemented on this store.")
 
 
 class SQLiteMemoryStore(BaseMemoryStore):
@@ -671,6 +680,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
         domain: Optional[TaskDomain] = None,
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
+        user_id: Optional[str] = None,
     ) -> List[Experience]:
         query = "SELECT * FROM experiences WHERE 1=1"
         params: List[Any] = []
@@ -683,6 +693,9 @@ class SQLiteMemoryStore(BaseMemoryStore):
         if min_trust is not None:
             query += " AND trust_score >= ?"
             params.append(min_trust)
+        if user_id is not None:
+            query += " AND user_id = ?"
+            params.append(user_id)
         query += " ORDER BY trust_score DESC, updated_at DESC"
 
         with self._get_connection() as conn:
@@ -691,9 +704,13 @@ class SQLiteMemoryStore(BaseMemoryStore):
             return [self._row_to_experience(r) for r in cursor.fetchall()]
 
     async def search_similar(
-        self, query_embedding: List[float], domain: Optional[TaskDomain] = None, top_k: int = 5
+        self,
+        query_embedding: List[float],
+        domain: Optional[TaskDomain] = None,
+        top_k: int = 5,
+        user_id: Optional[str] = None,
     ) -> List[Tuple[Experience, float]]:
-        experiences = await self.list_experiences(domain=domain)
+        experiences = await self.list_experiences(domain=domain, user_id=user_id)
         if not experiences:
             return []
 
@@ -738,6 +755,21 @@ class SQLiteMemoryStore(BaseMemoryStore):
 
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:top_k]
+
+    async def delete_experience(self, experience_id: str) -> bool:
+        with self._get_write_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("BEGIN IMMEDIATE")
+            try:
+                cursor.execute("DELETE FROM probation_task_fingerprints WHERE experience_id = ?", (experience_id,))
+                cursor.execute("DELETE FROM trust_history WHERE experience_id = ?", (experience_id,))
+                cursor.execute("DELETE FROM experiences WHERE id = ?", (experience_id,))
+                deleted = cursor.rowcount > 0
+                cursor.execute("COMMIT")
+                return deleted
+            except Exception:
+                cursor.execute("ROLLBACK")
+                raise
 
     def _row_to_experience(self, row: sqlite3.Row) -> Experience:
         embedding = json.loads(row["embedding"]) if row["embedding"] else None
@@ -790,9 +822,27 @@ class PostgresMemoryStore(BaseMemoryStore):
             if not self.database_url:
                 raise ValueError("PostgresMemoryStore requires a valid database_url or DATABASE_URL env var")
 
+            # Pre-create vector extension on a dedicated bootstrap connection before pool creation.
+            # This ensures pg_type contains public.vector when pool init registers the codec.
+            try:
+                init_conn = await asyncpg.connect(self.database_url)
+                try:
+                    await init_conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                finally:
+                    await init_conn.close()
+            except Exception as e:
+                logger.warning(f"Could not bootstrap vector extension on standalone connection: {e}")
+
             async def init_connection(conn):
+                try:
+                    await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                except Exception:
+                    pass
                 if register_vector:
-                    await register_vector(conn)
+                    try:
+                        await register_vector(conn)
+                    except Exception as ve:
+                        logger.warning(f"Could not register vector codec on connection: {ve}")
 
             self._pool = await asyncpg.create_pool(
                 dsn=self.database_url,
@@ -811,6 +861,11 @@ class PostgresMemoryStore(BaseMemoryStore):
             return
         async with self._pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS experiences (
                     id TEXT PRIMARY KEY,
@@ -927,6 +982,11 @@ class PostgresMemoryStore(BaseMemoryStore):
             local_embedder = None
 
         now = datetime.now(timezone.utc)
+        if register_vector:
+            try:
+                await register_vector(conn)
+            except Exception:
+                pass
         for item in seeds:
             id_, uid, domain, trig, strat, pit, conf, trust, uses, succ, fail, stat, emb, src = item
             if local_embedder is not None and emb is None:
@@ -947,14 +1007,23 @@ class PostgresMemoryStore(BaseMemoryStore):
         emb = row["embedding"]
         emb_list = None
         if emb is not None:
-            if hasattr(emb, "tolist"):
-                emb_list = emb.tolist()
+            if hasattr(emb, "to_list"):
+                emb_list = [float(x) for x in emb.to_list()]
+            elif hasattr(emb, "tolist"):
+                emb_list = [float(x) for x in emb.tolist()]
             elif isinstance(emb, (list, tuple)):
                 emb_list = [float(x) for x in emb]
             elif isinstance(emb, str):
-                emb_list = json.loads(emb)
+                try:
+                    emb_list = json.loads(emb)
+                except Exception:
+                    raw = emb.strip().lstrip("[").rstrip("]")
+                    emb_list = [float(x.strip()) for x in raw.split(",") if x.strip()]
             else:
-                emb_list = list(emb)
+                try:
+                    emb_list = [float(x) for x in emb]
+                except Exception:
+                    emb_list = None
 
         prob_successes = int(row["probation_successes"]) if "probation_successes" in row else 0
 
@@ -991,6 +1060,11 @@ class PostgresMemoryStore(BaseMemoryStore):
         prob_successes = getattr(exp, "probation_successes", 0)
 
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             await conn.execute("""
                 INSERT INTO experiences (
                     id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
@@ -1017,6 +1091,11 @@ class PostgresMemoryStore(BaseMemoryStore):
     async def get_experience(self, experience_id: str) -> Optional[Experience]:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             row = await conn.fetchrow("SELECT * FROM experiences WHERE id = $1", experience_id)
             return self._record_to_experience(row) if row else None
 
@@ -1331,6 +1410,7 @@ class PostgresMemoryStore(BaseMemoryStore):
         domain: Optional[TaskDomain] = None,
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
+        user_id: Optional[str] = None,
     ) -> List[Experience]:
         pool = await self._get_pool()
         query = "SELECT * FROM experiences WHERE 1=1"
@@ -1349,19 +1429,37 @@ class PostgresMemoryStore(BaseMemoryStore):
             query += f" AND trust_score >= ${param_idx}"
             params.append(min_trust)
             param_idx += 1
+        if user_id is not None:
+            query += f" AND user_id = ${param_idx}"
+            params.append(user_id)
+            param_idx += 1
 
         query += " ORDER BY trust_score DESC, updated_at DESC"
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             rows = await conn.fetch(query, *params)
             return [self._record_to_experience(r) for r in rows]
 
     async def search_similar(
-        self, query_embedding: List[float], domain: Optional[TaskDomain] = None, top_k: int = 5
+        self,
+        query_embedding: List[float],
+        domain: Optional[TaskDomain] = None,
+        top_k: int = 5,
+        user_id: Optional[str] = None,
     ) -> List[Tuple[Experience, float]]:
         pool = await self._get_pool()
         domain_val = domain.value if isinstance(domain, TaskDomain) else domain
 
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             query = """
                 SELECT id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
                        confidence, trust_score, uses_count, successes_count, failures_count,
@@ -1370,17 +1468,27 @@ class PostgresMemoryStore(BaseMemoryStore):
                 FROM experiences
                 WHERE status = 'active'
                   AND ($2::text IS NULL OR task_domain = $2)
+                  AND ($4::text IS NULL OR user_id = $4)
                   AND embedding IS NOT NULL
                 ORDER BY similarity DESC
                 LIMIT $3;
             """
-            rows = await conn.fetch(query, query_embedding, domain_val, top_k)
+            rows = await conn.fetch(query, query_embedding, domain_val, top_k, user_id)
             results = []
             for r in rows:
                 exp = self._record_to_experience(r)
                 sim = max(0.0, min(1.0, float(r["similarity"]))) if r["similarity"] is not None else 0.0
                 results.append((exp, sim))
             return results
+
+    async def delete_experience(self, experience_id: str) -> bool:
+        pool = await self._get_pool()
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute("DELETE FROM probation_task_fingerprints WHERE experience_id = $1", experience_id)
+                await conn.execute("DELETE FROM trust_history WHERE experience_id = $1", experience_id)
+                res = await conn.execute("DELETE FROM experiences WHERE id = $1", experience_id)
+                return not res.endswith(" 0")
 
     async def close(self) -> None:
         if self._pool is not None:
@@ -1553,6 +1661,7 @@ class SupabaseMemoryStore(BaseMemoryStore):
         domain: Optional[TaskDomain] = None,
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
+        user_id: Optional[str] = None,
     ) -> List[Experience]:
         params = ["select=*"]
         if domain:
@@ -1561,6 +1670,8 @@ class SupabaseMemoryStore(BaseMemoryStore):
             params.append(f"status=eq.{status.value if isinstance(status, ExperienceStatus) else status}")
         if min_trust is not None:
             params.append(f"trust_score=gte.{min_trust}")
+        if user_id is not None:
+            params.append(f"user_id=eq.{user_id}")
         params.append("order=trust_score.desc,updated_at.desc")
 
         url = f"/rest/v1/experiences?{'&'.join(params)}"
@@ -1570,13 +1681,17 @@ class SupabaseMemoryStore(BaseMemoryStore):
             return [self._dict_to_experience(d) for d in resp.json()]
 
     async def search_similar(
-        self, query_embedding: List[float], domain: Optional[TaskDomain] = None, top_k: int = 5
+        self,
+        query_embedding: List[float],
+        domain: Optional[TaskDomain] = None,
+        top_k: int = 5,
+        user_id: Optional[str] = None,
     ) -> List[Tuple[Experience, float]]:
         domain_val = (domain.value if isinstance(domain, TaskDomain) else domain) if domain else None
         rpc_payload = {
             "query_embedding": query_embedding,
             "match_threshold": 0.0,
-            "match_count": top_k,
+            "match_count": top_k * 4 if user_id else top_k,
             "filter_domain": domain_val,
         }
 
@@ -1588,14 +1703,20 @@ class SupabaseMemoryStore(BaseMemoryStore):
                     results = []
                     for r in rows:
                         exp = self._dict_to_experience(r)
+                        if user_id is not None and exp.user_id != user_id:
+                            continue
                         sim = float(r.get("similarity", 0.0))
                         results.append((exp, sim))
-                    return results
+                        if len(results) >= top_k:
+                            break
+                    # If tenant-scoped search found top_k or RPC wasn't truncated, return
+                    if user_id is None or len(results) >= top_k or len(rows) < (top_k * 4):
+                        return results
             except Exception as e:
                 logger.warning(f"Supabase RPC match_experiences call failed ({e}); falling back to client-side cosine")
 
         # Resilient fallback: list and compute cosine similarity
-        all_exps = await self.list_experiences(domain=domain)
+        all_exps = await self.list_experiences(domain=domain, user_id=user_id)
         q_vec = np.array(query_embedding, dtype=np.float32)
         q_norm = np.linalg.norm(q_vec)
         if q_norm < 1e-6:
@@ -1613,6 +1734,12 @@ class SupabaseMemoryStore(BaseMemoryStore):
             scored.append((exp, max(0.0, min(1.0, sim))))
         scored.sort(key=lambda x: x[1], reverse=True)
         return scored[:top_k]
+
+    async def delete_experience(self, experience_id: str) -> bool:
+        async with httpx.AsyncClient(base_url=self.url, headers=self._headers(), timeout=15.0) as client:
+            resp = await client.delete(f"/rest/v1/experiences?id=eq.{experience_id}")
+            resp.raise_for_status()
+            return True
 
     def _dict_to_experience(self, d: Dict[str, Any]) -> Experience:
         return Experience(
@@ -1671,5 +1798,7 @@ def get_memory_store(
     return SQLiteMemoryStore(db_path=db_path or settings.SQLITE_DB_PATH, auto_seed=auto_seed)
 
 
-# Global default store instance
-memory_store = get_memory_store()
+# Global default store instance (lazy / side-effect-free on empty directories)
+memory_store = get_memory_store(auto_seed=False)
+get_store = get_memory_store
+

@@ -1,6 +1,6 @@
 # AEMA (Adaptive Experience Memory Agent)
 
-[![npm version](https://img.shields.io/npm/v/aema.svg?color=blue)](https://www.npmjs.com/package/aema)
+[![npm version](https://img.shields.io/npm/v/%40sumitaidev%2Faema.svg?logo=npm&logoColor=white&label=npm)](https://www.npmjs.com/package/@sumitaidev/aema)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![MCP Ready](https://img.shields.io/badge/MCP-Standard%20v1.0-purple)](https://modelcontextprotocol.io)
 [![Docker Pulls](https://img.shields.io/docker/pulls/aema/mcp.svg?color=brightgreen)](https://hub.docker.com/r/aema/mcp)
@@ -29,23 +29,23 @@ Standard retrieval-augmented generation (RAG) and agent memory architectures ret
 ### 1. Installation
 
 ```bash
-npm install aema
+npm install @sumitaidev/aema
 ```
 
 Or run directly with `npx`:
 
 ```bash
 # Start MCP server over stdio
-npx aema-mcp
+npx -y --package=@sumitaidev/aema aema-mcp
 
 # Or inspect system status via CLI
-npx aema status
+npx -y --package=@sumitaidev/aema aema status
 
 # Run full memory bank health audit
-npx aema audit
+npx -y --package=@sumitaidev/aema aema audit
 
 # Deduplicate redundant memory traces
-npx aema dedup --dry-run
+npx -y --package=@sumitaidev/aema aema dedup --dry-run
 ```
 
 ---
@@ -61,7 +61,7 @@ Add to your `claude_desktop_config.json`:
   "mcpServers": {
     "aema-memory": {
       "command": "npx",
-      "args": ["-y", "aema-mcp"]
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
 }
@@ -74,7 +74,7 @@ Add to `.cursor/mcp.json` or enable the included `.cursor-plugin`:
   "mcpServers": {
     "aema-memory": {
       "command": "npx",
-      "args": ["-y", "aema-mcp"]
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
 }
@@ -87,7 +87,7 @@ Includes a native `.antigravity-plugin` with automatic MCP tool registration and
   "mcpServers": {
     "aema": {
       "command": "npx",
-      "args": ["-y", "aema-mcp"]
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
 }
@@ -101,7 +101,7 @@ Add to `~/.codex/config.json` or install via `.codex-plugin`:
   "mcpServers": {
     "aema": {
       "command": "npx",
-      "args": ["-y", "aema-mcp"]
+      "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
 }
@@ -110,7 +110,7 @@ Add to `~/.codex/config.json` or install via `.codex-plugin`:
 ### 5. OpenAI (GPT-4o, o1, o3-mini)
 ```typescript
 import OpenAI from 'openai';
-import { openAITools, handleOpenAIToolCall } from 'aema';
+import { openAITools, handleOpenAIToolCall } from '@sumitaidev/aema';
 
 const openai = new OpenAI();
 
@@ -127,11 +127,11 @@ for (const call of response.choices[0].message.tool_calls || []) {
 }
 ```
 
-### 4. Grok / xAI (Grok-2, Grok-3)
+### 6. Grok / xAI (Grok-2, Grok-3)
 xAI uses OpenAI-compatible schemas. Simply point the OpenAI SDK to `https://api.x.ai/v1`:
 ```typescript
 import OpenAI from 'openai';
-import { grokTools, handleOpenAIToolCall } from 'aema';
+import { grokTools, handleOpenAIToolCall } from '@sumitaidev/aema';
 
 const grok = new OpenAI({
   baseURL: 'https://api.x.ai/v1',
@@ -145,10 +145,10 @@ const response = await grok.chat.completions.create({
 });
 ```
 
-### 5. Google Gemini (Gemini 1.5 Pro, 2.0 Flash)
+### 7. Google Gemini (Gemini 1.5 Pro, 2.0 Flash)
 ```typescript
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { geminiTools, handleGeminiToolCall } from 'aema';
+import { geminiTools, handleGeminiToolCall } from '@sumitaidev/aema';
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 const model = genAI.getGenerativeModel({
@@ -180,7 +180,7 @@ const result = await chat.sendMessage('Find reliable past solutions for PostgreS
 ## 💻 TypeScript / JavaScript SDK
 
 ```typescript
-import { AEMAClient, calculateAsymmetricEMA, isQuarantined } from 'aema';
+import { AEMAClient, calculateAsymmetricEMA, isQuarantined } from '@sumitaidev/aema';
 
 // 1. Initialize client
 const memory = new AEMAClient();
@@ -248,9 +248,9 @@ $$
 
 | Registry | Package | Command |
 | :--- | :--- | :--- |
-| **npm** | `aema` | `npm install aema` |
+| **npm** | `@sumitaidev/aema` | `npm install @sumitaidev/aema` |
 | **PyPI** | `aema` | `pip install aema` |
-| **Docker Hub** | `aema/mcp` | `docker run -i --rm aema/mcp` |
+| **Docker** | Local Dockerfile | `docker build -t aema-mcp . && docker run -i --rm aema-mcp` |
 
 ---
 

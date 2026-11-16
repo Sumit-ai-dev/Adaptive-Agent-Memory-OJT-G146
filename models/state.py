@@ -79,6 +79,15 @@ class AgentState(TypedDict, total=False):
     # Telemetry and loop management
     trajectory: List[Dict[str, Any]]
     tokens_used: int
+    prompt_tokens: int
+    completion_tokens: int
+    total_cost_usd: float
+    budget_exceeded: bool
+    budget_error: Optional[str]
+    was_memory_compacted: bool
+    compacted_memory_tokens: int
+    trace_id: Optional[str]
+    trace_url: Optional[str]
     loop_count: int
     max_loops: int
     start_time: float

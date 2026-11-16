@@ -1,0 +1,74 @@
+# Dependabot configuration for Adaptive Agent Memory (AEMA)
+# Automated weekly dependency auditing and security update PRs
+version: 2
+updates:
+  # Python root dependencies (pyproject.toml, requirements-dev.txt)
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+      - "security"
+
+  # Python backend dependencies (backend/requirements.txt)
+  - package-ecosystem: "pip"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "backend"
+      - "security"
+
+  # TypeScript SDK & MCP Server (packages/aema/package.json)
+  - package-ecosystem: "npm"
+    directory: "/packages/aema"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "sdk"
+      - "security"
+
+  # Frontend Dashboard (frontend/package.json)
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "frontend"
+      - "security"
+
+  # GitHub Actions workflows (.github/workflows)
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "ci/cd"
+      - "security"
+

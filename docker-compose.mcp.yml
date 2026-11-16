@@ -1,15 +1,21 @@
-version: '3.8'
+# ==============================================================================
+# Standalone MCP Overlay Configuration for AEMA
+# Use this when running the MCP Server connected to an existing host backend
+# Example: docker compose -f docker-compose.mcp.yml up
+# ==============================================================================
 
 services:
   aema-mcp:
     build:
       context: ./packages/aema
       dockerfile: Dockerfile
-    image: aema/mcp:0.1.0
+    image: aema/mcp:0.1.1
     container_name: aema-mcp-server
     environment:
       - NODE_ENV=production
-      - AEMA_API_URL=http://backend:8000
+      - AEMA_API_URL=${AEMA_API_URL:-http://host.docker.internal:8000}
     restart: unless-stopped
     stdin_open: true
     tty: true
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

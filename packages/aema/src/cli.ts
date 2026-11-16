@@ -18,11 +18,11 @@ const client = new AEMAClient();
 function printHelp() {
   console.log(`
 AEMA: Reliability-Aware Experiential Memory for AI Agents
-Version: 0.1.0
+Version: 0.1.1
 
 Usage:
   aema <command> [options]
-  npx aema-mcp                  # Start MCP Server on stdio (for Claude/Cursor)
+  npx -y --package=@sumitaidev/aema aema-mcp   # Start MCP Server on stdio (for Claude/Cursor)
 
 Commands:
   status                        Display current memory trust parameters and quarantine health
@@ -46,6 +46,7 @@ async function main() {
 
   switch (command) {
     case 'status': {
+      await client.syncFromRemote();
       const quarantined = client.getQuarantined();
       const kStar = computeQuarantineSteps(1.0, DEFAULT_QUARANTINE_THRESHOLD, DEFAULT_BETA);
       console.log(`\n=== AEMA Experiential Memory System ===`);
@@ -59,6 +60,7 @@ async function main() {
     }
 
     case 'audit': {
+      await client.syncFromRemote();
       const report = client.audit();
       console.log(`\n=== AEMA Memory Bank Health Audit ===`);
       console.log(`Health Status:               ${report.healthStatus}`);
@@ -131,7 +133,7 @@ async function main() {
     case 'version':
     case '-v':
     case '--version': {
-      console.log('aema v0.1.0');
+      console.log('aema v0.1.1');
       break;
     }
 
