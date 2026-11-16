@@ -75,7 +75,7 @@ docker compose up -d
 * Expected output:
   | Service | State | Ports | Health |
   | :--- | :--- | :--- | :--- |
-  | `aema-db` | Up | `0.0.0.0:5432->5432/tcp` | healthy |
+  | `aema-db` | Up | `5432/tcp (internal)` | healthy |
   | `aema-backend` | Up | `0.0.0.0:8000->8000/tcp` | healthy |
   | `aema-frontend` | Up | `0.0.0.0:3000->80/tcp` | healthy |
   | `aema-mcp` | Up | - | running |
@@ -97,7 +97,7 @@ All environment variables can be set in a local `.env` file or passed directly i
 | `POSTGRES_DB` | `aema_db` | Postgres database name |
 | `POSTGRES_USER` | `aema` | Postgres database user |
 | `POSTGRES_PASSWORD` | `aema_password` | Postgres database password |
-| `ADMIN_API_KEY` | `dev-admin-key` | Secret key for administrative telemetry & purge endpoints |
+| `ADMIN_API_KEY` | - (required for admin ops) | Secret key for administrative telemetry & purge endpoints |
 | `GROQ_API_KEY` | - | Optional LLM provider key for Groq |
 | `OPENAI_API_KEY` | - | Optional LLM provider key for OpenAI |
 | `GEMINI_API_KEY` | - | Optional LLM provider key for Google Gemini |

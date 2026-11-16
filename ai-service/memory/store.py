@@ -1007,14 +1007,23 @@ class PostgresMemoryStore(BaseMemoryStore):
         emb = row["embedding"]
         emb_list = None
         if emb is not None:
-            if hasattr(emb, "tolist"):
-                emb_list = emb.tolist()
+            if hasattr(emb, "to_list"):
+                emb_list = [float(x) for x in emb.to_list()]
+            elif hasattr(emb, "tolist"):
+                emb_list = [float(x) for x in emb.tolist()]
             elif isinstance(emb, (list, tuple)):
                 emb_list = [float(x) for x in emb]
             elif isinstance(emb, str):
-                emb_list = json.loads(emb)
+                try:
+                    emb_list = json.loads(emb)
+                except Exception:
+                    raw = emb.strip().lstrip("[").rstrip("]")
+                    emb_list = [float(x.strip()) for x in raw.split(",") if x.strip()]
             else:
-                emb_list = list(emb)
+                try:
+                    emb_list = [float(x) for x in emb]
+                except Exception:
+                    emb_list = None
 
         prob_successes = int(row["probation_successes"]) if "probation_successes" in row else 0
 
@@ -1082,6 +1091,11 @@ class PostgresMemoryStore(BaseMemoryStore):
     async def get_experience(self, experience_id: str) -> Optional[Experience]:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             row = await conn.fetchrow("SELECT * FROM experiences WHERE id = $1", experience_id)
             return self._record_to_experience(row) if row else None
 
@@ -1422,6 +1436,11 @@ class PostgresMemoryStore(BaseMemoryStore):
 
         query += " ORDER BY trust_score DESC, updated_at DESC"
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             rows = await conn.fetch(query, *params)
             return [self._record_to_experience(r) for r in rows]
 
