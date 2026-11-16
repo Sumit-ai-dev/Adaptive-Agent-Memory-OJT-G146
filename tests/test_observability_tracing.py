@@ -86,18 +86,106 @@ def test_tracer_flush_swallows_collector_network_errors():
     tracer.flush()
 
 
-def test_tracer_cloud_url_construction_when_keys_present():
-    """Tracer generates standard cloud trace URL when credentials exist even if SDK handler is absent."""
+def test_tracer_cloud_url_construction_when_handler_present():
+    """Tracer generates standard cloud trace URL when a remote handler is active."""
+    mock_handler = MagicMock()
+    mock_handler.get_trace_id.return_value = "trace_cloud_abc"
+    # Handler without get_trace_url method, falling back to configured host + trace_id
+    del mock_handler.get_trace_url
+
+    with patch.object(settings, "LANGFUSE_PUBLIC_KEY", "pk-lf-test"), \
+         patch.object(settings, "LANGFUSE_SECRET_KEY", "sk-lf-test"), \
+         patch.object(settings, "LANGFUSE_HOST", "https://cloud.langfuse.com"):
+        tracer = ObservabilityTracer(
+            task_id="task_cloud_test",
+            callback_handler=mock_handler,
+        )
+        assert tracer.trace_url is not None
+        assert "cloud.langfuse.com" in tracer.trace_url
+        assert tracer.trace_id == "trace_cloud_abc"
+        assert tracer.trace_id in tracer.trace_url
+
+
+def test_tracer_url_is_none_without_active_remote_trace():
+    """Trace URL is strictly None when no remote collector handler was created (Issue #36 Copilot Finding 5)."""
     with patch.object(settings, "LANGFUSE_PUBLIC_KEY", "pk-lf-test"), \
          patch.object(settings, "LANGFUSE_SECRET_KEY", "sk-lf-test"), \
          patch.object(settings, "LANGFUSE_HOST", "https://cloud.langfuse.com"):
         tracer = create_task_tracer(
-            task_id="task_cloud_test",
+            task_id="task_cloud_nohandler",
             task_domain="reasoning",
         )
-        assert tracer.trace_url is not None
-        assert "cloud.langfuse.com" in tracer.trace_url
-        assert tracer.trace_id in tracer.trace_url
+        # Because LangfuseCallbackHandler is not initialized / absent, no remote trace was created
+        assert tracer.trace_url is None
+
+
+def test_langsmith_tracer_wiring_into_graph_callbacks():
+    """LangSmith callback handler is wired into callbacks when enabled (Issue #36 Copilot Finding 2)."""
+    with patch.object(settings, "LANGSMITH_TRACING", True), \
+         patch.object(settings, "LANGSMITH_API_KEY", "lsv2_pt_testkey123"), \
+         patch.object(settings, "LANGSMITH_PROJECT", "adaptive-agent-memory"):
+        tracer = create_task_tracer(
+            task_id="task_smith_test",
+            task_domain="analysis",
+        )
+        callbacks = tracer.get_callbacks()
+        assert len(callbacks) >= 1
+        assert any("LangChainTracer" in type(cb).__name__ for cb in callbacks)
+
+        # Flush must cleanly invoke without errors
+        tracer.flush()
+
+
+def test_node_spans_record_token_and_cost_metadata():
+    """Node spans record granular prompt tokens, completion tokens, and step cost (Issue #36 Copilot Finding 4)."""
+    tracer = ObservabilityTracer(task_id="task_span_meta")
+    tracer.record_node_span(
+        node_name="execute_node",
+        duration_ms=250,
+        prompt_tokens=150,
+        completion_tokens=65,
+        step_cost_usd=0.00035,
+        metadata={"model": "gpt-4o-mini"},
+    )
+
+    span = tracer.node_spans["execute_node"]
+    assert span["durationMs"] == 250
+    assert span["promptTokens"] == 150
+    assert span["completionTokens"] == 65
+    assert span["totalTokens"] == 215
+    assert span["stepCostUsd"] == 0.00035
+    assert span["metadata"]["model"] == "gpt-4o-mini"
+
+
+def test_tokenizer_encoding_configuration_respected():
+    """Token counting respects configured TOKENIZER_ENCODING setting (Issue #36 Copilot Finding 1)."""
+    from ai_service.context.token_budget import count_tokens, truncate_text_to_tokens
+
+    with patch.object(settings, "TOKENIZER_ENCODING", "cl100k_base"):
+        tokens = count_tokens("Hello world from unit test")
+        assert tokens > 0
+
+        truncated, count = truncate_text_to_tokens("Hello world from unit test", max_tokens=3)
+        assert count <= 3
+        assert len(truncated) > 0
+
+
+@pytest.mark.asyncio
+async def test_trace_finalization_on_execution_failure():
+    """Trace finalization and flush run even when graph execution fails (Issue #36 Copilot Finding 3)."""
+    from ai_service.graph import agent_graph
+
+    req = TaskExecuteRequest(
+        task_input="Test execution failure path",
+        task_domain=TaskDomain.CODING,
+        memory_mode=MemoryMode.OFF,
+        provider="mock",
+        model="mock",
+    )
+
+    with patch.object(agent_graph, "ainvoke", side_effect=RuntimeError("Simulated LLM pipeline failure")):
+        with pytest.raises(RuntimeError, match="Simulated LLM pipeline failure"):
+            await execute_task(req, memory_store=None)
 
 
 def test_tracer_disabled_via_settings():

@@ -30,10 +30,16 @@ try:
 except ImportError:
     LangfuseCallbackHandler = None
 
+# Graceful dynamic import for LangSmith
+try:
+    from langchain_core.tracers import LangChainTracer
+except ImportError:
+    LangChainTracer = None
+
 
 class ObservabilityTracer:
     """
-    Manages distributed tracing lifecycle, Langfuse callbacks,
+    Manages distributed tracing lifecycle, Langfuse/LangSmith callbacks,
     and granular per-node span telemetry for LangGraph executions.
     """
 
@@ -45,6 +51,7 @@ class ObservabilityTracer:
         metadata: Optional[Dict[str, Any]] = None,
         tags: Optional[List[str]] = None,
         callback_handler: Optional[Any] = None,
+        langsmith_handler: Optional[Any] = None,
     ) -> None:
         self.task_id = task_id
         self.session_id = session_id
@@ -55,6 +62,7 @@ class ObservabilityTracer:
         self.node_spans: Dict[str, Dict[str, Any]] = {}
         self.node_latencies_ms: Dict[str, int] = {}
         self.langfuse_handler = callback_handler
+        self.langsmith_handler = langsmith_handler
 
         # Derive trace ID and trace URL
         if self.langfuse_handler is not None and hasattr(self.langfuse_handler, "get_trace_id"):
@@ -65,18 +73,22 @@ class ObservabilityTracer:
         else:
             self.trace_id = f"trace_{task_id}_{uuid.uuid4().hex[:6]}"
 
-        if self.langfuse_handler is not None and hasattr(self.langfuse_handler, "get_trace_url"):
-            try:
-                self.trace_url = self.langfuse_handler.get_trace_url()
-            except Exception:
-                self.trace_url = None
-        else:
-            # When Langfuse credentials are configured but handler is in fallback, build standard cloud link
-            if settings.LANGFUSE_PUBLIC_KEY and settings.LANGFUSE_HOST:
-                host_clean = settings.LANGFUSE_HOST.rstrip("/")
-                self.trace_url = f"{host_clean}/project/default/traces/{self.trace_id}"
+        # Only construct remote trace URL when a valid collector handler was actually initialized
+        if self.langfuse_handler is not None:
+            if hasattr(self.langfuse_handler, "get_trace_url"):
+                try:
+                    self.trace_url = self.langfuse_handler.get_trace_url()
+                except Exception:
+                    self.trace_url = None
             else:
                 self.trace_url = None
+
+            if not self.trace_url and settings.LANGFUSE_HOST and settings.LANGFUSE_PUBLIC_KEY:
+                host_clean = settings.LANGFUSE_HOST.rstrip("/")
+                self.trace_url = f"{host_clean}/project/default/traces/{self.trace_id}"
+        else:
+            # Without an active remote trace handler, returning a link to an uncreated trace is misleading.
+            self.trace_url = None
 
     def get_callbacks(self) -> List[Any]:
         """
@@ -85,6 +97,8 @@ class ObservabilityTracer:
         callbacks: List[Any] = []
         if self.langfuse_handler is not None:
             callbacks.append(self.langfuse_handler)
+        if self.langsmith_handler is not None:
+            callbacks.append(self.langsmith_handler)
         return callbacks
 
     def record_node_span(
@@ -139,13 +153,19 @@ class ObservabilityTracer:
 
     def flush(self) -> None:
         """
-        Safely flushes buffered spans to remote collector without raising exceptions.
+        Safely flushes buffered spans to remote collectors without raising exceptions.
         """
         if self.langfuse_handler is not None and hasattr(self.langfuse_handler, "flush"):
             try:
                 self.langfuse_handler.flush()
             except Exception as e:
                 logger.debug(f"Langfuse flush caught non-fatal exception: {e}")
+
+        if self.langsmith_handler is not None and hasattr(self.langsmith_handler, "wait_for_futures"):
+            try:
+                self.langsmith_handler.wait_for_futures()
+            except Exception as e:
+                logger.debug(f"LangSmith flush caught non-fatal exception: {e}")
 
 
 def create_task_tracer(
@@ -204,6 +224,26 @@ def create_task_tracer(
         else:
             logger.debug("Langfuse package is not installed; operating in local tracing mode.")
 
+    langsmith_handler = None
+    if settings.LANGSMITH_TRACING:
+        if settings.LANGSMITH_API_KEY:
+            import os
+            os.environ["LANGCHAIN_TRACING_V2"] = "true"
+            os.environ["LANGCHAIN_API_KEY"] = settings.LANGSMITH_API_KEY
+            if settings.LANGSMITH_PROJECT:
+                os.environ["LANGCHAIN_PROJECT"] = settings.LANGSMITH_PROJECT
+        if LangChainTracer is not None:
+            try:
+                langsmith_handler = LangChainTracer(
+                    project_name=settings.LANGSMITH_PROJECT or "default",
+                )
+                logger.info(f"Initialized LangSmith tracer for task '{task_id}'.")
+            except Exception as e:
+                logger.warning(f"Could not initialize LangChainTracer ({e}).")
+                langsmith_handler = None
+        else:
+            logger.debug("LangChainTracer is not installed; operating in local tracing mode.")
+
     return ObservabilityTracer(
         task_id=task_id,
         session_id=session_id,
@@ -211,4 +251,5 @@ def create_task_tracer(
         metadata=combined_metadata,
         tags=combined_tags,
         callback_handler=handler,
+        langsmith_handler=langsmith_handler,
     )
