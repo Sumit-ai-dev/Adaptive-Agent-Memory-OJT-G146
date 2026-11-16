@@ -86,6 +86,8 @@ class AgentState(TypedDict, total=False):
     budget_error: Optional[str]
     was_memory_compacted: bool
     compacted_memory_tokens: int
+    trace_id: Optional[str]
+    trace_url: Optional[str]
     loop_count: int
     max_loops: int
     start_time: float

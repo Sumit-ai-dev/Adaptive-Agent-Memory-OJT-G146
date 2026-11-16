@@ -18,6 +18,7 @@ from ai_service.nodes.execute_node import execute_node
 from ai_service.nodes.reflect_node import reflect_node
 from ai_service.nodes.retrieve_node import async_retrieve_node, retrieve_node
 from ai_service.nodes.trust_node import async_trust_node, trust_node
+from ai_service.observability.tracer import create_task_tracer
 from models.domain import MemoryMode, TaskDomain
 from models.experience import Experience, ExperienceMatch
 from models.state import AgentState
@@ -297,8 +298,35 @@ async def execute_task(
         "status": "starting",
     }
 
-    # Execute graph
-    final_state = await agent_graph.ainvoke(initial_state)
+    # Initialize distributed tracer and callback handlers (Issue #36)
+    tracer = create_task_tracer(
+        task_id=task_id,
+        session_id=request.session_id,
+        user_id=getattr(request, "user_id", None),
+        task_domain=request.task_domain.value if hasattr(request.task_domain, "value") else str(request.task_domain),
+        memory_mode=request.memory_mode.value if hasattr(request.memory_mode, "value") else str(request.memory_mode),
+        provider=request.provider.value if request.provider and hasattr(request.provider, "value") else request.provider,
+        model=request.model,
+    )
+    callbacks = tracer.get_callbacks()
+    graph_config = {
+        "run_name": f"task_{task_id}",
+        "callbacks": callbacks,
+        "metadata": {
+            "task_id": task_id,
+            "session_id": request.session_id,
+            "domain": str(request.task_domain),
+            "memory_mode": str(request.memory_mode),
+            "provider": str(request.provider),
+            "model": str(request.model),
+        },
+    }
+
+    initial_state["trace_id"] = tracer.trace_id
+    initial_state["trace_url"] = tracer.trace_url
+
+    # Execute graph with distributed tracing callbacks
+    final_state = await agent_graph.ainvoke(initial_state, config=graph_config)
 
     total_latency_ms = int((time.time() - start_time) * 1000)
 
@@ -490,6 +518,24 @@ async def execute_task(
         else ExecutionStatus.COMPLETED
     )
 
+    # Calculate per-node latencies and finalize observability trace (Issue #36)
+    node_latencies: Dict[str, int] = {}
+    for step in final_state.get("trajectory", []):
+        node = step.get("node")
+        dur = step.get("durationMs")
+        if node and dur is not None:
+            node_latencies[node] = node_latencies.get(node, 0) + int(dur)
+            tracer.record_node_span(node_name=node, duration_ms=int(dur))
+
+    tracer.finish_trace(
+        status=exec_status.value,
+        outcome_score=score,
+        total_tokens=final_state.get("tokens_used", 0),
+        prompt_tokens=final_state.get("prompt_tokens", 0),
+        completion_tokens=final_state.get("completion_tokens", 0),
+        total_cost_usd=final_state.get("total_cost_usd", 0.0),
+    )
+
     return TaskExecution(
         id=exec_id,
         execution_id=exec_id,
@@ -518,6 +564,8 @@ async def execute_task(
         budget_exceeded=is_budget_breached,
         was_memory_compacted=final_state.get("was_memory_compacted", False),
         latency_ms=total_latency_ms,
+        trace_id=tracer.trace_id,
+        trace_url=tracer.trace_url,
         outcome_quality=quality,
         outcome_score=score,
         binary_outcome=task_binary,
@@ -541,6 +589,9 @@ async def execute_task(
             budget_exceeded=is_budget_breached,
             compacted_memory_tokens=final_state.get("compacted_memory_tokens", 0),
             was_memory_compacted=final_state.get("was_memory_compacted", False),
+            trace_id=tracer.trace_id,
+            trace_url=tracer.trace_url,
+            node_latencies_ms=node_latencies,
         ),
     )
 

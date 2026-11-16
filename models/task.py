@@ -321,6 +321,9 @@ class ExecutionMetadata(BaseModel):
     budget_exceeded: bool = False
     compacted_memory_tokens: int = 0
     was_memory_compacted: bool = False
+    trace_id: Optional[str] = None
+    trace_url: Optional[str] = None
+    node_latencies_ms: Dict[str, int] = Field(default_factory=dict)
 
 
 class TaskExecution(BaseModel):
@@ -374,6 +377,8 @@ class TaskExecution(BaseModel):
     # --- F1: attempt-level diagnostics, kept separate from the task-level outcome ---
     attempts: List[AttemptRecord] = Field(default_factory=list)
     n_attempts: int = Field(default=0, alias="nAttempts")
+    trace_id: Optional[str] = Field(default=None, alias="traceId")
+    trace_url: Optional[str] = Field(default=None, alias="traceUrl")
     execution_metadata: Optional[ExecutionMetadata] = None
     created_at: Union[datetime, str] = Field(default_factory=lambda: datetime.now(timezone.utc), alias="createdAt")
 
