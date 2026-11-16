@@ -302,6 +302,13 @@ class ExecutionMetadata(BaseModel):
     outcome_score: float = 0.0
     tokens_used: int = 0
     loop_count: int = 1
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    total_cost_usd: float = 0.0
+    cost_usd: float = 0.0
+    budget_exceeded: bool = False
+    compacted_memory_tokens: int = 0
+    was_memory_compacted: bool = False
 
 
 class TaskExecution(BaseModel):
@@ -333,6 +340,12 @@ class TaskExecution(BaseModel):
     trust_updates: List[TrustUpdate] = Field(default_factory=list, alias="trustUpdates")
     trajectory: List[ExecutionStepTrace] = Field(default_factory=list)
     tokens_used: int = Field(default=0, alias="tokensUsed")
+    prompt_tokens: int = Field(default=0, alias="promptTokens")
+    completion_tokens: int = Field(default=0, alias="completionTokens")
+    total_cost_usd: float = Field(default=0.0, alias="totalCostUsd")
+    cost_usd: float = Field(default=0.0, alias="costUsd")
+    budget_exceeded: bool = Field(default=False, alias="budgetExceeded")
+    was_memory_compacted: bool = Field(default=False, alias="wasMemoryCompacted")
     latency_ms: int = Field(default=0, alias="latencyMs")
     outcome_quality: Optional[OutcomeQuality] = Field(default=OutcomeQuality.POSITIVE, alias="outcomeQuality")
     outcome_score: Optional[float] = Field(default=None, ge=0.0, le=1.0, alias="outcomeScore")

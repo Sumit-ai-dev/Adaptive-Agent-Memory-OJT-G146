@@ -47,6 +47,16 @@ def should_loop_or_finish(state: AgentState) -> str:
     if eval_details.get("status") == "inconclusive" or eval_details.get("error") in ("missing_test_code", "harness_error", "provider_error"):
         return END
 
+    # Circuit breaker check: abort if budget or token ceiling was breached (Issue #38)
+    if state.get("budget_exceeded") is True:
+        return END
+
+    if (
+        state.get("total_cost_usd", 0.0) >= settings.MAX_TASK_COST_USD
+        or state.get("tokens_used", 0) >= settings.MAX_TASK_TOKENS
+    ):
+        return END
+
     score = state.get("outcome_score", 1.0)
     loop_count = state.get("loop_count", 1)
     max_loops = state.get("max_loops", settings.MAX_CYCLICAL_LOOPS)
@@ -485,6 +495,12 @@ async def execute_task(
         trust_updates=trust_updates,
         trajectory=traces,
         tokens_used=final_state.get("tokens_used", 120),
+        prompt_tokens=final_state.get("prompt_tokens", 0),
+        completion_tokens=final_state.get("completion_tokens", 0),
+        total_cost_usd=final_state.get("total_cost_usd", 0.0),
+        cost_usd=final_state.get("cost_usd", final_state.get("total_cost_usd", 0.0)),
+        budget_exceeded=final_state.get("budget_exceeded", False),
+        was_memory_compacted=final_state.get("was_memory_compacted", False),
         latency_ms=total_latency_ms,
         outcome_quality=quality,
         outcome_score=score,
@@ -502,6 +518,13 @@ async def execute_task(
             outcome_score=score,
             tokens_used=final_state.get("tokens_used", 120),
             loop_count=final_state.get("loop_count", 1),
+            prompt_tokens=final_state.get("prompt_tokens", 0),
+            completion_tokens=final_state.get("completion_tokens", 0),
+            total_cost_usd=final_state.get("total_cost_usd", 0.0),
+            cost_usd=final_state.get("cost_usd", final_state.get("total_cost_usd", 0.0)),
+            budget_exceeded=final_state.get("budget_exceeded", False),
+            compacted_memory_tokens=final_state.get("compacted_memory_tokens", 0),
+            was_memory_compacted=final_state.get("was_memory_compacted", False),
         ),
     )
 
