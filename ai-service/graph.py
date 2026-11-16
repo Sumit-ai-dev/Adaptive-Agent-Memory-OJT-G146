@@ -364,7 +364,10 @@ async def execute_task(
         # store.update_trust touches no counters.
         is_inconclusive = (
             terminal_details.get("status") == "inconclusive"
-            or terminal_details.get("error") in ("missing_test_code", "harness_error", "provider_error")
+            or terminal_details.get("error") in (
+                "missing_test_code", "harness_error", "provider_error", "budget_exceeded"
+            )
+            or final_state.get("budget_exceeded") is True
         )
 
         # Exactly one write per (task, memory). Deduplicated by experience id so that
@@ -400,7 +403,7 @@ async def execute_task(
 
         # One candidate per task, from the terminal reflection.
         new_exp_obj = final_state.get("new_experience")
-        if new_exp_obj is not None:
+        if new_exp_obj is not None and not is_inconclusive and not final_state.get("budget_exceeded"):
             try:
                 await memory_store.add_experience(new_exp_obj)
             except Exception:
@@ -474,6 +477,12 @@ async def execute_task(
             except Exception:
                 pass
 
+    exec_status = (
+        ExecutionStatus.FAILED
+        if (final_state.get("budget_exceeded") or final_state.get("status") == "failed")
+        else ExecutionStatus.COMPLETED
+    )
+
     return TaskExecution(
         id=exec_id,
         execution_id=exec_id,
@@ -484,7 +493,7 @@ async def execute_task(
         task_domain=request.task_domain,
         memory_enabled=request.memory_enabled,
         memory_mode=request.memory_mode,
-        status=ExecutionStatus.COMPLETED,
+        status=exec_status,
         final_output=final_state.get("final_answer"),
         final_answer=final_state.get("final_answer"),
         reflection_lesson=final_state.get("candidate_experience", {}).get("strategy_lesson") if final_state.get("candidate_experience") else None,

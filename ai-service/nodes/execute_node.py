@@ -226,6 +226,7 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
 
     # Call Universal LLM Gateway with error-safe handling. Passing `temperature` explicitly overrides the
     # config default; passing None leaves the config/provider default in force.
+    has_provider_error = False
     try:
         final_answer, tokens = await llm_gateway.generate(
             messages, config=provider_config, temperature=requested_temperature,
@@ -234,19 +235,25 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
         logger.error(f"Universal LLM gateway call failed in execute_node: {e}", exc_info=True)
         final_answer = f"Execution encountered a model provider error: {str(e)}"
         tokens = 0
+        has_provider_error = True
 
-    completion_tokens = count_tokens(final_answer)
-    step_tokens = tokens if tokens > 0 else (prompt_tokens + completion_tokens)
-
-    # Compute USD cost for this step
-    prov_name = provider_config.provider.value if provider_config and provider_config.provider else (state.get("provider") or "groq")
-    mod_name = provider_config.model if provider_config and provider_config.model else (state.get("model") or "openai/gpt-oss-120b")
-    step_cost = calculate_token_cost(
-        provider=prov_name,
-        model=mod_name,
-        prompt_tokens=prompt_tokens,
-        completion_tokens=completion_tokens,
-    )
+    if has_provider_error:
+        # Provider error: do not count or charge synthetic error message as model completion output
+        completion_tokens = 0
+        step_tokens = 0
+        step_cost = 0.0
+    else:
+        completion_tokens = count_tokens(final_answer)
+        step_tokens = tokens if tokens > 0 else (prompt_tokens + completion_tokens)
+        # Compute USD cost for this step
+        prov_name = provider_config.provider.value if provider_config and provider_config.provider else (state.get("provider") or "groq")
+        mod_name = provider_config.model if provider_config and provider_config.model else (state.get("model") or "openai/gpt-oss-120b")
+        step_cost = calculate_token_cost(
+            provider=prov_name,
+            model=mod_name,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
 
     duration_ms = int((time.time() - start_ts) * 1000)
 
@@ -280,9 +287,15 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
     trajectory.append(trace)
 
     accumulated_tokens = state.get("tokens_used", 0) + step_tokens
-    accumulated_prompt_tokens = state.get("prompt_tokens", 0) + prompt_tokens
+    accumulated_prompt_tokens = state.get("prompt_tokens", 0) + (0 if has_provider_error else prompt_tokens)
     accumulated_completion_tokens = state.get("completion_tokens", 0) + completion_tokens
     accumulated_cost = round(state.get("total_cost_usd", 0.0) + step_cost, 6)
+
+    # Enforce budget ceiling check on newly accumulated totals
+    is_budget_exceeded = (
+        accumulated_cost >= settings.MAX_TASK_COST_USD
+        or accumulated_tokens >= settings.MAX_TASK_TOKENS
+    )
 
     updated_messages = list(messages)
     updated_messages.append({"role": "assistant", "content": final_answer})
@@ -295,7 +308,7 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
         "completion_tokens": accumulated_completion_tokens,
         "total_cost_usd": accumulated_cost,
         "cost_usd": accumulated_cost,
-        "budget_exceeded": False,
+        "budget_exceeded": is_budget_exceeded,
         "loop_count": loop_count,
         "trajectory": trajectory,
         "messages": updated_messages,

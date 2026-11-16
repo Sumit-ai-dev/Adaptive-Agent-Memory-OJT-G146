@@ -55,14 +55,14 @@ DEFAULT_FALLBACK_RATES: Tuple[float, float] = (0.50, 1.50)
 def _bpe_fallback_count(text: str) -> int:
     """
     Deterministic token estimation that closely tracks BPE tokenizers without tiktoken.
-    Accurately scores code and JSON by treating individual syntax symbols, numbers,
-    and subwords as distinct tokens, preventing character-ratio drift.
+    Accurately scores code, JSON, and multilingual Unicode text (including CJK and accented words)
+    by treating individual syntax symbols, numbers, and subwords as distinct tokens.
     """
     if not text:
         return 0
 
-    # Token patterns: words/numbers, individual symbols/punctuation, and whitespace runs
-    tokens = re.findall(r"[A-Za-z]+|\d+|[^\w\s]|\s+", text)
+    # Token patterns: Unicode word runs, digits, individual symbols/punctuation, and whitespace
+    tokens = re.findall(r"[^\W\d_]+|\d+|[^\w\s]|\s+", text, re.UNICODE)
     count = 0
 
     for token in tokens:
@@ -71,12 +71,19 @@ def _bpe_fallback_count(text: str) -> int:
             newlines = token.count("\n")
             spaces = len(token) - newlines
             count += newlines + max(0, (spaces + 2) // 4)
-        elif token.isalpha():
-            # Subword heuristic: short words are 1 token; longer words segment every ~4 chars
-            count += max(1, (len(token) + 3) // 4)
         elif token.isdigit():
             # Numbers in BPE are typically 1-3 digits per token
             count += max(1, (len(token) + 2) // 3)
+        elif token.isalpha():
+            # Handle CJK ideographs (each CJK char is typically 1-2 BPE tokens)
+            cjk_chars = sum(
+                1 for c in token
+                if "\u4e00" <= c <= "\u9fff"
+                or "\u3040" <= c <= "\u30ff"
+                or "\uac00" <= c <= "\ud7af"
+            )
+            non_cjk_len = len(token) - cjk_chars
+            count += cjk_chars + (max(1, (non_cjk_len + 3) // 4) if non_cjk_len > 0 else 0)
         else:
             # Punctuation and symbols (JSON brackets, colons, arithmetic) are individual tokens
             count += len(token)
@@ -122,7 +129,7 @@ def truncate_text_to_tokens(
     Returns:
         (truncated_text, token_count)
     """
-    if max_tokens <= 0:
+    if max_tokens <= 0 or not text:
         return "", 0
 
     current_tokens = count_tokens(text, encoding_name=encoding_name)
@@ -130,12 +137,20 @@ def truncate_text_to_tokens(
         return text, current_tokens
 
     suffix_tokens = count_tokens(suffix, encoding_name=encoding_name)
-    effective_budget = max(1, max_tokens - suffix_tokens)
+
+    # If the budget is too small to even accommodate the suffix, truncate text directly without suffix
+    if max_tokens <= suffix_tokens:
+        candidate = text
+        while candidate and count_tokens(candidate, encoding_name=encoding_name) > max_tokens:
+            candidate = candidate[:-1]
+        final_count = count_tokens(candidate, encoding_name=encoding_name)
+        return candidate, final_count
 
     # Use tiktoken exact slicing if available
     if tiktoken is not None:
         try:
             enc = tiktoken.get_encoding(encoding_name or "cl100k_base")
+            effective_budget = max(1, max_tokens - suffix_tokens)
             encoded = enc.encode(text, disallowed_special=())
             if len(encoded) > effective_budget:
                 truncated_text = enc.decode(encoded[:effective_budget]).rstrip() + suffix
@@ -145,7 +160,8 @@ def truncate_text_to_tokens(
                     effective_budget -= 1
                     truncated_text = enc.decode(encoded[:effective_budget]).rstrip() + suffix
                     final_count = count_tokens(truncated_text, encoding_name=encoding_name)
-                return truncated_text, final_count
+                if final_count <= max_tokens:
+                    return truncated_text, final_count
         except Exception:
             pass
 
@@ -154,7 +170,6 @@ def truncate_text_to_tokens(
     low = 0
     high = len(words)
     best_candidate = ""
-    best_tokens = 0
 
     while low <= high:
         mid = (low + high) // 2
@@ -163,18 +178,23 @@ def truncate_text_to_tokens(
 
         if cand_tokens <= max_tokens:
             best_candidate = candidate
-            best_tokens = cand_tokens
             low = mid + 1
         else:
             high = mid - 1
 
     if not best_candidate:
-        # Extreme fallback if a single token or word is massive
-        chars_budget = max_tokens * 3
-        best_candidate = text[:chars_budget].rstrip() + suffix
-        best_tokens = count_tokens(best_candidate, encoding_name=encoding_name)
+        # Fallback character slice reserving room for suffix
+        best_candidate = text
+        while best_candidate and count_tokens(best_candidate + suffix, encoding_name=encoding_name) > max_tokens:
+            best_candidate = best_candidate[:-1]
+        best_candidate = (best_candidate.rstrip() + suffix) if best_candidate else ""
 
-    return best_candidate, best_tokens
+    # Strict invariant check: ensure result NEVER exceeds max_tokens under any tokenization
+    while best_candidate and count_tokens(best_candidate, encoding_name=encoding_name) > max_tokens:
+        best_candidate = best_candidate[:-1].rstrip()
+
+    final_count = count_tokens(best_candidate, encoding_name=encoding_name)
+    return best_candidate, final_count
 
 
 def calculate_token_cost(

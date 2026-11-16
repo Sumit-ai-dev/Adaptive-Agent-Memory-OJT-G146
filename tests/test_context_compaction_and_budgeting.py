@@ -16,9 +16,10 @@ from ai_service.context.token_budget import (
 )
 from ai_service.graph import execute_task, should_loop_or_finish
 from ai_service.nodes.execute_node import execute_node
+from ai_service.nodes.reflect_node import reflect_node
 from ai_service.nodes.retrieve_node import async_retrieve_node
 from models.domain import MemoryMode, TaskDomain
-from models.task import TaskExecuteRequest
+from models.task import ExecutionStatus, TaskExecuteRequest
 
 
 def test_count_tokens_deterministic():
@@ -200,3 +201,91 @@ async def test_end_to_end_task_execution_metadata():
     assert meta.completion_tokens > 0
     assert meta.total_cost_usd >= 0.0
     assert meta.tokens_used > 0
+
+
+def test_unicode_fallback_counting():
+    """Fallback tokenizer accurately scores multilingual and accented Unicode text."""
+    from ai_service.context.token_budget import _bpe_fallback_count
+    chinese_text = "这是一个测试用例"
+    count = _bpe_fallback_count(chinese_text)
+    assert count >= 7
+
+    accented = "café crème brûlée señorita"
+    assert _bpe_fallback_count(accented) >= 4
+
+
+def test_truncate_text_to_tokens_small_budgets():
+    """Truncation strictly enforces the ceiling constraint even for 1 to 5 tokens."""
+    sample = "This is an extensive sentence demonstrating boundary truncation."
+    for budget in [1, 2, 3, 5, 8]:
+        truncated, count = truncate_text_to_tokens(sample, max_tokens=budget)
+        assert count <= budget, f"Expected tokens <= {budget}, got {count}"
+        assert count_tokens(truncated) <= budget
+
+
+@pytest.mark.asyncio
+async def test_provider_error_does_not_charge_completion_tokens():
+    """Provider failure strings are not counted or billed as model completion output."""
+    from unittest.mock import AsyncMock, patch
+    from ai_service.llm_client import llm_gateway
+
+    state = {
+        "task_input": "Run task",
+        "messages": [],
+        "provider": "groq",
+        "model": "openai/gpt-oss-120b",
+        "tokens_used": 100,
+        "total_cost_usd": 0.001,
+    }
+
+    with patch.object(llm_gateway, "generate", new=AsyncMock(side_effect=RuntimeError("Provider 503 unavailable"))):
+        res = await execute_node(state)
+        assert res["completion_tokens"] == 0
+        assert res["total_cost_usd"] == pytest.approx(0.001, rel=1e-4)
+
+
+@pytest.mark.asyncio
+async def test_reflect_node_tracks_tokens_and_cost():
+    """Reflect node accumulates tokens and USD cost, and skips if budget exceeded."""
+    state = {
+        "task_input": "Build binary search",
+        "task_domain": "coding",
+        "final_answer": "def binary_search(arr, x): pass",
+        "outcome_score": 0.90,
+        "provider": "mock",
+        "model": "mock",
+        "tokens_used": 100,
+        "total_cost_usd": 0.001,
+        "prompt_tokens": 80,
+        "completion_tokens": 20,
+    }
+
+    res = await reflect_node(state)
+    assert res["tokens_used"] > 100
+    assert res["candidate_experience"] is not None
+    assert res["new_experience_created"] is True
+
+    # When budget exceeded, reflect node short-circuits
+    state_breached = dict(state)
+    state_breached["budget_exceeded"] = True
+    res_breached = await reflect_node(state_breached)
+    assert res_breached["candidate_experience"] is None
+    assert res_breached["new_experience_created"] is False
+
+
+@pytest.mark.asyncio
+async def test_budget_exceeded_marks_task_execution_as_failed():
+    """Budget-exceeded tasks are explicitly reported as FAILED with trust preserved."""
+    req = TaskExecuteRequest(
+        task_input="A" * 25000,  # massive prompt exceeding MAX_PROMPT_TOKENS
+        task_domain=TaskDomain.GENERAL,
+        memory_mode=MemoryMode.OFF,
+        provider="mock",
+        model="mock",
+    )
+
+    execution = await execute_task(req, memory_store=None)
+    assert execution.budget_exceeded is True
+    assert execution.status == ExecutionStatus.FAILED
+    assert "circuit breaker" in execution.final_answer.lower()
+
