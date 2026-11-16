@@ -46,7 +46,7 @@ server = [
 ]
 embeddings = [
     "sentence-transformers>=3.0.0",
-    "scipy>=1.11.0",
+    "scipy>=1.15.3",
 ]
 postgres = [
     "asyncpg>=0.29.0",
