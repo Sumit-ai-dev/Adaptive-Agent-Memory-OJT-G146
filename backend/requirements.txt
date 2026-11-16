@@ -15,7 +15,7 @@ langgraph>=0.2.0                  # ai_service/graph.py
 typing-extensions>=4.12.0         # models/state.py
 
 # --- Numerics / trust mathematics ---
-numpy>=1.26.0                     # ai_service/embedder.py, memory/store.py
+numpy>=2.2.6                     # ai_service/embedder.py, memory/store.py
 scipy>=1.11.0                     # ai_service/trust_math.py (scipy.special.betainc)
 
 # --- PostgreSQL / pgvector persistence ---
