@@ -1,0 +1,72 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Root .dockerignore for AEMA (Adaptive Experience Memory Agent)
+# Excludes local artifacts, virtual environments, caches, and secrets
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Git and GitHub
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Python virtual environments and bytecode
+.venv/
+venv/
+backend/venv/
+env/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Python test, coverage, and lint artifacts
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local databases and SQLite stores
+*.db
+*.sqlite
+*.sqlite3
+data/*.db
+!data/.gitkeep
+adaptive_memory.db
+
+# Node.js dependencies and build output
+node_modules/
+frontend/node_modules/
+packages/aema/node_modules/
+frontend/dist/
+packages/aema/dist/
+
+# Environment files and credentials (never bake secrets into images)
+.env
+.env.*
+!.env.example
+
+# IDE, OS, and local developer directories
+.idea/
+.vscode/
+.gemini/
+.agents/
+.statwrap/
+ojt/
+.DS_Store
+Thumbs.db
+
+# Benchmark outputs, literature caches, and large paper PDFs
+benchmarks/
+logbooks/
+*.log
+papers/
+
+# Internal revision docs
+docs/AEMA_MASTER_REVISION_AND_VIVA_GUIDE.md
+docs/MCP_INTEGRATION_GUIDE.md
+docs/RFC-001-month2-architecture.md
