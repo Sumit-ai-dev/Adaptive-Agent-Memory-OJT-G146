@@ -1,0 +1,78 @@
+name: CI / Automated LLM Regression Benchmarks
+
+on:
+  push:
+    branches:
+      - main
+      - 'feat/**'
+    paths:
+      - 'ai_service/**'
+      - 'ai-service/**'
+      - 'backend/**'
+      - 'models/**'
+      - 'benchmarks/**'
+      - '.github/workflows/evals.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'ai_service/**'
+      - 'ai-service/**'
+      - 'backend/**'
+      - 'models/**'
+      - 'benchmarks/**'
+      - '.github/workflows/evals.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  regression-evals:
+    name: LLM Regression Benchmarking & Pass@1 Quality Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Cache HuggingFace models
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
+        with:
+          path: ~/.cache/huggingface
+          key: hf-models-${{ runner.os }}-all-MiniLM-L6-v2
+
+      - name: Install Core Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          grep -v 'sentence-transformers' backend/requirements.txt > /tmp/req_core.txt
+          pip install -r /tmp/req_core.txt
+          pip install -r requirements-dev.txt
+
+      - name: Run Automated LLM Regression Benchmark Suite
+        run: |
+          PYTHONPATH=. python3 benchmarks/ci_eval_suite.py \
+            --provider mock \
+            --min-pass-rate 0.80 \
+            --output-json /tmp/eval_results.json \
+            --output-markdown /tmp/eval_report.md
+        env:
+          TRANSFORMERS_OFFLINE: "1"
+          HF_DATASETS_OFFLINE: "1"
+          SIMILARITY_THRESHOLD: "0.10"
+
+      - name: Post Evaluation Report on PR
+        if: github.event_name == 'pull_request' && (success() || failure())
+        uses: peter-evans/create-or-update-comment@71340b69f18e7687ae372e87321577e43d92b714 # v4.0.0
+        continue-on-error: true
+        with:
+          issue-number: ${{ github.event.pull_request.number }}
+          body-path: /tmp/eval_report.md
+          edit-mode: replace
