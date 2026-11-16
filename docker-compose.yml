@@ -21,9 +21,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-aema_db}
       POSTGRES_USER: ${POSTGRES_USER:-aema}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aema_password}
-    ports:
-      # Bound to loopback interface only to prevent public network exposure
-      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    # Database remains internal to aema-network by default to prevent external exposure.
+    # To expose PostgreSQL to localhost for local debugging, uncomment the ports block:
+    # ports:
+    #   - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:

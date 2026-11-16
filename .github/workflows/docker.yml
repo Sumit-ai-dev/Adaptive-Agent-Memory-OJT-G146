@@ -71,17 +71,28 @@ jobs:
         run: |
           export ADMIN_API_KEY="ci-smoke-admin-key"
 
-          # Start PostgreSQL + pgvector and wait for health
+          # Start PostgreSQL + pgvector and wait for database engine readiness
           docker compose up -d db
-          timeout 60 bash -c 'until docker compose ps db | grep -q "healthy"; do sleep 2; done'
+          echo "Waiting for PostgreSQL + pgvector container to be ready..."
+          timeout 60 bash -c 'until docker compose exec -T db pg_isready -U aema -d aema_db; do sleep 2; done' || {
+            echo "PostgreSQL failed to become ready! Container logs:"
+            docker compose logs db
+            exit 1
+          }
 
-          # Start Backend against containerized pgvector
+          # Start Backend against containerized pgvector and wait for health endpoint
           docker compose up -d backend
-          timeout 90 bash -c 'until docker compose ps backend | grep -q "healthy"; do sleep 2; done'
+          echo "Waiting for FastAPI backend to be ready..."
+          timeout 90 bash -c 'until curl -s http://localhost:8000/api/v1/health | grep -q "\"status\":\"ok\""; do sleep 2; done' || {
+            echo "Backend failed to become healthy! Container logs:"
+            docker compose logs backend
+            exit 1
+          }
 
           # Execute end-to-end Python smoke test suite:
           # Asserts health, pgvector persistence, cosine search, and user tenant isolation
           python3 scripts/smoke_test_docker.py http://localhost:8000 "$ADMIN_API_KEY"
 
-          # Teardown
-          docker compose down -v
+      - name: Teardown Compose Stack
+        if: always()
+        run: docker compose down -v

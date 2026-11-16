@@ -182,10 +182,18 @@ To build images supporting both Apple Silicon (M1/M2/M3/M4) and Intel/AMD cloud 
 # Enable Docker Buildx
 docker buildx create --use --name aema-builder
 
-# Build and export backend
+# Build and push multi-architecture image to container registry:
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
   -t ghcr.io/sumit-ai-dev/aema:0.1.1 \
+  --push \
+  -f Dockerfile \
+  .
+
+# Or build and load into your local Docker daemon (single architecture):
+docker buildx build \
+  --load \
+  -t aema/server:0.1.1 \
   -f Dockerfile \
   .
 ```
