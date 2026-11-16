@@ -295,6 +295,7 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
     is_budget_exceeded = (
         accumulated_cost >= settings.MAX_TASK_COST_USD
         or accumulated_tokens >= settings.MAX_TASK_TOKENS
+        or prompt_tokens > settings.MAX_PROMPT_TOKENS
     )
 
     updated_messages = list(messages)

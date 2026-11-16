@@ -281,6 +281,18 @@ class TaskExecuteRequest(BaseModel):
             v = v[-MAX_MESSAGES:]
         return v
 
+    @field_validator("provider")
+    @classmethod
+    def validate_provider(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        v_clean = str(v).strip().lower()
+        from models.provider import ModelProvider
+        allowed = {p.value for p in ModelProvider}
+        if v_clean not in allowed:
+            raise ValueError(f"Invalid model provider '{v}'. Allowed providers: {sorted(allowed)}")
+        return v_clean
+
     @model_validator(mode="before")
     @classmethod
     def check_domain_alias(cls, data: Any) -> Any:

@@ -277,7 +277,7 @@ async def test_reflect_node_tracks_tokens_and_cost():
 async def test_budget_exceeded_marks_task_execution_as_failed():
     """Budget-exceeded tasks are explicitly reported as FAILED with trust preserved."""
     req = TaskExecuteRequest(
-        task_input="A" * 25000,  # massive prompt exceeding MAX_PROMPT_TOKENS
+        task_input="word " * 5000,  # massive prompt exceeding MAX_PROMPT_TOKENS (5000 tokens > 4096)
         task_domain=TaskDomain.GENERAL,
         memory_mode=MemoryMode.OFF,
         provider="mock",

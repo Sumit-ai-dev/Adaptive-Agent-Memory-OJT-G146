@@ -477,9 +477,16 @@ async def execute_task(
             except Exception:
                 pass
 
+    is_budget_breached = bool(
+        final_state.get("budget_exceeded")
+        or final_state.get("prompt_tokens", 0) > settings.MAX_PROMPT_TOKENS
+        or final_state.get("total_cost_usd", 0.0) >= settings.MAX_TASK_COST_USD
+        or final_state.get("tokens_used", 0) >= settings.MAX_TASK_TOKENS
+    )
+
     exec_status = (
         ExecutionStatus.FAILED
-        if (final_state.get("budget_exceeded") or final_state.get("status") == "failed")
+        if (is_budget_breached or final_state.get("status") == "failed")
         else ExecutionStatus.COMPLETED
     )
 
@@ -508,7 +515,7 @@ async def execute_task(
         completion_tokens=final_state.get("completion_tokens", 0),
         total_cost_usd=final_state.get("total_cost_usd", 0.0),
         cost_usd=final_state.get("cost_usd", final_state.get("total_cost_usd", 0.0)),
-        budget_exceeded=final_state.get("budget_exceeded", False),
+        budget_exceeded=is_budget_breached,
         was_memory_compacted=final_state.get("was_memory_compacted", False),
         latency_ms=total_latency_ms,
         outcome_quality=quality,
@@ -531,7 +538,7 @@ async def execute_task(
             completion_tokens=final_state.get("completion_tokens", 0),
             total_cost_usd=final_state.get("total_cost_usd", 0.0),
             cost_usd=final_state.get("cost_usd", final_state.get("total_cost_usd", 0.0)),
-            budget_exceeded=final_state.get("budget_exceeded", False),
+            budget_exceeded=is_budget_breached,
             compacted_memory_tokens=final_state.get("compacted_memory_tokens", 0),
             was_memory_compacted=final_state.get("was_memory_compacted", False),
         ),
