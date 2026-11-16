@@ -34,7 +34,13 @@ def test_frozen_regression_tasks_structure():
         assert isinstance(t["evaluator_config"], dict)
 
 
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
 @pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_run_ci_eval_suite_all_pass():
     """Runs the 10 frozen regression tasks with mock provider and asserts 100% pass rate."""
     report = await run_ci_eval_suite(
@@ -59,6 +65,7 @@ async def test_run_ci_eval_suite_all_pass():
 
 
 @pytest.mark.asyncio
+@pytest.mark.anyio
 async def test_run_ci_eval_suite_threshold_breach():
     """Validates that isGatePassed is False when pass rate fails to meet strict threshold."""
     report = await run_ci_eval_suite(

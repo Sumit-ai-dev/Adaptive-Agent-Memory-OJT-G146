@@ -91,17 +91,32 @@ def _bpe_fallback_count(text: str) -> int:
     return max(1, count)
 
 
-def count_tokens(text: str, encoding_name: Optional[str] = "cl100k_base") -> int:
+def _get_default_encoding() -> str:
+    """
+    Retrieves the configured tokenizer encoding from application settings,
+    falling back to cl100k_base if settings are unavailable.
+    """
+    try:
+        from ai_service.config import settings
+        return getattr(settings, "TOKENIZER_ENCODING", "cl100k_base") or "cl100k_base"
+    except Exception:
+        return "cl100k_base"
+
+
+def count_tokens(text: str, encoding_name: Optional[str] = None) -> int:
     """
     Counts the number of tokens in a string using tiktoken if available,
     falling back to deterministic BPE-approximating segmentation.
+    Uses configured TOKENIZER_ENCODING by default.
     """
     if not text:
         return 0
 
+    effective_encoding = encoding_name or _get_default_encoding()
+
     if tiktoken is not None:
         try:
-            enc = tiktoken.get_encoding(encoding_name or "cl100k_base")
+            enc = tiktoken.get_encoding(effective_encoding)
             return len(enc.encode(text, disallowed_special=()))
         except Exception:
             pass
@@ -119,7 +134,7 @@ def estimate_tokens_fast(text: str) -> int:
 def truncate_text_to_tokens(
     text: str,
     max_tokens: int,
-    encoding_name: Optional[str] = "cl100k_base",
+    encoding_name: Optional[str] = None,
     suffix: str = " [...]",
 ) -> Tuple[str, int]:
     """
@@ -132,34 +147,35 @@ def truncate_text_to_tokens(
     if max_tokens <= 0 or not text:
         return "", 0
 
-    current_tokens = count_tokens(text, encoding_name=encoding_name)
+    effective_encoding = encoding_name or _get_default_encoding()
+    current_tokens = count_tokens(text, encoding_name=effective_encoding)
     if current_tokens <= max_tokens:
         return text, current_tokens
 
-    suffix_tokens = count_tokens(suffix, encoding_name=encoding_name)
+    suffix_tokens = count_tokens(suffix, encoding_name=effective_encoding)
 
     # If the budget is too small to even accommodate the suffix, truncate text directly without suffix
     if max_tokens <= suffix_tokens:
         candidate = text
-        while candidate and count_tokens(candidate, encoding_name=encoding_name) > max_tokens:
+        while candidate and count_tokens(candidate, encoding_name=effective_encoding) > max_tokens:
             candidate = candidate[:-1]
-        final_count = count_tokens(candidate, encoding_name=encoding_name)
+        final_count = count_tokens(candidate, encoding_name=effective_encoding)
         return candidate, final_count
 
     # Use tiktoken exact slicing if available
     if tiktoken is not None:
         try:
-            enc = tiktoken.get_encoding(encoding_name or "cl100k_base")
+            enc = tiktoken.get_encoding(effective_encoding)
             effective_budget = max(1, max_tokens - suffix_tokens)
             encoded = enc.encode(text, disallowed_special=())
             if len(encoded) > effective_budget:
                 truncated_text = enc.decode(encoded[:effective_budget]).rstrip() + suffix
-                final_count = count_tokens(truncated_text, encoding_name=encoding_name)
+                final_count = count_tokens(truncated_text, encoding_name=effective_encoding)
                 # Guarantee absolute cap
                 while final_count > max_tokens and effective_budget > 1:
                     effective_budget -= 1
                     truncated_text = enc.decode(encoded[:effective_budget]).rstrip() + suffix
-                    final_count = count_tokens(truncated_text, encoding_name=encoding_name)
+                    final_count = count_tokens(truncated_text, encoding_name=effective_encoding)
                 if final_count <= max_tokens:
                     return truncated_text, final_count
         except Exception:
@@ -174,7 +190,7 @@ def truncate_text_to_tokens(
     while low <= high:
         mid = (low + high) // 2
         candidate = " ".join(words[:mid]).rstrip() + suffix
-        cand_tokens = count_tokens(candidate, encoding_name=encoding_name)
+        cand_tokens = count_tokens(candidate, encoding_name=effective_encoding)
 
         if cand_tokens <= max_tokens:
             best_candidate = candidate
@@ -185,15 +201,15 @@ def truncate_text_to_tokens(
     if not best_candidate:
         # Fallback character slice reserving room for suffix
         best_candidate = text
-        while best_candidate and count_tokens(best_candidate + suffix, encoding_name=encoding_name) > max_tokens:
+        while best_candidate and count_tokens(best_candidate + suffix, encoding_name=effective_encoding) > max_tokens:
             best_candidate = best_candidate[:-1]
         best_candidate = (best_candidate.rstrip() + suffix) if best_candidate else ""
 
     # Strict invariant check: ensure result NEVER exceeds max_tokens under any tokenization
-    while best_candidate and count_tokens(best_candidate, encoding_name=encoding_name) > max_tokens:
+    while best_candidate and count_tokens(best_candidate, encoding_name=effective_encoding) > max_tokens:
         best_candidate = best_candidate[:-1].rstrip()
 
-    final_count = count_tokens(best_candidate, encoding_name=encoding_name)
+    final_count = count_tokens(best_candidate, encoding_name=effective_encoding)
     return best_candidate, final_count
 
 
