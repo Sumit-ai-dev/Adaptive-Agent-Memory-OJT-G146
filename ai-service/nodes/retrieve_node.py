@@ -12,6 +12,10 @@ import math
 from typing import Any, Optional, Sequence
 
 from ai_service.config import settings
+from ai_service.context.compactor import (
+    compact_memory_context,
+    compact_retrieved_memories_list,
+)
 from models.domain import TaskDomain
 from models.experience import Experience, ExperienceMatch, ExperienceStatus
 
@@ -234,10 +238,31 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
                 })
 
     # Applies to BOTH the policy-backed and legacy retrieval branches.
+    was_compacted = False
+    compacted_memory_tokens = 0
+    original_memory_tokens = 0
+
     if retrieved:
+        # First compact the ordered memory list within MAX_RETRIEVED_MEMORY_TOKENS budget
+        retrieved, compacted_list_tokens, list_was_compacted = compact_retrieved_memories_list(
+            retrieved, max_tokens=settings.MAX_RETRIEVED_MEMORY_TOKENS
+        )
+
         top_exp = retrieved[0]["experience"]
-        positive_strategy = top_exp.get("strategyLesson") or top_exp.get("strategy_lesson")
-        negative_pitfall = top_exp.get("pitfall")
+        raw_strategy = top_exp.get("strategyLesson") or top_exp.get("strategy_lesson")
+        raw_pitfall = top_exp.get("pitfall")
+
+        # Deterministically compact top strategy & pitfall within MAX_RETRIEVED_MEMORY_TOKENS (<= 800 tokens)
+        comp_res = compact_memory_context(
+            positive_strategy=raw_strategy,
+            negative_pitfall=raw_pitfall,
+            max_tokens=settings.MAX_RETRIEVED_MEMORY_TOKENS,
+        )
+        positive_strategy = comp_res.positive_strategy
+        negative_pitfall = comp_res.negative_pitfall
+        was_compacted = comp_res.was_compacted or list_was_compacted
+        compacted_memory_tokens = comp_res.compacted_tokens
+        original_memory_tokens = comp_res.original_tokens
 
     # Invariant: candidateCount >= admissibleCount >= retrievedCount
     if retrieved:
@@ -256,6 +281,7 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
         "detail": (
             f"Retrieved {len(retrieved)} memories under mode '{mode_str}'. "
             f"Quarantine threshold (theta >= 0.35) enforced."
+            + (f" Context compacted ({original_memory_tokens} -> {compacted_memory_tokens} tokens)." if was_compacted else "")
             if retrieved
             else f"Zero prior experiences passed trust and similarity thresholds under mode '{mode_str}'."
         ),
@@ -271,6 +297,10 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
             "ranker": retrieval_diagnostics.get("ranker"),
             "policy": retrieval_diagnostics.get("policy"),
             "fallbackOccurred": len(retrieved) == 0,
+            "wasMemoryCompacted": was_compacted,
+            "compactedMemoryTokens": compacted_memory_tokens,
+            "originalMemoryTokens": original_memory_tokens,
+            "memoryTokenBudget": settings.MAX_RETRIEVED_MEMORY_TOKENS,
         },
     }
 
@@ -282,6 +312,8 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
         "retrieved_experiences": retrieved,
         "positive_strategy": positive_strategy,
         "negative_pitfall": negative_pitfall,
+        "was_memory_compacted": was_compacted,
+        "compacted_memory_tokens": compacted_memory_tokens,
         "trajectory": trajectory,
         "status": "executing",
     }

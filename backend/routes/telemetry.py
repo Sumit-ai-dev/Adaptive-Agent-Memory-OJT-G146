@@ -52,6 +52,8 @@ async def get_telemetry() -> Dict[str, Any]:
     total_executions = 0
     executions_with_memory_hit = 0
     memory_hit_rate: float = 0.0
+    total_tokens_used: int = 0
+    total_cost_usd: float = 0.0
 
     db_path = getattr(shared_store, "db_path", None)
     if db_path:
@@ -69,6 +71,8 @@ async def get_telemetry() -> Dict[str, Any]:
             for (payload_json,) in rows:
                 try:
                     data = json.loads(payload_json)
+                    total_tokens_used += int(data.get("tokensUsed") or data.get("tokens_used") or 0)
+                    total_cost_usd += float(data.get("totalCostUsd") or data.get("total_cost_usd") or data.get("cost_usd") or 0.0)
                     retrieved = (
                         data.get("retrievedExperiences")
                         or data.get("retrievedMemories")
@@ -87,6 +91,8 @@ async def get_telemetry() -> Dict[str, Any]:
     else:
         total_executions = len(_execution_history)
         for ex in _execution_history:
+            total_tokens_used += int(getattr(ex, "tokens_used", 0) or 0)
+            total_cost_usd += float(getattr(ex, "total_cost_usd", 0.0) or 0.0)
             retrieved = getattr(ex, "retrieved_experiences", None) or getattr(ex, "retrieved_memories", None) or []
             if retrieved:
                 executions_with_memory_hit += 1
@@ -108,6 +114,8 @@ async def get_telemetry() -> Dict[str, Any]:
         "totalTaskExecutions": total_executions,
         "executionsWithMemoryHit": executions_with_memory_hit,
         "memoryHitRate": memory_hit_rate,
+        "totalTokensUsed": total_tokens_used,
+        "totalCostUsd": round(total_cost_usd, 4),
         # -- Trust system constants (informational, always truthful) --------
         "quarantineThreshold": 0.35,
         "trustDecayBeta": 0.70,

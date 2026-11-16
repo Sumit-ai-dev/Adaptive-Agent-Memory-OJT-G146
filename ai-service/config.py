@@ -66,6 +66,13 @@ class AIServiceSettings(BaseSettings):
     MAX_CYCLICAL_LOOPS: int = Field(default=3, description="Maximum reflection loops before forced exit")
     REQUEST_TIMEOUT_SECONDS: float = Field(default=15.0)
 
+    # Token Budgeting & Context Compaction Bounds (Issue #38)
+    MAX_PROMPT_TOKENS: int = Field(default=4096, description="Upper bound for total task prompt context tokens")
+    MAX_RETRIEVED_MEMORY_TOKENS: int = Field(default=800, description="Strict upper bound for injected experiential memories into prompts")
+    MAX_TASK_COST_USD: float = Field(default=0.05, description="Maximum allowed token expenditure in USD per task execution")
+    MAX_TASK_TOKENS: int = Field(default=8192, description="Upper bound for cumulative tokens across cyclical execution loops")
+    TOKENIZER_ENCODING: str = Field(default="cl100k_base", description="Default tokenizer encoding family for budget calculations")
+
     # Security & API Protection
     HOST: str = Field(default="127.0.0.1", description="Default network bind address for the API server")
     PORT: int = Field(default=8000, description="Default port for the API server")

@@ -47,6 +47,16 @@ def should_loop_or_finish(state: AgentState) -> str:
     if eval_details.get("status") == "inconclusive" or eval_details.get("error") in ("missing_test_code", "harness_error", "provider_error"):
         return END
 
+    # Circuit breaker check: abort if budget or token ceiling was breached (Issue #38)
+    if state.get("budget_exceeded") is True:
+        return END
+
+    if (
+        state.get("total_cost_usd", 0.0) >= settings.MAX_TASK_COST_USD
+        or state.get("tokens_used", 0) >= settings.MAX_TASK_TOKENS
+    ):
+        return END
+
     score = state.get("outcome_score", 1.0)
     loop_count = state.get("loop_count", 1)
     max_loops = state.get("max_loops", settings.MAX_CYCLICAL_LOOPS)
@@ -354,7 +364,10 @@ async def execute_task(
         # store.update_trust touches no counters.
         is_inconclusive = (
             terminal_details.get("status") == "inconclusive"
-            or terminal_details.get("error") in ("missing_test_code", "harness_error", "provider_error")
+            or terminal_details.get("error") in (
+                "missing_test_code", "harness_error", "provider_error", "budget_exceeded"
+            )
+            or final_state.get("budget_exceeded") is True
         )
 
         # Exactly one write per (task, memory). Deduplicated by experience id so that
@@ -390,7 +403,7 @@ async def execute_task(
 
         # One candidate per task, from the terminal reflection.
         new_exp_obj = final_state.get("new_experience")
-        if new_exp_obj is not None:
+        if new_exp_obj is not None and not is_inconclusive and not final_state.get("budget_exceeded"):
             try:
                 await memory_store.add_experience(new_exp_obj)
             except Exception:
@@ -464,6 +477,19 @@ async def execute_task(
             except Exception:
                 pass
 
+    is_budget_breached = bool(
+        final_state.get("budget_exceeded")
+        or final_state.get("prompt_tokens", 0) > settings.MAX_PROMPT_TOKENS
+        or final_state.get("total_cost_usd", 0.0) >= settings.MAX_TASK_COST_USD
+        or final_state.get("tokens_used", 0) >= settings.MAX_TASK_TOKENS
+    )
+
+    exec_status = (
+        ExecutionStatus.FAILED
+        if (is_budget_breached or final_state.get("status") == "failed")
+        else ExecutionStatus.COMPLETED
+    )
+
     return TaskExecution(
         id=exec_id,
         execution_id=exec_id,
@@ -474,7 +500,7 @@ async def execute_task(
         task_domain=request.task_domain,
         memory_enabled=request.memory_enabled,
         memory_mode=request.memory_mode,
-        status=ExecutionStatus.COMPLETED,
+        status=exec_status,
         final_output=final_state.get("final_answer"),
         final_answer=final_state.get("final_answer"),
         reflection_lesson=final_state.get("candidate_experience", {}).get("strategy_lesson") if final_state.get("candidate_experience") else None,
@@ -485,6 +511,12 @@ async def execute_task(
         trust_updates=trust_updates,
         trajectory=traces,
         tokens_used=final_state.get("tokens_used", 120),
+        prompt_tokens=final_state.get("prompt_tokens", 0),
+        completion_tokens=final_state.get("completion_tokens", 0),
+        total_cost_usd=final_state.get("total_cost_usd", 0.0),
+        cost_usd=final_state.get("cost_usd", final_state.get("total_cost_usd", 0.0)),
+        budget_exceeded=is_budget_breached,
+        was_memory_compacted=final_state.get("was_memory_compacted", False),
         latency_ms=total_latency_ms,
         outcome_quality=quality,
         outcome_score=score,
@@ -502,6 +534,13 @@ async def execute_task(
             outcome_score=score,
             tokens_used=final_state.get("tokens_used", 120),
             loop_count=final_state.get("loop_count", 1),
+            prompt_tokens=final_state.get("prompt_tokens", 0),
+            completion_tokens=final_state.get("completion_tokens", 0),
+            total_cost_usd=final_state.get("total_cost_usd", 0.0),
+            cost_usd=final_state.get("cost_usd", final_state.get("total_cost_usd", 0.0)),
+            budget_exceeded=is_budget_breached,
+            compacted_memory_tokens=final_state.get("compacted_memory_tokens", 0),
+            was_memory_compacted=final_state.get("was_memory_compacted", False),
         ),
     )
 
