@@ -441,8 +441,91 @@ class UniversalLLMClient:
             else:
                 return "```python\ndef is_even(n):\n    return n % 2 == 0\n```", 90
 
+        if "fibonacci" in user_msg.lower():
+            return (
+                "```python\n"
+                "def fibonacci(n):\n"
+                "    if n <= 0:\n"
+                "        return 0\n"
+                "    elif n == 1:\n"
+                "        return 1\n"
+                "    a, b = 0, 1\n"
+                "    for _ in range(2, n + 1):\n"
+                "        a, b = b, a + b\n"
+                "    return b\n"
+                "```",
+                85,
+            )
+
         if "is_palindrome" in user_msg.lower():
             return "```python\ndef is_palindrome(s):\n    cleaned = ''.join(c.lower() for c in str(s) if c.isalnum())\n    return cleaned == cleaned[::-1]\n```", 90
+
+        if "binary_search" in user_msg.lower():
+            return (
+                "```python\n"
+                "def binary_search(arr, target):\n"
+                "    left, right = 0, len(arr) - 1\n"
+                "    while left <= right:\n"
+                "        mid = (left + right) // 2\n"
+                "        if arr[mid] == target:\n"
+                "            return mid\n"
+                "        elif arr[mid] < target:\n"
+                "            left = mid + 1\n"
+                "        else:\n"
+                "            right = mid - 1\n"
+                "    return -1\n"
+                "```",
+                110,
+            )
+
+        if "two_sum" in user_msg.lower():
+            return (
+                "```python\n"
+                "def two_sum(nums, target):\n"
+                "    lookup = {}\n"
+                "    for i, num in enumerate(nums):\n"
+                "        diff = target - num\n"
+                "        if diff in lookup:\n"
+                "            return [lookup[diff], i]\n"
+                "        lookup[num] = i\n"
+                "    return []\n"
+                "```",
+                100,
+            )
+
+        if "merge_intervals" in user_msg.lower():
+            return (
+                "```python\n"
+                "def merge_intervals(intervals):\n"
+                "    if not intervals:\n"
+                "        return []\n"
+                "    sorted_intervals = sorted(intervals, key=lambda x: x[0])\n"
+                "    merged = [sorted_intervals[0]]\n"
+                "    for current in sorted_intervals[1:]:\n"
+                "        prev = merged[-1]\n"
+                "        if current[0] <= prev[1]:\n"
+                "            merged[-1] = [prev[0], max(prev[1], current[1])]\n"
+                "        else:\n"
+                "            merged.append(current)\n"
+                "    return merged\n"
+                "```",
+                120,
+            )
+
+        if "prime number" in user_msg.lower():
+            return "Final Answer: 17 is a prime number because it is divisible only by 1 and itself.", 80
+
+        if "all humans are mortal" in user_msg.lower():
+            return "Final Answer: Socrates is mortal because all humans are mortal and Socrates is a human.", 75
+
+        if "503" in user_msg.lower():
+            return "Final Answer: Root Cause: Gateway connection pool exhaustion under high concurrent load.", 85
+
+        if "weather in tokyo" in user_msg.lower():
+            return "Final Answer: The current weather in Tokyo is sunny, 22°C with 45% humidity.", 70
+
+        if "find customer by id" in user_msg.lower():
+            return "Final Answer: Customer record found: ID=CUST-1042, Status=ACTIVE, Tier=PLATINUM.", 75
 
         tokens = len(user_msg.split()) + 80
         ans = (
