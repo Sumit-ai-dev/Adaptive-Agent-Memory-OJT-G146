@@ -90,6 +90,15 @@ class AIServiceSettings(BaseSettings):
     )
     SANDBOX_AST_STRICT: bool = Field(default=True, description="Enforce strict AST code safety verification before evaluation")
 
+    # Observability & Distributed Tracing (Issue #36)
+    OBSERVABILITY_ENABLED: bool = Field(default=True, description="Enable distributed tracing telemetry")
+    LANGFUSE_PUBLIC_KEY: Optional[str] = Field(default=None, description="Langfuse Cloud or Self-hosted Public Key")
+    LANGFUSE_SECRET_KEY: Optional[str] = Field(default=None, description="Langfuse Cloud or Self-hosted Secret Key")
+    LANGFUSE_HOST: str = Field(default="https://cloud.langfuse.com", description="Langfuse host URL")
+    LANGSMITH_TRACING: bool = Field(default=False, description="Enable LangSmith OpenTelemetry tracing")
+    LANGSMITH_API_KEY: Optional[str] = Field(default=None, description="LangSmith API Key")
+    LANGSMITH_PROJECT: str = Field(default="adaptive-agent-memory", description="LangSmith Project Name")
+
 
 # Global singleton settings instance
 settings = AIServiceSettings()

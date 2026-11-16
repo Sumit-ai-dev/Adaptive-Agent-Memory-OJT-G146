@@ -47,7 +47,7 @@ def compact_memory_context(
     positive_strategy: Optional[str],
     negative_pitfall: Optional[str],
     max_tokens: int = 800,
-    encoding_name: Optional[str] = "cl100k_base",
+    encoding_name: Optional[str] = None,
 ) -> MemoryCompactionResult:
     """
     Deterministically compacts positive strategies (+sigma) and negative pitfalls (-pi)
@@ -150,7 +150,7 @@ def compact_memory_context(
 def compact_retrieved_memories_list(
     memories: List[Dict[str, Any]],
     max_tokens: int = 800,
-    encoding_name: Optional[str] = "cl100k_base",
+    encoding_name: Optional[str] = None,
 ) -> Tuple[List[Dict[str, Any]], int, bool]:
     """
     Filters and compacts an ordered list of retrieved memory dictionaries to guarantee
