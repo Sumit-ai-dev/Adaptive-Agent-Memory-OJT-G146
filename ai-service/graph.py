@@ -555,6 +555,7 @@ async def execute_task(
         retrieved_experiences=retrieved_exp_matches,
         retrieved_memories=final_state.get("retrieved_memories", []),
         trust_updates=trust_updates,
+        tool_calls=final_state.get("tool_calls", []),
         trajectory=traces,
         tokens_used=final_state.get("tokens_used", 120),
         prompt_tokens=final_state.get("prompt_tokens", 0),

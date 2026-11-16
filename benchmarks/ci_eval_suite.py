@@ -21,6 +21,11 @@ import sys
 import time
 from typing import Any, Dict, List, Optional
 
+# Ensure repository root is on sys.path for direct invocations and CI runners
+REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if REPO_ROOT not in sys.path:
+    sys.path.insert(0, REPO_ROOT)
+
 from ai_service.graph import execute_task
 from models.domain import MemoryMode, TaskDomain
 from models.task import EvaluatorName, TaskExecuteRequest, TaskExecution
@@ -31,20 +36,19 @@ logger = logging.getLogger("benchmarks.ci_eval_suite")
 FROZEN_REGRESSION_TASKS: List[Dict[str, Any]] = [
     # ─── 5 Coding Tasks (Evaluated with PytestExecutionEvaluator) ───────────────
     {
-        "id": "code_01_is_even",
-        "name": "Parity Determination",
+        "id": "code_01_fibonacci",
+        "name": "Fibonacci Sequence",
         "category": "coding",
         "domain": TaskDomain.CODING,
         "evaluator": EvaluatorName.PYTEST_EXECUTION,
-        "input": "Write a python function `is_even(n)` that returns True if n is even, False otherwise.",
+        "input": "Write a python function `fibonacci(n)` that returns the n-th Fibonacci number (0-indexed: fibonacci(0)=0, fibonacci(1)=1, fibonacci(6)=8).",
         "evaluator_config": {
             "test_code": (
-                "def test_even():\n"
-                "    assert is_even(4) is True\n"
-                "    assert is_even(0) is True\n"
-                "def test_odd():\n"
-                "    assert is_even(7) is False\n"
-                "    assert is_even(-1) is False\n"
+                "def test_fib():\n"
+                "    assert fibonacci(0) == 0\n"
+                "    assert fibonacci(1) == 1\n"
+                "    assert fibonacci(6) == 8\n"
+                "    assert fibonacci(10) == 55\n"
             ),
         },
     },
@@ -159,6 +163,7 @@ FROZEN_REGRESSION_TASKS: List[Dict[str, Any]] = [
         "input": "Query the weather tool for weather in Tokyo and state current temperature and condition.",
         "evaluator_config": {
             "ground_truth": "The current weather in Tokyo is sunny, 22°C with 45% humidity.",
+            "expected_tool": "weather_api",
         },
     },
     {
@@ -170,6 +175,7 @@ FROZEN_REGRESSION_TASKS: List[Dict[str, Any]] = [
         "input": "Search the database: find customer by id CUST-1042.",
         "evaluator_config": {
             "ground_truth": "Customer record found: ID=CUST-1042, Status=ACTIVE, Tier=PLATINUM.",
+            "expected_tool": "database_search",
         },
     },
 ]
@@ -215,6 +221,19 @@ async def run_ci_eval_suite(
             duration_ms = int((time.time() - task_start) * 1000)
             score = float(execution.outcome_score or 0.0)
             is_success = execution.binary_outcome == 1 or score >= float(execution.outcome_threshold or 0.80)
+
+            # For tool execution tasks, verify both ground truth alignment and structured tool call dispatch
+            expected_tool = task_spec.get("evaluator_config", {}).get("expected_tool")
+            if task_spec.get("category") == "tool_execution" and expected_tool:
+                tool_calls = execution.tool_calls or []
+                has_tool_call = any(
+                    expected_tool.lower() in str(tc.get("name", "")).lower()
+                    for tc in tool_calls
+                    if isinstance(tc, dict)
+                )
+                if not has_tool_call:
+                    is_success = False
+                    score = min(score, 0.40)
 
             if is_success:
                 passed_count += 1
@@ -322,9 +341,9 @@ def format_markdown_report(report_data: Dict[str, Any]) -> str:
         "| Metric | Result | Target / Baseline | Status |",
         "|:---|:---|:---|:---|",
         f"| **Pass@1 Rate** | **{report_data['passRate'] * 100:.1f}%** | >= {report_data['minPassRate'] * 100:.1f}% | {'PASS' if is_passed else 'FAIL'} |",
-        f"| **Average Latency** | **{report_data['avgLatencyMs']} ms** | < 2500 ms | PASS |",
+        f"| **Average Latency** | **{report_data['avgLatencyMs']} ms** | < 2500 ms | {'PASS' if report_data['avgLatencyMs'] < 2500 else 'WARN'} |",
         f"| **Total Tokens** | **{report_data['totalTokens']:,}** (prompt: {report_data['promptTokens']:,}, completion: {report_data['completionTokens']:,}) | Monitored | PASS |",
-        f"| **Total Cost (USD)** | **${report_data['totalCostUsd']:.5f}** | Monitored | PASS |",
+        f"| **Total Cost (USD)** | **${report_data['totalCostUsd']:.5f}** | <= $0.05000 | {'PASS' if report_data['totalCostUsd'] <= 0.05 else 'WARN'} |",
         "",
         "### Task Breakdown (10 Frozen Regression Benchmarks)",
         "",
@@ -349,7 +368,12 @@ def format_markdown_report(report_data: Dict[str, Any]) -> str:
 
 def main():
     parser = argparse.ArgumentParser(description="CI Automated LLM Regression Benchmarking Suite")
-    parser.add_argument("--provider", default="mock", help="Model provider (default: mock)")
+    parser.add_argument(
+        "--provider",
+        default="mock",
+        choices=["mock", "openai", "anthropic", "gemini", "ollama", "openrouter", "deepseek"],
+        help="Model provider (default: mock). Quality gate is scoped to evaluated provider.",
+    )
     parser.add_argument("--model", default="mock", help="Model identifier (default: mock)")
     parser.add_argument("--min-pass-rate", type=float, default=0.80, help="Minimum pass rate threshold in [0, 1] (default: 0.80)")
     parser.add_argument("--memory-mode", default="adaptive", choices=["off", "naive", "symmetric", "adaptive"], help="Memory mode")

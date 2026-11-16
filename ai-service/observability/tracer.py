@@ -98,14 +98,25 @@ class ObservabilityTracer:
     ) -> None:
         """
         Records node execution duration and resource expenditure.
+        Accumulates duration, token usage, and cost across cyclical loop retries.
         """
-        self.node_latencies_ms[node_name] = duration_ms
+        prev_latency = self.node_latencies_ms.get(node_name, 0)
+        accumulated_duration = prev_latency + duration_ms
+        self.node_latencies_ms[node_name] = accumulated_duration
+
+        prev_span = self.node_spans.get(node_name, {})
+        prev_prompt = prev_span.get("promptTokens", 0)
+        prev_comp = prev_span.get("completionTokens", 0)
+        prev_cost = prev_span.get("stepCostUsd", 0.0)
+        prev_visits = prev_span.get("visits", 0)
+
         self.node_spans[node_name] = {
-            "durationMs": duration_ms,
-            "promptTokens": prompt_tokens,
-            "completionTokens": completion_tokens,
-            "totalTokens": prompt_tokens + completion_tokens,
-            "stepCostUsd": step_cost_usd,
+            "durationMs": accumulated_duration,
+            "promptTokens": prev_prompt + prompt_tokens,
+            "completionTokens": prev_comp + completion_tokens,
+            "totalTokens": prev_prompt + prev_comp + prompt_tokens + completion_tokens,
+            "stepCostUsd": round(prev_cost + step_cost_usd, 6),
+            "visits": prev_visits + 1,
             "metadata": metadata or {},
         }
 

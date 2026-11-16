@@ -281,11 +281,13 @@ class TaskExecuteRequest(BaseModel):
             v = v[-MAX_MESSAGES:]
         return v
 
-    @field_validator("provider")
+    @field_validator("provider", mode="before")
     @classmethod
-    def validate_provider(cls, v: Optional[str]) -> Optional[str]:
+    def validate_provider(cls, v: Any) -> Optional[str]:
         if v is None:
             return None
+        if hasattr(v, "value"):
+            v = v.value
         v_clean = str(v).strip().lower()
         from models.provider import ModelProvider
         allowed = {p.value for p in ModelProvider}
@@ -377,6 +379,7 @@ class TaskExecution(BaseModel):
     # --- F1: attempt-level diagnostics, kept separate from the task-level outcome ---
     attempts: List[AttemptRecord] = Field(default_factory=list)
     n_attempts: int = Field(default=0, alias="nAttempts")
+    tool_calls: List[Dict[str, Any]] = Field(default_factory=list, alias="toolCalls")
     trace_id: Optional[str] = Field(default=None, alias="traceId")
     trace_url: Optional[str] = Field(default=None, alias="traceUrl")
     execution_metadata: Optional[ExecutionMetadata] = None

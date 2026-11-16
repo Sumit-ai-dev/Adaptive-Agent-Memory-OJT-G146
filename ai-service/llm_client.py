@@ -441,6 +441,22 @@ class UniversalLLMClient:
             else:
                 return "```python\ndef is_even(n):\n    return n % 2 == 0\n```", 90
 
+        if "fibonacci" in user_msg.lower():
+            return (
+                "```python\n"
+                "def fibonacci(n):\n"
+                "    if n <= 0:\n"
+                "        return 0\n"
+                "    elif n == 1:\n"
+                "        return 1\n"
+                "    a, b = 0, 1\n"
+                "    for _ in range(2, n + 1):\n"
+                "        a, b = b, a + b\n"
+                "    return b\n"
+                "```",
+                85,
+            )
+
         if "is_palindrome" in user_msg.lower():
             return "```python\ndef is_palindrome(s):\n    cleaned = ''.join(c.lower() for c in str(s) if c.isalnum())\n    return cleaned == cleaned[::-1]\n```", 90
 

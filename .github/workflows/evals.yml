@@ -44,15 +44,10 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
-      - name: Cache HuggingFace models
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf # v4.2.2
-        with:
-          path: ~/.cache/huggingface
-          key: hf-models-${{ runner.os }}-all-MiniLM-L6-v2
-
       - name: Install Core Dependencies
         run: |
           python -m pip install --upgrade pip
+          # Exclude heavy sentence-transformers / PyTorch dependencies in CI
           grep -v 'sentence-transformers' backend/requirements.txt > /tmp/req_core.txt
           pip install -r /tmp/req_core.txt
           pip install -r requirements-dev.txt

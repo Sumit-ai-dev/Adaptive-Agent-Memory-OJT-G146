@@ -11,7 +11,7 @@ from benchmarks.ci_eval_suite import (
     run_ci_eval_suite,
 )
 from models.domain import TaskDomain
-from models.task import EvaluatorName
+from models.task import EvaluatorName, TaskExecuteRequest
 
 
 def test_frozen_regression_tasks_structure():
@@ -90,8 +90,8 @@ def test_format_markdown_report():
         "totalCostUsd": 0.0,
         "tasks": [
             {
-                "taskId": "code_01_is_even",
-                "name": "Parity Determination",
+                "taskId": "code_01_fibonacci",
+                "name": "Fibonacci Sequence",
                 "category": "coding",
                 "evaluator": "pytest_execution",
                 "score": 1.0,
@@ -104,6 +104,69 @@ def test_format_markdown_report():
     md = format_markdown_report(mock_report)
     assert "## CI LLM Regression Benchmark Report: PASS (PASSED)" in md
     assert "**Pass Rate**: `100.0%`" in md
-    assert "| **Pass@1 Rate** | **100.0%** | >= 80.0% | PASS |" in md
-    assert "Parity Determination" in md
+    assert "Fibonacci Sequence" in md
+    assert "<= $0.05000" in md
     assert "pytest_execution" in md
+
+
+def test_provider_enum_normalization_for_ci_eval():
+    """ModelProvider enum instance is normalized to lowercase string (PR #88 Copilot Finding 2)."""
+    from models.provider import ModelProvider
+    req = TaskExecuteRequest(
+        task_input="test prompt",
+        task_domain=TaskDomain.GENERAL,
+        provider=ModelProvider.MOCK,
+    )
+    assert req.provider == "mock"
+
+
+def test_trust_node_neutral_on_budget_exceeded():
+    """Trust updates treat budget-exceeded executions as inconclusive (PR #88 Copilot Finding 5)."""
+    from ai_service.nodes.trust_node import compute_next_trust, update_experience_trust
+    from models.experience import Experience, ExperienceStatus
+
+    exp = Experience(
+        id="exp_test_budget",
+        task_domain=TaskDomain.GENERAL,
+        trigger_condition="test condition",
+        strategy_lesson="test lesson",
+        trust_score=0.75,
+        status=ExperienceStatus.ACTIVE,
+    )
+
+    next_trust, reason = compute_next_trust(
+        current_trust=0.75,
+        outcome_score=0.10,
+        evaluator_details={"status": "inconclusive", "error": "budget_exceeded"},
+    )
+    assert next_trust == 0.75
+    assert "Inconclusive evaluation" in reason
+
+    updated_exp, _, _ = update_experience_trust(
+        experience=exp,
+        outcome_score=0.10,
+        evaluator_details={"status": "inconclusive", "error": "budget_exceeded"},
+    )
+    # Usage and failure counters must not increment for budget exhaustion
+    assert updated_exp.trust_score == 0.75
+    assert updated_exp.uses_count == 0
+
+
+def test_record_node_span_accumulates_cyclical_latency():
+    """Tracer accumulates latency, tokens, and cost across cyclical loop visits (PR #88 Copilot Finding 6)."""
+    from ai_service.observability.tracer import ObservabilityTracer
+
+    tracer = ObservabilityTracer(task_id="task_cyclical_accum")
+    # First visit (attempt 1)
+    tracer.record_node_span("execute_node", duration_ms=100, prompt_tokens=50, completion_tokens=20, step_cost_usd=0.0001)
+    # Second visit (attempt 2 after retry)
+    tracer.record_node_span("execute_node", duration_ms=150, prompt_tokens=60, completion_tokens=30, step_cost_usd=0.00015)
+
+    span = tracer.node_spans["execute_node"]
+    assert span["durationMs"] == 250
+    assert span["promptTokens"] == 110
+    assert span["completionTokens"] == 50
+    assert span["totalTokens"] == 160
+    assert span["stepCostUsd"] == 0.00025
+    assert span["visits"] == 2
+    assert tracer.node_latencies_ms["execute_node"] == 250

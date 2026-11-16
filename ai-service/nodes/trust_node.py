@@ -95,7 +95,9 @@ def update_experience_trust(
     delta = round(new_trust - old_trust, 4)
 
     details = evaluator_details or {}
-    is_inconclusive = details.get("status") == "inconclusive" or details.get("error") in ("missing_test_code", "harness_error", "provider_error")
+    is_inconclusive = details.get("status") == "inconclusive" or details.get("error") in (
+        "missing_test_code", "harness_error", "provider_error", "budget_exceeded"
+    )
 
     # Increment usage statistics only for verified outcomes
     if not is_inconclusive:
@@ -190,7 +192,10 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
     outcome_score = state.get("outcome_score", 0.85)
     execution_id = state.get("task_id")
     raw_matches = state.get("retrieved_memories") or state.get("retrieved_experiences", [])
-    evaluator_details = state.get("evaluator_details")
+    evaluator_details = dict(state.get("evaluator_details") or {})
+    if state.get("budget_exceeded") is True:
+        evaluator_details["status"] = "inconclusive"
+        evaluator_details["error"] = "budget_exceeded"
 
     # F1: this node sits ON the retry cycle and is therefore visited once per ATTEMPT.
     # It is now PURE -- it computes trust updates but performs no I/O. Persistence
