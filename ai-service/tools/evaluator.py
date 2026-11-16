@@ -788,8 +788,9 @@ class DeterministicEvaluator:
         failed_calls = [
             c for c in calls
             if c.get("status") == "error"
-            or "error" in str(c.get("output", "")).lower()
-            or "exception" in str(c.get("output", "")).lower()
+            or c.get("error") is not None
+            or str(c.get("output", "")).strip().lower().startswith("error:")
+            or str(c.get("output", "")).strip().lower().startswith("exception:")
         ]
         if failed_calls:
             return 0.30, f"Failure: {len(failed_calls)} tool calls resulted in runtime errors"

@@ -4,38 +4,38 @@
 # so CI was never actually green.
 
 # --- API gateway ---
-fastapi>=0.115.0
+fastapi>=0.162.5
 uvicorn>=0.30.0
-pydantic>=2.10.0
+pydantic>=2.14.3
 pydantic-settings>=2.5.0          # ai_service/config.py
-httpx>=0.27.0
-python-dotenv>=1.0.0
+httpx>=0.28.1
+python-dotenv>=1.2.4
 
 # --- Agent orchestration ---
-langgraph>=0.2.0                  # ai_service/graph.py
-typing-extensions>=4.12.0         # models/state.py
+langgraph>=1.2.21                 # ai_service/graph.py
+typing-extensions>=4.16.0         # models/state.py
 
 # --- Numerics / trust mathematics ---
-numpy>=1.26.0                     # ai_service/embedder.py, memory/store.py
-scipy>=1.11.0                     # ai_service/trust_math.py (scipy.special.betainc)
+numpy>=2.2.6                      # ai_service/embedder.py, memory/store.py
+scipy>=1.15.3                     # ai_service/trust_math.py (scipy.special.betainc)
 
 # --- PostgreSQL / pgvector persistence ---
 asyncpg>=0.30.0                   # ai_service/memory/store.py (PostgresMemoryStore)
 pgvector>=0.3.0                   # ai_service/memory/store.py (pgvector integration)
 
 # --- Embeddings ---
-sentence-transformers>=3.0.0      # ai_service/embedder.py (hash fallback if absent)
+sentence-transformers>=6.3.0      # ai_service/embedder.py (hash fallback if absent)
 
 # --- Model gateway, Token Budgeting & Observability ---
-openai>=1.40.0                    # ai_service/llm_client.py (AsyncOpenAI)
-tiktoken>=0.7.0                   # ai_service/context/token_budget.py (token counting)
-langfuse>=2.0.0                   # ai_service/observability/tracer.py (distributed tracing)
+openai>=3.50.0                    # ai_service/llm_client.py (AsyncOpenAI)
+tiktoken>=0.14.0                  # ai_service/context/token_budget.py (token counting)
+langfuse>=5.2.0                   # ai_service/observability/tracer.py (distributed tracing)
 
 # --- Test runner ---
 pytest>=8.0.0
-pytest-asyncio>=0.24.0
+pytest-asyncio>=1.5.0
 
 # --- Agent tools ---
 duckduckgo-search>=8.0.0          # ai_service/tools/search.py
-ddgs>=9.0.0                       # standalone DDGS search tool
+ddgs>=9.16.1                      # standalone DDGS search tool
 
