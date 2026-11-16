@@ -176,13 +176,22 @@ async def create_memory(experience: Experience) -> Dict[str, Any]:
 )
 async def get_memory(memory_id: str) -> Dict[str, Any]:
     """Retrieves an experience record by ID."""
-    exp = await shared_store.get_experience(memory_id)
-    if not exp:
+    try:
+        exp = await shared_store.get_experience(memory_id)
+        if not exp:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Experience '{memory_id}' not found.",
+            )
+        return exp.model_dump(by_alias=True)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error fetching memory {memory_id}: {e}", exc_info=True)
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Experience '{memory_id}' not found.",
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch experience '{memory_id}': {str(e)}",
         )
-    return exp.model_dump(by_alias=True)
 
 
 @router.delete(
@@ -318,6 +327,7 @@ class MemoryRetrieveRequest(BaseModel):
     task_input: Optional[str] = Field(default=None, description="Task prompt or query to match against memory index")
     query: Optional[str] = Field(default=None, description="SDK/MCP alias for task_input")
     domain: Optional[TaskDomain] = Field(default=None, description="Optional task domain filter")
+    task_domain: Optional[TaskDomain] = Field(default=None, alias="taskDomain", description="Alternative alias for domain")
     user_id: Optional[str] = Field(default=None, alias="userId", description="Optional user/tenant namespace filter")
     min_similarity: Optional[float] = Field(
         default=None,
@@ -327,10 +337,19 @@ class MemoryRetrieveRequest(BaseModel):
     )
     min_trust: float = Field(default=0.35, ge=0.0, le=1.0, description="Minimum trust score cutoff (Theorem 1 boundary)")
     top_k: int = Field(default=3, ge=1, le=10, description="Maximum number of memories to return")
+    limit: Optional[int] = Field(default=None, ge=1, le=10, description="Alias for top_k")
 
     @property
     def effective_input(self) -> str:
         return self.task_input or self.query or ""
+
+    @property
+    def effective_domain(self) -> Optional[TaskDomain]:
+        return self.domain or self.task_domain
+
+    @property
+    def effective_limit(self) -> int:
+        return self.limit or self.top_k
 
 
 class TrustUpdateRequest(BaseModel):
@@ -371,10 +390,10 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
     matches = retrieve_experiences(
         query_embedding=query_emb,
         candidates=all_candidates,
-        filter_domain=payload.domain,
+        filter_domain=payload.effective_domain,
         min_similarity=effective_min_similarity,
         min_trust=payload.min_trust,
-        top_k=payload.top_k,
+        top_k=payload.effective_limit,
     )
     return matches
 

@@ -822,9 +822,27 @@ class PostgresMemoryStore(BaseMemoryStore):
             if not self.database_url:
                 raise ValueError("PostgresMemoryStore requires a valid database_url or DATABASE_URL env var")
 
+            # Pre-create vector extension on a dedicated bootstrap connection before pool creation.
+            # This ensures pg_type contains public.vector when pool init registers the codec.
+            try:
+                init_conn = await asyncpg.connect(self.database_url)
+                try:
+                    await init_conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                finally:
+                    await init_conn.close()
+            except Exception as e:
+                logger.warning(f"Could not bootstrap vector extension on standalone connection: {e}")
+
             async def init_connection(conn):
+                try:
+                    await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+                except Exception:
+                    pass
                 if register_vector:
-                    await register_vector(conn)
+                    try:
+                        await register_vector(conn)
+                    except Exception as ve:
+                        logger.warning(f"Could not register vector codec on connection: {ve}")
 
             self._pool = await asyncpg.create_pool(
                 dsn=self.database_url,
@@ -843,6 +861,11 @@ class PostgresMemoryStore(BaseMemoryStore):
             return
         async with self._pool.acquire() as conn:
             await conn.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS experiences (
                     id TEXT PRIMARY KEY,
@@ -959,6 +982,11 @@ class PostgresMemoryStore(BaseMemoryStore):
             local_embedder = None
 
         now = datetime.now(timezone.utc)
+        if register_vector:
+            try:
+                await register_vector(conn)
+            except Exception:
+                pass
         for item in seeds:
             id_, uid, domain, trig, strat, pit, conf, trust, uses, succ, fail, stat, emb, src = item
             if local_embedder is not None and emb is None:
@@ -979,14 +1007,23 @@ class PostgresMemoryStore(BaseMemoryStore):
         emb = row["embedding"]
         emb_list = None
         if emb is not None:
-            if hasattr(emb, "tolist"):
-                emb_list = emb.tolist()
+            if hasattr(emb, "to_list"):
+                emb_list = [float(x) for x in emb.to_list()]
+            elif hasattr(emb, "tolist"):
+                emb_list = [float(x) for x in emb.tolist()]
             elif isinstance(emb, (list, tuple)):
                 emb_list = [float(x) for x in emb]
             elif isinstance(emb, str):
-                emb_list = json.loads(emb)
+                try:
+                    emb_list = json.loads(emb)
+                except Exception:
+                    raw = emb.strip().lstrip("[").rstrip("]")
+                    emb_list = [float(x.strip()) for x in raw.split(",") if x.strip()]
             else:
-                emb_list = list(emb)
+                try:
+                    emb_list = [float(x) for x in emb]
+                except Exception:
+                    emb_list = None
 
         prob_successes = int(row["probation_successes"]) if "probation_successes" in row else 0
 
@@ -1023,6 +1060,11 @@ class PostgresMemoryStore(BaseMemoryStore):
         prob_successes = getattr(exp, "probation_successes", 0)
 
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             await conn.execute("""
                 INSERT INTO experiences (
                     id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
@@ -1049,6 +1091,11 @@ class PostgresMemoryStore(BaseMemoryStore):
     async def get_experience(self, experience_id: str) -> Optional[Experience]:
         pool = await self._get_pool()
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             row = await conn.fetchrow("SELECT * FROM experiences WHERE id = $1", experience_id)
             return self._record_to_experience(row) if row else None
 
@@ -1389,6 +1436,11 @@ class PostgresMemoryStore(BaseMemoryStore):
 
         query += " ORDER BY trust_score DESC, updated_at DESC"
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             rows = await conn.fetch(query, *params)
             return [self._record_to_experience(r) for r in rows]
 
@@ -1403,6 +1455,11 @@ class PostgresMemoryStore(BaseMemoryStore):
         domain_val = domain.value if isinstance(domain, TaskDomain) else domain
 
         async with pool.acquire() as conn:
+            if register_vector:
+                try:
+                    await register_vector(conn)
+                except Exception:
+                    pass
             query = """
                 SELECT id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
                        confidence, trust_score, uses_count, successes_count, failures_count,

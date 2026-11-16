@@ -1,0 +1,131 @@
+# ==============================================================================
+# Full-Stack Multi-Container Orchestration for AEMA
+# Topology:
+#   - db:       PostgreSQL 16 with pgvector extension & HNSW indexing
+#   - backend:  FastAPI memory server + LangGraph agent orchestration
+#   - frontend: Vite React Dashboard served by Nginx reverse proxy
+#   - aema-mcp: Node.js Model Context Protocol Server for external AI clients
+# ==============================================================================
+
+services:
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Database Service: PostgreSQL 16 + pgvector
+  # ─────────────────────────────────────────────────────────────────────────────
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: aema-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aema_db}
+      POSTGRES_USER: ${POSTGRES_USER:-aema}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aema_password}
+    # Database remains internal to aema-network by default to prevent external exposure.
+    # To expose PostgreSQL to localhost for local debugging, uncomment the ports block:
+    # ports:
+    #   - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aema} -d ${POSTGRES_DB:-aema_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - aema-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Backend Service: FastAPI Engine & Experiential Memory Storage
+  # ─────────────────────────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: aema/server:0.1.1
+    container_name: aema-backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - STORAGE_ENGINE=postgres
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-aema}:${POSTGRES_PASSWORD:-aema_password}@db:5432/${POSTGRES_DB:-aema_db}
+      - AEMA_DB_PATH=/data/adaptive_memory.db
+      - ADMIN_API_KEY=${ADMIN_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_KEY=${SUPABASE_KEY:-}
+    volumes:
+      - aema_data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health')\" || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - aema-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # Frontend Service: React Dashboard & Visualization Studio
+  # ─────────────────────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: aema/frontend:0.1.1
+    container_name: aema-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost/healthz || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - aema-network
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # MCP Server: Model Context Protocol Gateway for Claude Desktop & Cursor
+  # ─────────────────────────────────────────────────────────────────────────────
+  aema-mcp:
+    build:
+      context: ./packages/aema
+      dockerfile: Dockerfile
+    image: aema/mcp:0.1.1
+    container_name: aema-mcp
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - AEMA_API_URL=http://backend:8000
+    depends_on:
+      backend:
+        condition: service_healthy
+    stdin_open: true
+    tty: true
+    networks:
+      - aema-network
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Storage Volumes & Shared Bridge Network
+# ─────────────────────────────────────────────────────────────────────────────
+volumes:
+  pgdata:
+    driver: local
+  aema_data:
+    driver: local
+
+networks:
+  aema-network:
+    name: aema-network
+    driver: bridge
