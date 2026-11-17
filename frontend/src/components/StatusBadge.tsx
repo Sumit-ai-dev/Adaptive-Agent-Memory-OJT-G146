@@ -27,10 +27,9 @@ export default function StatusBadge({ status, size = 'sm', className = '' }: Sta
       return (
         <span
           className={`inline-flex items-center gap-1.5 font-mono font-medium rounded-md border ${sizeClasses} ${className}
-            bg-indigo-50 text-indigo-800 border-indigo-200
-            dark:bg-indigo-950/40 dark:text-indigo-300 dark:border-indigo-800/60`}
+            bg-[#1E1E1B] text-[#E67E22] border-[#3E3E34]`}
         >
-          <span className="w-1.5 h-1.5 rounded-full bg-indigo-500" />
+          <span className="w-1.5 h-1.5 rounded-full bg-[#E67E22]" />
           Demo Mode
         </span>
       )
