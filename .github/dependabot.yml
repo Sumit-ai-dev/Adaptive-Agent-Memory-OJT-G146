@@ -57,6 +57,11 @@ updates:
       - "dependencies"
       - "frontend"
       - "security"
+    ignore:
+      - dependency-name: "vite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-router-dom"
+        update-types: ["version-update:semver-major"]
 
   # GitHub Actions workflows (.github/workflows)
   - package-ecosystem: "github-actions"

@@ -154,6 +154,15 @@ def _save_execution_to_db(execution: TaskExecution) -> None:
         logger.warning(f"Could not persist execution {execution.id} to SQLite: {exc}")
 
 
+async def _save_execution_to_store(execution: TaskExecution) -> None:
+    """Persist a TaskExecution to the active store (Postgres or SQLite) and local cache."""
+    try:
+        await shared_store.save_execution(execution)
+    except Exception as exc:
+        logger.warning(f"Could not persist execution {execution.id} to shared_store: {exc}")
+        _save_execution_to_db(execution)
+
+
 def _load_executions_from_db(
     domain: Optional[str] = None,
     memory_mode: Optional[str] = None,
@@ -381,8 +390,8 @@ async def run_agent_task(
         )
         execution_result = await execute_task(request, memory_store=shared_store)
 
-        # Persist to SQLite (durable across restarts)
-        _save_execution_to_db(execution_result)
+        # Persist to durable store (SQLite/Postgres) and cache
+        await _save_execution_to_store(execution_result)
 
         # Keep in session cache (fast reads within current session, keep latest 100)
         _execution_history.insert(0, execution_result)
@@ -428,7 +437,7 @@ async def run_agent_task_stream(
                                 res_obj = payload_data.get("result")
                                 if res_obj:
                                     exec_obj = TaskExecution.model_validate(res_obj)
-                                    _save_execution_to_db(exec_obj)
+                                    await _save_execution_to_store(exec_obj)
                                     _execution_history.insert(0, exec_obj)
                                     if len(_execution_history) > 100:
                                         _execution_history.pop()
@@ -492,15 +501,27 @@ async def list_executions(
         effective_user = None
         unauthenticated_only = True
 
-    total, items = _load_executions_from_db(
-        domain=domain,
-        memory_mode=memory_mode,
-        session_id=session_id,
-        user_id=effective_user,
-        unauthenticated_only=unauthenticated_only,
-        limit=limit,
-        offset=offset,
-    )
+    try:
+        total, items = await shared_store.list_executions(
+            domain=domain,
+            memory_mode=memory_mode,
+            session_id=session_id,
+            user_id=effective_user,
+            unauthenticated_only=unauthenticated_only,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as exc:
+        logger.warning(f"Could not load executions from shared_store, falling back to SQLite: {exc}")
+        total, items = _load_executions_from_db(
+            domain=domain,
+            memory_mode=memory_mode,
+            session_id=session_id,
+            user_id=effective_user,
+            unauthenticated_only=unauthenticated_only,
+            limit=limit,
+            offset=offset,
+        )
     return {
         "total": total,
         "items": [item.model_dump(by_alias=True) for item in items],
@@ -544,6 +565,15 @@ async def list_sessions(
         effective_user = None
         unauthenticated_only = True
 
+    try:
+        return await shared_store.list_sessions(
+            user_id=effective_user,
+            unauthenticated_only=unauthenticated_only,
+            limit=limit,
+        )
+    except Exception as exc:
+        logger.warning(f"Could not load sessions from shared_store, falling back to SQLite: {exc}")
+
     db_path = _sqlite_db_path()
     if not db_path:
         seen: Dict[str, Dict[str, Any]] = {}
@@ -569,10 +599,13 @@ async def list_sessions(
         if effective_user:
             rows = conn.execute(
                 """
-                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                FROM task_executions
-                WHERE session_id IS NOT NULL AND session_id != '' AND user_id = ?
-                GROUP BY session_id
+                SELECT t1.session_id,
+                       (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                       MAX(t1.created_at) as last_active,
+                       COUNT(*) as turn_count
+                FROM task_executions t1
+                WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND t1.user_id = ?
+                GROUP BY t1.session_id
                 ORDER BY last_active DESC
                 LIMIT ?
                 """,
@@ -581,10 +614,13 @@ async def list_sessions(
         elif unauthenticated_only:
             rows = conn.execute(
                 """
-                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                FROM task_executions
-                WHERE session_id IS NOT NULL AND session_id != '' AND (user_id IS NULL OR user_id = 'anonymous')
-                GROUP BY session_id
+                SELECT t1.session_id,
+                       (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                       MAX(t1.created_at) as last_active,
+                       COUNT(*) as turn_count
+                FROM task_executions t1
+                WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND (t1.user_id IS NULL OR t1.user_id = 'anonymous')
+                GROUP BY t1.session_id
                 ORDER BY last_active DESC
                 LIMIT ?
                 """,
@@ -593,10 +629,13 @@ async def list_sessions(
         else:
             rows = conn.execute(
                 """
-                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                FROM task_executions
-                WHERE session_id IS NOT NULL AND session_id != ''
-                GROUP BY session_id
+                SELECT t1.session_id,
+                       (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                       MAX(t1.created_at) as last_active,
+                       COUNT(*) as turn_count
+                FROM task_executions t1
+                WHERE t1.session_id IS NOT NULL AND t1.session_id != ''
+                GROUP BY t1.session_id
                 ORDER BY last_active DESC
                 LIMIT ?
                 """,
@@ -634,12 +673,19 @@ async def get_execution_trace(
     Enforces tenant authorization: users can only view their own executions;
     admins and machine services can view any execution.
     """
-    # Fast path: session cache
+    # Fast path: look up via shared_store
     found = None
-    for item in _execution_history:
-        if item.id == execution_id or getattr(item, "execution_id", None) == execution_id:
-            found = item
-            break
+    try:
+        found = await shared_store.get_execution(execution_id)
+    except Exception as exc:
+        logger.warning(f"Could not load execution from shared_store: {exc}")
+
+    # Fallback: session cache
+    if not found:
+        for item in _execution_history:
+            if item.id == execution_id or getattr(item, "execution_id", None) == execution_id:
+                found = item
+                break
 
     # Durable fallback: SQLite
     if not found:
@@ -712,6 +758,11 @@ async def clear_executions(
 
     global _execution_history
     _execution_history.clear()
+    try:
+        await shared_store.clear_executions()
+    except Exception as exc:
+        logger.warning(f"Could not clear executions from shared_store: {exc}")
+
     db_path = _sqlite_db_path()
     if not db_path:
         return {"status": "success", "message": "All execution runs cleared."}

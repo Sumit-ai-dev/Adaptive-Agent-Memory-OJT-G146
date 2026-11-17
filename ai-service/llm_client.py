@@ -4,9 +4,10 @@ Supports LiteLLM (when installed), OpenAI-compatible providers (Groq, NVIDIA NIM
 local Ollama, OpenAI, Gemini, Anthropic), and deterministic Mock emulator.
 """
 
+import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -296,6 +297,191 @@ class UniversalLLMClient:
                 return raw_ans, tokens
 
         return self._generate_mock_response(messages, json_mode)
+
+    async def generate_stream(
+        self,
+        messages: List[Dict[str, str]],
+        config: Optional[ProviderConfig] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        seed: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Asynchronously stream chat completion tokens from LiteLLM, AsyncOpenAI, or Mock generator.
+        Yields raw token string chunks in real time as they arrive over the wire.
+        """
+        cfg = config or self.default_config
+        if cfg is None:
+            raise ProviderConfigurationError(
+                "No provider configuration supplied. Pass an explicit ProviderConfig."
+            )
+        provider = cfg.provider
+        effective_seed = cfg.seed if seed is None else seed
+        validate_seed(provider, effective_seed)
+
+        if provider == ModelProvider.MOCK:
+            content, _ = self._generate_mock_response(messages, json_mode=False)
+            words = content.split(" ")
+            for i, word in enumerate(words):
+                chunk = word + (" " if i < len(words) - 1 else "")
+                yield chunk
+                await asyncio.sleep(0.005)
+            return
+
+        # 1. Native Google Gemini REST integration
+        if provider == ModelProvider.GEMINI:
+            try:
+                async for chunk in self._generate_gemini_native_stream(
+                    messages=messages,
+                    cfg=cfg,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    yield chunk
+                return
+            except Exception as ge:
+                logger.warning(f"Gemini native streaming failed: {ge}. Trying litellm/OpenAI fallback.")
+
+        # 2. Try litellm with stream=True
+        if litellm is not None:
+            try:
+                litellm_model = cfg.model
+                if provider == ModelProvider.GROQ and not litellm_model.startswith("groq/"):
+                    litellm_model = f"groq/{litellm_model}"
+                elif provider == ModelProvider.OLLAMA and not litellm_model.startswith("ollama/"):
+                    litellm_model = f"ollama/{litellm_model}"
+
+                resolved_key = (
+                    (cfg.api_key or "").strip()
+                    or getattr(settings, f"{provider.value.upper()}_API_KEY", None)
+                    or ProviderConfig.default_for(provider).api_key
+                )
+
+                response = await litellm.acompletion(
+                    model=litellm_model,
+                    messages=messages,
+                    api_key=resolved_key,
+                    base_url=cfg.base_url,
+                    temperature=temperature if temperature is not None else cfg.temperature,
+                    max_tokens=max_tokens or cfg.max_tokens,
+                    stream=True,
+                )
+                async for chunk in response:
+                    delta = ""
+                    if hasattr(chunk, "choices") and chunk.choices:
+                        delta = getattr(chunk.choices[0].delta, "content", "") or ""
+                    if delta:
+                        yield delta
+                return
+            except Exception as e:
+                logger.warning(f"LiteLLM streaming failed for {provider.value}: {e}. Trying AsyncOpenAI streaming fallback.")
+
+        # 3. OpenAI-compatible Async client streaming fallback
+        client, model, _ = self._get_client_and_model(cfg)
+        if client is not None:
+            try:
+                kwargs: Dict[str, Any] = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature if temperature is not None else cfg.temperature,
+                    "max_tokens": max_tokens or cfg.max_tokens,
+                    "stream": True,
+                }
+                if effective_seed is not None:
+                    kwargs["seed"] = int(effective_seed)
+
+                response = await client.chat.completions.create(**kwargs)
+                async for chunk in response:
+                    delta = ""
+                    if chunk.choices and hasattr(chunk.choices[0], "delta"):
+                        delta = getattr(chunk.choices[0].delta, "content", "") or ""
+                    if delta:
+                        yield delta
+                return
+            except Exception as e:
+                logger.error(f"AsyncOpenAI streaming failed: {e}")
+                raise
+        elif provider != ModelProvider.MOCK:
+            raise ProviderConfigurationError(
+                f"No API key configured for provider '{provider.value}'. "
+                f"Supply one via BYOK in the request payload or configure "
+                f"{provider.value.upper()}_API_KEY in the backend environment."
+            )
+
+    async def _generate_gemini_native_stream(
+        self,
+        messages: List[Dict[str, str]],
+        cfg: ProviderConfig,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Direct, native Google Gemini REST SSE streaming integration.
+        Streams text chunks live using the :streamGenerateContent?alt=sse endpoint.
+        """
+        api_key = (cfg.api_key or "").strip() or getattr(settings, "GEMINI_API_KEY", None)
+        if not api_key:
+            raise ProviderConfigurationError(
+                "No GEMINI API key configured. "
+                "Provide an API key via BYOK or set GEMINI_API_KEY in the backend environment."
+            )
+
+        model = (cfg.model or ProviderConfig.default_for(ModelProvider.GEMINI).model).replace("models/", "")
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
+        headers = {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json",
+        }
+
+        contents = []
+        system_instruction = None
+        for m in messages:
+            role = m.get("role", "user")
+            text = m.get("content", "")
+            if role == "system":
+                system_instruction = {"parts": [{"text": text}]}
+            else:
+                gemini_role = "user" if role == "user" else "model"
+                contents.append({"role": gemini_role, "parts": [{"text": text}]})
+
+        if not contents:
+            contents.append({"role": "user", "parts": [{"text": "Hello"}]})
+
+        payload: Dict[str, Any] = {"contents": contents}
+        if system_instruction:
+            payload["systemInstruction"] = system_instruction
+
+        gen_config: Dict[str, Any] = {}
+        if temperature is not None:
+            gen_config["temperature"] = float(temperature)
+        if max_tokens:
+            gen_config["maxOutputTokens"] = int(max_tokens)
+        if gen_config:
+            payload["generationConfig"] = gen_config
+
+        timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
+            async with client.stream("POST", url, json=payload, headers=headers) as res:
+                if res.status_code != 200:
+                    error_bytes = await res.aread()
+                    raise RuntimeError(
+                        f"Gemini streaming API returned HTTP {res.status_code}: {error_bytes.decode('utf-8', errors='replace')}"
+                    )
+
+                async for line in res.aiter_lines():
+                    if line.startswith("data: "):
+                        raw_data = line[6:].strip()
+                        if not raw_data:
+                            continue
+                        try:
+                            parsed = json.loads(raw_data)
+                            for cand in parsed.get("candidates", []):
+                                for part in cand.get("content", {}).get("parts", []):
+                                    text_chunk = part.get("text", "")
+                                    if text_chunk:
+                                        yield text_chunk
+                        except Exception:
+                            continue
 
     async def _generate_gemini_native(
         self,

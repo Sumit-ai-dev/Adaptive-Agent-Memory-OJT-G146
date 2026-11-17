@@ -802,10 +802,47 @@ async def execute_task_stream(
 
     running_state: Dict[str, Any] = dict(initial_state)
     trace_finalized = False
+    event_queue: asyncio.Queue = asyncio.Queue()
+    initial_state["token_queue"] = event_queue
+    if "configurable" not in graph_config:
+        graph_config["configurable"] = {}
+    graph_config["configurable"]["token_queue"] = event_queue
+
+    async def _run_graph():
+        try:
+            async for chunk in agent_graph.astream(initial_state, config=graph_config, stream_mode="updates"):
+                for node_name, node_update in chunk.items():
+                    running_state.update(node_update)
+                    await event_queue.put(("node_complete", node_name, node_update))
+
+            final_execution = await _finalize_execution(
+                final_state=running_state,
+                request=request,
+                memory_store=memory_store,
+                run_context=run_context,
+                exec_id=exec_id,
+                task_id=task_id,
+                task_index=task_index,
+                start_time=start_time,
+                tracer=tracer,
+            )
+            await event_queue.put(("done", final_execution))
+        except Exception as exc:
+            await event_queue.put(("error", exc))
+
+    graph_task = asyncio.create_task(_run_graph())
+
     try:
-        async for chunk in agent_graph.astream(initial_state, config=graph_config, stream_mode="updates"):
-            for node_name, node_update in chunk.items():
-                running_state.update(node_update)
+        while True:
+            event = await event_queue.get()
+            event_type = event[0]
+
+            if event_type == "token":
+                yield _format_sse("token", event[1])
+
+            elif event_type == "node_complete":
+                node_name = event[1]
+                node_update = event[2]
 
                 if node_name == "retrieve_node":
                     retrieved = node_update.get("retrieved_memories", [])
@@ -820,15 +857,6 @@ async def execute_task_stream(
 
                 elif node_name == "execute_node":
                     solution = node_update.get("final_answer") or node_update.get("solution") or ""
-                    # Stream token chunks for responsive live typing effect
-                    if solution:
-                        words = solution.split(" ")
-                        chunk_size = 2
-                        for i in range(0, len(words), chunk_size):
-                            part = " ".join(words[i : i + chunk_size]) + (" " if i + chunk_size < len(words) else "")
-                            yield _format_sse("token", {"chunk": part})
-                            await asyncio.sleep(0.01)
-
                     yield _format_sse("node_complete", {
                         "node": "execute_node",
                         "title": "Task Execution",
@@ -862,39 +890,38 @@ async def execute_task_stream(
                         "trust_updates": updates,
                     })
 
-        final_execution = await _finalize_execution(
-            final_state=running_state,
-            request=request,
-            memory_store=memory_store,
-            run_context=run_context,
-            exec_id=exec_id,
-            task_id=task_id,
-            task_index=task_index,
-            start_time=start_time,
-            tracer=tracer,
-        )
-        trace_finalized = True
+            elif event_type == "done":
+                final_execution = event[1]
+                trace_finalized = True
+                yield _format_sse("done", {
+                    "execution_id": exec_id,
+                    "status": "completed",
+                    "result": final_execution.model_dump(mode="json", by_alias=True),
+                })
+                break
 
-        yield _format_sse("done", {
-            "execution_id": exec_id,
-            "status": "completed",
-            "result": final_execution.model_dump(mode="json", by_alias=True),
-        })
-
-    except Exception as exc:
-        if not trace_finalized:
-            tracer.finish_trace(
-                status="failed",
-                outcome_score=0.0,
-                total_tokens=0,
-                prompt_tokens=0,
-                completion_tokens=0,
-                total_cost_usd=0.0,
-            )
-            trace_finalized = True
-        logger.error("Error during streaming execution in graph: %s", exc, exc_info=True)
-        yield _format_sse("error", {"message": str(exc), "execution_id": exec_id})
+            elif event_type == "error":
+                exc = event[1]
+                if not trace_finalized:
+                    tracer.finish_trace(
+                        status="failed",
+                        outcome_score=0.0,
+                        total_tokens=0,
+                        prompt_tokens=0,
+                        completion_tokens=0,
+                        total_cost_usd=0.0,
+                    )
+                    trace_finalized = True
+                logger.error("Error during streaming execution in graph: %s", exc, exc_info=True)
+                yield _format_sse("error", {"message": str(exc), "execution_id": exec_id})
+                break
+    except asyncio.CancelledError:
+        logger.info("Streaming client disconnected; cancelling graph execution task.")
+        graph_task.cancel()
+        raise
     finally:
+        if not graph_task.done():
+            graph_task.cancel()
         tracer.flush()
 
 
