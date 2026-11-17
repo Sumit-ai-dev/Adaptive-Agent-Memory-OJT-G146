@@ -54,11 +54,27 @@ class MemoryRetriever:
         # Embed query text
         query_vec = local_embedder.embed_text(query)
 
-        # Retrieve top candidates by raw cosine similarity
-        try:
-            raw_matches = await self.store.search_similar(query_vec, domain=domain, top_k=top_k * 3, user_id=user_id)
-        except TypeError:
+        # Retrieve top candidates by raw cosine similarity while strictly enforcing tenant scoping
+        import inspect
+        store_params = inspect.signature(self.store.search_similar).parameters
+        accepts_user_id = "user_id" in store_params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in store_params.values()
+        )
+
+        if accepts_user_id:
+            raw_matches = await self.store.search_similar(
+                query_vec, domain=domain, top_k=top_k * 3, user_id=user_id
+            )
+        else:
+            # Legacy store adapter without native user_id parameter in signature.
+            # Perform search and strictly filter in-memory to prevent tenant data leakage.
             raw_matches = await self.store.search_similar(query_vec, domain=domain, top_k=top_k * 3)
+            if user_id is not None:
+                raw_matches = [
+                    (exp, sim)
+                    for exp, sim in raw_matches
+                    if getattr(exp, "user_id", None) == user_id or getattr(exp, "user_id", None) is None
+                ]
         if not raw_matches:
             return [], diagnostics
 

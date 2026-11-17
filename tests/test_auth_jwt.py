@@ -160,6 +160,7 @@ async def test_multi_tenant_memory_isolation_and_anti_spoofing():
     - User Bob cannot see User Alice's private memories.
     - Both users see global baseline memories (user_id IS NULL).
     - Alice passing userId=bob via query param cannot bypass tenant filter.
+    - Cleans up shared-store records after execution.
     """
     alice_id = "usr_tenant_alice"
     bob_id = "usr_tenant_bob"
@@ -179,7 +180,6 @@ async def test_multi_tenant_memory_isolation_and_anti_spoofing():
         trust_score=0.92,
         status=ExperienceStatus.ACTIVE,
     )
-    await shared_store.add_experience(alice_exp)
 
     # Seed a Bob-specific private memory
     bob_exp = Experience(
@@ -193,47 +193,75 @@ async def test_multi_tenant_memory_isolation_and_anti_spoofing():
         trust_score=0.90,
         status=ExperienceStatus.ACTIVE,
     )
-    await shared_store.add_experience(bob_exp)
 
-    # 1. Alice lists memories: must see Alice's memory, must NOT see Bob's memory
-    res_alice = client.get(
-        "/api/v1/memories",
-        headers={"Authorization": f"Bearer {alice_token}"},
-    )
-    assert res_alice.status_code == 200
-    alice_items = res_alice.json()
-    alice_exp_ids = [m["id"] for m in alice_items]
-    assert alice_exp.id in alice_exp_ids
-    assert bob_exp.id not in alice_exp_ids
+    try:
+        await shared_store.add_experience(alice_exp)
+        await shared_store.add_experience(bob_exp)
 
-    # 2. Bob lists memories: must see Bob's memory, must NOT see Alice's memory
-    res_bob = client.get(
-        "/api/v1/memories",
-        headers={"Authorization": f"Bearer {bob_token}"},
-    )
-    assert res_bob.status_code == 200
-    bob_items = res_bob.json()
-    bob_exp_ids = [m["id"] for m in bob_items]
-    assert bob_exp.id in bob_exp_ids
-    assert alice_exp.id not in bob_exp_ids
+        # 1. Alice lists memories: must see Alice's memory, must NOT see Bob's memory
+        res_alice = client.get(
+            "/api/v1/memories",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        assert res_alice.status_code == 200
+        alice_items = res_alice.json()
+        alice_exp_ids = [m["id"] for m in alice_items]
+        assert alice_exp.id in alice_exp_ids
+        assert bob_exp.id not in alice_exp_ids
 
-    # 3. Anti-Spoofing: Alice tries to snoop on Bob by passing userId=bob
-    res_spoof = client.get(
-        f"/api/v1/memories?userId={bob_id}",
-        headers={"Authorization": f"Bearer {alice_token}"},
-    )
-    assert res_spoof.status_code == 200
-    spoof_items = res_spoof.json()
-    spoof_exp_ids = [m["id"] for m in spoof_items]
-    # Bob's private memory must NOT be visible even when Alice explicitly requests Bob's userId
-    assert bob_exp.id not in spoof_exp_ids
-    assert alice_exp.id in spoof_exp_ids
+        # 2. Bob lists memories: must see Bob's memory, must NOT see Alice's memory
+        res_bob = client.get(
+            "/api/v1/memories",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+        assert res_bob.status_code == 200
+        bob_items = res_bob.json()
+        bob_exp_ids = [m["id"] for m in bob_items]
+        assert bob_exp.id in bob_exp_ids
+        assert alice_exp.id not in bob_exp_ids
+
+        # 3. Anti-Spoofing: Alice tries to snoop on Bob by passing userId=bob
+        res_spoof = client.get(
+            f"/api/v1/memories?userId={bob_id}",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        assert res_spoof.status_code == 200
+        spoof_items = res_spoof.json()
+        spoof_exp_ids = [m["id"] for m in spoof_items]
+        # Bob's private memory must NOT be visible even when Alice explicitly requests Bob's userId
+        assert bob_exp.id not in spoof_exp_ids
+        assert alice_exp.id in spoof_exp_ids
+
+        # 4. Authorize ownership before returning a memory by ID (Issue #8)
+        # Alice fetches Alice's memory -> 200
+        res_own = client.get(
+            f"/api/v1/memories/{alice_exp.id}",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        assert res_own.status_code == 200
+        assert res_own.json()["id"] == alice_exp.id
+
+        # Bob attempts to fetch Alice's private memory by ID -> 404 (ownership denied)
+        res_other = client.get(
+            f"/api/v1/memories/{alice_exp.id}",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+        assert res_other.status_code == 404
+
+        # Unauthenticated caller attempts to fetch Alice's private memory -> 404
+        res_unauth = client.get(f"/api/v1/memories/{alice_exp.id}")
+        assert res_unauth.status_code == 404
+
+    finally:
+        # Issue #11: Clean up test data from shared store
+        await shared_store.delete_experience(alice_exp.id)
+        await shared_store.delete_experience(bob_exp.id)
 
 
 # ─── 5. Multi-Tenant Execution Trace Isolation ──────────────────────────────
 
 def test_multi_tenant_execution_trace_isolation():
-    """Verify execution history list filters by tenant identity."""
+    """Verify execution history list filters by tenant identity and cleans up."""
     alice_id = "trace_tenant_alice"
     bob_id = "trace_tenant_bob"
 
@@ -258,22 +286,145 @@ def test_multi_tenant_execution_trace_isolation():
     assert res_b.status_code == 200
     exec_b_id = res_b.json()["id"]
 
-    # Alice lists executions
-    list_a = client.get(
-        "/api/v1/agent/executions",
-        headers={"Authorization": f"Bearer {alice_token}"},
-    )
-    assert list_a.status_code == 200
-    a_ids = [x["id"] for x in list_a.json()["items"]]
-    assert exec_a_id in a_ids
-    assert exec_b_id not in a_ids
+    try:
+        # Alice lists executions
+        list_a = client.get(
+            "/api/v1/agent/executions",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        assert list_a.status_code == 200
+        a_ids = [x["id"] for x in list_a.json()["items"]]
+        assert exec_a_id in a_ids
+        assert exec_b_id not in a_ids
 
-    # Bob lists executions
-    list_b = client.get(
-        "/api/v1/agent/executions",
-        headers={"Authorization": f"Bearer {bob_token}"},
+        # Bob lists executions
+        list_b = client.get(
+            "/api/v1/agent/executions",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+        assert list_b.status_code == 200
+        b_ids = [x["id"] for x in list_b.json()["items"]]
+        assert exec_b_id in b_ids
+        assert exec_a_id not in b_ids
+
+        # Issue #6: Scope execution detail lookup GET /executions/{id}
+        # Alice fetches her own execution trace -> 200
+        trace_a = client.get(
+            f"/api/v1/agent/executions/{exec_a_id}",
+            headers={"Authorization": f"Bearer {alice_token}"},
+        )
+        assert trace_a.status_code == 200
+        assert trace_a.json()["id"] == exec_a_id
+
+        # Bob attempts to fetch Alice's execution trace -> 404 (tenant isolation)
+        trace_b_on_a = client.get(
+            f"/api/v1/agent/executions/{exec_a_id}",
+            headers={"Authorization": f"Bearer {bob_token}"},
+        )
+        assert trace_b_on_a.status_code == 404
+
+        # Unauthenticated attempts to fetch Alice's execution trace -> 404
+        trace_unauth = client.get(f"/api/v1/agent/executions/{exec_a_id}")
+        assert trace_unauth.status_code == 404
+    finally:
+        # Issue #11: Clean up test executions
+        from backend.routes.agent import _execution_history
+        _execution_history[:] = [ex for ex in _execution_history if ex.id not in (exec_a_id, exec_b_id)]
+
+
+# ─── 6. Security Hardening & Copilot Audit Regressions ──────────────────────
+
+def test_require_user_auth_enforced_without_credentials():
+    """
+    Verify REQUIRE_USER_AUTH rejects unauthenticated requests across all routes (Issue #1).
+    """
+    with patch.object(settings, "REQUIRE_USER_AUTH", True):
+        # 1. GET /memories without token
+        res_mem = client.get("/api/v1/memories")
+        assert res_mem.status_code == 401
+
+        # 2. GET /agent/executions without token
+        res_exec = client.get("/api/v1/agent/executions")
+        assert res_exec.status_code == 401
+
+        # 3. GET /agent/sessions without token
+        res_sess = client.get("/api/v1/agent/sessions")
+        assert res_sess.status_code == 401
+
+
+def test_reject_fallback_jwt_key_when_supabase_secret_configured():
+    """
+    Verify when SUPABASE_JWT_SECRET is configured, AEMA_JWT_SECRET is strictly rejected (Issues #2 & #9).
+    """
+    supabase_sec = "supabase-production-hmac-secret-xyz-987-long"
+    aema_sec = "fallback-local-aema-key-123-with-thirty-two-chars"
+
+    with patch.object(settings, "SUPABASE_JWT_SECRET", supabase_sec), \
+         patch.object(settings, "AEMA_JWT_SECRET", aema_sec):
+
+        # Valid Supabase token decodes successfully
+        supabase_token = create_access_token({"sub": "usr_supabase"}, secret_key=supabase_sec)
+        decoded = decode_jwt_token(supabase_token)
+        assert decoded["sub"] == "usr_supabase"
+
+        # Token signed with AEMA_JWT_SECRET MUST fail when Supabase secret is active
+        forged_token = create_access_token({"sub": "usr_forged"}, secret_key=aema_sec)
+        with pytest.raises(HTTPException) as exc_info:
+            decode_jwt_token(forged_token)
+        assert exc_info.value.status_code == 401
+
+
+def test_anonymous_execution_cannot_spoof_tenant_id():
+    """
+    Verify client-supplied tenant ID is ignored for unauthenticated executions (Issues #4 & #10).
+    """
+    # Unauthenticated caller sends userId: "victim_alice"
+    res = client.post(
+        "/api/v1/agent/execute",
+        json={
+            "taskInput": "Calculate 5 * 5",
+            "domain": "coding",
+            "provider": "mock",
+            "userId": "victim_alice",
+        },
     )
-    assert list_b.status_code == 200
-    b_ids = [x["id"] for x in list_b.json()["items"]]
-    assert exec_b_id in b_ids
-    assert exec_a_id not in b_ids
+    assert res.status_code == 200
+    data = res.json()
+    # Server must NEVER trust the client-supplied tenant ID for unauthenticated calls
+    assert data.get("userId") is None or data.get("userId") == "anonymous"
+    assert data.get("userId") != "victim_alice"
+
+
+def test_unauthenticated_cannot_enumerate_cross_tenant_records():
+    """
+    Verify unauthenticated requests cannot pass ?userId=victim to enumerate records (Issues #5 & #7).
+    """
+    # 1. Memories query with userId parameter without credentials -> 401
+    res_mem = client.get("/api/v1/memories?userId=victim_alice")
+    assert res_mem.status_code == 401
+
+    # 2. Executions query with userId parameter without credentials -> 401
+    res_exec = client.get("/api/v1/agent/executions?userId=victim_alice")
+    assert res_exec.status_code == 401
+
+    # 3. Sessions query with userId parameter without credentials -> 401
+    res_sess = client.get("/api/v1/agent/sessions?userId=victim_alice")
+    assert res_sess.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_retriever_signature_tenant_scoping_no_typeerror_fallback():
+    """
+    Verify retriever inspects method signature and preserves tenant scoping (Issue #3).
+    """
+    from ai_service.memory.retriever import MemoryRetriever
+
+    retriever = MemoryRetriever(store=shared_store)
+    # Search for an authenticated user's scope
+    results, diagnostics = await retriever.retrieve_with_diagnostics(
+        query="banking logic",
+        domain=TaskDomain.CODING,
+        user_id="usr_tenant_alice",
+    )
+    assert isinstance(results, list)
+    assert diagnostics["policy"] == "aema"

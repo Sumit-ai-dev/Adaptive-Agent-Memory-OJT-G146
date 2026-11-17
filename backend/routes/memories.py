@@ -106,8 +106,25 @@ async def list_memories(
     Enforces multi-tenant isolation: non-admin users only access their own private memories plus global baseline memories.
     """
     effective_user = user_id
-    if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
-        effective_user = auth.user_id
+    if isinstance(auth, AuthContext) and auth.is_authenticated:
+        if auth.is_admin or auth.is_machine:
+            effective_user = user_id
+        else:
+            effective_user = auth.user_id
+    else:
+        if getattr(settings, "REQUIRE_USER_AUTH", False):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required to filter memories by user ID.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        effective_user = None
 
     try:
         resolved_status: Optional[ExperienceStatus] = None
@@ -175,8 +192,15 @@ async def create_memory(
     """Manually insert an experience into the memory store."""
     try:
         # Enforce multi-tenant user attribution
-        if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
-            experience.user_id = auth.user_id
+        if isinstance(auth, AuthContext) and auth.is_authenticated:
+            if not auth.is_admin and not auth.is_machine:
+                experience.user_id = auth.user_id
+        elif getattr(settings, "REQUIRE_USER_AUTH", False):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
         # Enforce server-side lifecycle policy: manually submitted memories
         # start as CANDIDATE with capped initial trust to prevent injection
@@ -188,6 +212,8 @@ async def create_memory(
             )
         await shared_store.add_experience(experience)
         return experience.model_dump(by_alias=True)
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error creating memory: {e}", exc_info=True)
         raise HTTPException(
@@ -201,8 +227,11 @@ async def create_memory(
     response_model=Dict[str, Any],
     summary="Get Single Experience by ID",
 )
-async def get_memory(memory_id: str) -> Dict[str, Any]:
-    """Retrieves an experience record by ID."""
+async def get_memory(
+    memory_id: str,
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
+) -> Dict[str, Any]:
+    """Retrieves an experience record by ID, authorizing tenant ownership."""
     try:
         exp = await shared_store.get_experience(memory_id)
         if not exp:
@@ -210,6 +239,29 @@ async def get_memory(memory_id: str) -> Dict[str, Any]:
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Experience '{memory_id}' not found.",
             )
+
+        # Authorize tenant ownership:
+        # Private memories (user_id IS NOT NULL) are only accessible to their owner or admin/machine actors.
+        if exp.user_id:
+            if isinstance(auth, AuthContext) and auth.is_authenticated:
+                if not auth.is_admin and not auth.is_machine and auth.user_id != exp.user_id:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Experience '{memory_id}' not found.",
+                    )
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Experience '{memory_id}' not found.",
+                )
+        elif getattr(settings, "REQUIRE_USER_AUTH", False):
+            if not (isinstance(auth, AuthContext) and auth.is_authenticated):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Authentication required.",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
+
         return exp.model_dump(by_alias=True)
     except HTTPException:
         raise

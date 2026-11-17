@@ -159,6 +159,7 @@ def _load_executions_from_db(
     memory_mode: Optional[str] = None,
     session_id: Optional[str] = None,
     user_id: Optional[str] = None,
+    unauthenticated_only: bool = False,
     limit: int = 20,
     offset: int = 0,
 ) -> "tuple[int, List[TaskExecution]]":
@@ -174,6 +175,8 @@ def _load_executions_from_db(
             session_id=session_id,
             user_id=user_id,
         )
+        if unauthenticated_only:
+            filtered = [ex for ex in filtered if ex.user_id is None or ex.user_id == "anonymous"]
         return len(filtered), filtered[offset : offset + limit]
 
     try:
@@ -192,6 +195,8 @@ def _load_executions_from_db(
         if user_id:
             where_clauses.append("user_id = ?")
             params.append(user_id)
+        elif unauthenticated_only:
+            where_clauses.append("(user_id IS NULL OR user_id = 'anonymous')")
 
         # Build parameterized queries with static structure
         base_count_sql = "SELECT COUNT(*) FROM task_executions"
@@ -309,6 +314,23 @@ def verify_agent_execution_auth(
     return "authorized_client"
 
 
+def resolve_execution_tenant(
+    requested_user_id: Optional[str],
+    auth: Optional[AuthContext],
+) -> Optional[str]:
+    """
+    Derives execution tenant ID exclusively from authenticated context.
+    - Authenticated user: ALWAYS returns auth.user_id (ignoring any client-supplied user_id).
+    - Machine/Admin: may specify a target tenant via requested_user_id, or defaults to None.
+    - Anonymous/Unauthenticated: NEVER trusts client-supplied tenant ID; returns None.
+    """
+    if isinstance(auth, AuthContext) and auth.is_authenticated:
+        if auth.is_machine or auth.is_admin:
+            return requested_user_id
+        return auth.user_id
+    return None
+
+
 # ─── API Routes ───────────────────────────────────────────────────────────────
 
 @router.post(
@@ -350,17 +372,8 @@ async def run_agent_task(
         )
 
     # API Authentication verification
-    caller = verify_agent_execution_auth(
-        authorization=authorization,
-        x_api_key=x_api_key,
-        client_ip=client_ip,
-    )
-    if caller and caller.startswith("user:"):
-        request.user_id = caller[5:]
-    elif not request.user_id:
-        opt_auth = get_optional_auth_context(http_request, authorization, x_api_key)
-        if opt_auth and opt_auth.is_authenticated and not opt_auth.is_machine:
-            request.user_id = opt_auth.user_id
+    auth_ctx = get_auth_context(http_request, authorization, x_api_key)
+    request.user_id = resolve_execution_tenant(request.user_id, auth_ctx)
 
     try:
         logger.info(
@@ -400,17 +413,8 @@ async def run_agent_task_stream(
     Streams node lifecycle events (node_complete), code generation tokens, and final TaskExecution.
     """
     client_ip = http_request.client.host if (http_request and http_request.client) else "127.0.0.1"
-    caller = verify_agent_execution_auth(
-        authorization=authorization,
-        x_api_key=x_api_key,
-        client_ip=client_ip,
-    )
-    if caller and caller.startswith("user:"):
-        request.user_id = caller[5:]
-    elif not request.user_id and http_request:
-        opt_auth = get_optional_auth_context(http_request, authorization, x_api_key)
-        if opt_auth and opt_auth.is_authenticated and not opt_auth.is_machine:
-            request.user_id = opt_auth.user_id
+    auth_ctx = get_auth_context(http_request, authorization, x_api_key)
+    request.user_id = resolve_execution_tenant(request.user_id, auth_ctx)
 
     async def event_generator():
         try:
@@ -464,16 +468,36 @@ async def list_executions(
     """
     Lists historical task execution records with optional domain/memory-mode/session_id filtering
     and pagination. Reads from SQLite: persisted across server restarts.
+    Enforces strict tenant scoping.
     """
-    effective_user = user_id
-    if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
-        effective_user = auth.user_id
+    unauthenticated_only = False
+    if isinstance(auth, AuthContext) and auth.is_authenticated:
+        if auth.is_admin or auth.is_machine:
+            effective_user = user_id
+        else:
+            effective_user = auth.user_id
+    else:
+        if getattr(settings, "REQUIRE_USER_AUTH", False):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required to filter executions by user ID.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        effective_user = None
+        unauthenticated_only = True
 
     total, items = _load_executions_from_db(
         domain=domain,
         memory_mode=memory_mode,
         session_id=session_id,
         user_id=effective_user,
+        unauthenticated_only=unauthenticated_only,
         limit=limit,
         offset=offset,
     )
@@ -496,16 +520,37 @@ async def list_sessions(
     """
     Returns unique recent conversation sessions with session ID, title, turn count,
     and last activity timestamp from persisted execution history.
+    Enforces multi-tenant scoping.
     """
-    effective_user = user_id
-    if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
-        effective_user = auth.user_id
+    unauthenticated_only = False
+    if isinstance(auth, AuthContext) and auth.is_authenticated:
+        if auth.is_admin or auth.is_machine:
+            effective_user = user_id
+        else:
+            effective_user = auth.user_id
+    else:
+        if getattr(settings, "REQUIRE_USER_AUTH", False):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        if user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required to filter sessions by user ID.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        effective_user = None
+        unauthenticated_only = True
 
     db_path = _sqlite_db_path()
     if not db_path:
         seen: Dict[str, Dict[str, Any]] = {}
         for item in _execution_history:
             if effective_user and item.user_id != effective_user:
+                continue
+            if unauthenticated_only and (item.user_id is not None and item.user_id != "anonymous"):
                 continue
             sid = getattr(item, "session_id", None)
             if sid and sid not in seen:
@@ -532,6 +577,18 @@ async def list_sessions(
                 LIMIT ?
                 """,
                 (effective_user, limit),
+            ).fetchall()
+        elif unauthenticated_only:
+            rows = conn.execute(
+                """
+                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                FROM task_executions
+                WHERE session_id IS NOT NULL AND session_id != '' AND (user_id IS NULL OR user_id = 'anonymous')
+                GROUP BY session_id
+                ORDER BY last_active DESC
+                LIMIT ?
+                """,
+                (limit,),
             ).fetchall()
         else:
             rows = conn.execute(
@@ -566,26 +623,57 @@ async def list_sessions(
     response_model=TaskExecution,
     summary="Get Granular Execution Trace",
 )
-async def get_execution_trace(execution_id: str) -> TaskExecution:
+async def get_execution_trace(
+    execution_id: str,
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
+) -> TaskExecution:
     """
     Returns the full execution trace (trajectory, memory context, trust updates)
     for a specific execution ID. Checks the in-memory session cache first,
     then falls back to SQLite for executions from previous sessions.
+    Enforces tenant authorization: users can only view their own executions;
+    admins and machine services can view any execution.
     """
     # Fast path: session cache
+    found = None
     for item in _execution_history:
-        if item.id == execution_id or item.execution_id == execution_id:
-            return item
+        if item.id == execution_id or getattr(item, "execution_id", None) == execution_id:
+            found = item
+            break
 
     # Durable fallback: SQLite
-    found = _get_execution_from_db(execution_id)
-    if found:
-        return found
+    if not found:
+        found = _get_execution_from_db(execution_id)
 
-    raise HTTPException(
-        status_code=status.HTTP_404_NOT_FOUND,
-        detail=f"Execution ID '{execution_id}' not found.",
-    )
+    if not found:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Execution ID '{execution_id}' not found.",
+        )
+
+    # Authorize tenant ownership
+    exec_user = getattr(found, "user_id", None)
+    if exec_user and exec_user != "anonymous":
+        if isinstance(auth, AuthContext) and auth.is_authenticated:
+            if not auth.is_admin and not auth.is_machine and auth.user_id != exec_user:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Execution ID '{execution_id}' not found.",
+                )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Execution ID '{execution_id}' not found.",
+            )
+    elif getattr(settings, "REQUIRE_USER_AUTH", False):
+        if not (isinstance(auth, AuthContext) and auth.is_authenticated):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    return found
 
 
 @router.delete(

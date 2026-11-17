@@ -39,6 +39,13 @@ class AuthContext:
         return self.role != "anonymous"
 
 
+DEFAULT_INSECURE_SECRETS = {
+    "dev-insecure-jwt-secret-do-not-use-in-prod-12345",
+    "secret",
+    "jwt_secret",
+}
+
+
 def create_access_token(
     data: Dict[str, Any],
     expires_delta: Optional[timedelta] = None,
@@ -63,13 +70,34 @@ def create_access_token(
 def decode_jwt_token(token: str) -> Dict[str, Any]:
     """
     Decodes and validates a JWT token.
-    Supports symmetric HMAC (HS256) with SUPABASE_JWT_SECRET and AEMA_JWT_SECRET fallback.
+    Supports symmetric HMAC (HS256) with SUPABASE_JWT_SECRET.
+    Only falls back to AEMA_JWT_SECRET if SUPABASE_JWT_SECRET is unset.
+    Strictly isolates secrets: does NOT accept AEMA_JWT_SECRET alongside SUPABASE_JWT_SECRET.
+    Rejects known default insecure secret in production environments.
     """
+    import os
+    env_name = os.getenv("ENVIRONMENT", os.getenv("ENV", "development")).lower()
+    is_production = env_name in ("production", "prod")
+
     secrets_to_try: List[str] = []
     if settings.SUPABASE_JWT_SECRET:
+        # Crucial security rule: When SUPABASE_JWT_SECRET is configured,
+        # never accept or fall back to any other JWT secret.
         secrets_to_try.append(settings.SUPABASE_JWT_SECRET.strip())
-    if settings.AEMA_JWT_SECRET:
-        secrets_to_try.append(settings.AEMA_JWT_SECRET.strip())
+    elif settings.AEMA_JWT_SECRET:
+        sec = settings.AEMA_JWT_SECRET.strip()
+        if sec in DEFAULT_INSECURE_SECRETS and is_production:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Default insecure JWT secret cannot be used in production.",
+            )
+        secrets_to_try.append(sec)
+
+    if not secrets_to_try:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="JWT secret is not configured on the server.",
+        )
 
     last_error: Optional[Exception] = None
     for sec in secrets_to_try:
@@ -189,7 +217,7 @@ def get_auth_context(
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Valid Agent or Admin API Key required for execution.",
+            detail="Invalid authentication credentials.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -203,9 +231,14 @@ def get_auth_context(
             details={"endpoint": path, "reason": "missing_credentials"},
             client_ip=client_ip,
         )
+        detail_msg = (
+            "Valid Agent or Admin API Key required for execution."
+            if is_execute_endpoint
+            else "Authentication required."
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Valid Agent or Admin API Key required for execution.",
+            detail=detail_msg,
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -226,11 +259,26 @@ def get_optional_auth_context(
 ) -> Optional[AuthContext]:
     """
     Returns AuthContext if credentials are provided and valid.
-    Returns None if no credentials are provided.
+    If REQUIRE_USER_AUTH is True, strictly requires credentials and raises 401 if missing.
+    Returns None if no credentials are provided and REQUIRE_USER_AUTH is False.
     Raises 401 if invalid credentials were explicitly supplied.
     """
     bearer_token, api_key, admin_token = _extract_tokens_from_headers(authorization, x_api_key, x_admin_token)
     if not (bearer_token or api_key or admin_token):
+        if getattr(settings, "REQUIRE_USER_AUTH", False):
+            client_ip = request.client.host if (request and request.client) else "127.0.0.1"
+            path = request.url.path if request else ""
+            security_audit_logger.record_event(
+                event_type="AUTHENTICATION_FAILURE",
+                severity="HIGH",
+                details={"endpoint": path, "reason": "missing_required_user_credentials"},
+                client_ip=client_ip,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Authentication required.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
         return None
     return get_auth_context(request, authorization, x_api_key, x_admin_token)
 
