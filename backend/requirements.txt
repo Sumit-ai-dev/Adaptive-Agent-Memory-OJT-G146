@@ -4,7 +4,7 @@
 # so CI was never actually green.
 
 # --- API gateway ---
-fastapi>=0.162.5
+fastapi>=0.162.7
 uvicorn>=0.30.0
 pydantic>=2.14.3
 pydantic-settings>=2.16.3          # ai_service/config.py
