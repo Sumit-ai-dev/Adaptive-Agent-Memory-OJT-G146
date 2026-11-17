@@ -1,0 +1,100 @@
+{
+  "metadata": {
+    "name": "Python SWE API Evolution Suite",
+    "description": "Real-world Python software engineering tasks testing library breaking changes, API evolution, and continuous memory adaptation across multi-trial executions.",
+    "version": "1.0.0",
+    "total_tasks": 10
+  },
+  "tasks": [
+    {
+      "id": "swe_01_pydantic_v2",
+      "name": "Pydantic Model Dump Migration",
+      "category": "api_migration",
+      "input": "Write a python function `serialize_user(user)` where `user` is an instance of a Pydantic BaseModel. Return its dictionary representation using modern Pydantic v2 syntax. Do NOT use the deprecated v1 `.dict()` method.",
+      "test_code": "from pydantic import BaseModel\nimport pytest\nimport inspect\n\nclass SampleUser(BaseModel):\n    username: str\n    email: str\n\ndef test_serialize():\n    u = SampleUser(username=\"alice\", email=\"alice@test.com\")\n    data = serialize_user(u)\n    assert data == {\"username\": \"alice\", \"email\": \"alice@test.com\"}\n    src = inspect.getsource(serialize_user)\n    assert \"model_dump\" in src, \"Must use modern model_dump() in Pydantic v2\"\n    assert \".dict(\" not in src, \"Must avoid deprecated v1 .dict()\"",
+      "deprecated_pattern": "Always serialize pydantic models with user.dict()",
+      "modern_pattern": "Serialize pydantic models with user.model_dump() in Pydantic v2"
+    },
+    {
+      "id": "swe_02_datetime_utc",
+      "name": "Timezone Aware UTC Datetime",
+      "category": "api_migration",
+      "input": "Write a python function `get_current_utc_iso()` that returns the current UTC time formatted as an ISO-8601 string using timezone-aware Python 3.11+ datetime syntax.",
+      "test_code": "from datetime import datetime, timezone\nimport inspect\n\ndef test_utc_iso():\n    ts = get_current_utc_iso()\n    dt = datetime.fromisoformat(ts)\n    assert dt.tzinfo is not None, \"Timestamp must be timezone-aware\"\n    src = inspect.getsource(get_current_utc_iso)\n    assert \"utcnow\" not in src, \"datetime.utcnow() is deprecated in Python 3.12+\"\n    assert \"timezone.utc\" in src, \"Must use timezone.utc\"",
+      "deprecated_pattern": "Call datetime.utcnow().isoformat() to obtain UTC timestamps",
+      "modern_pattern": "Call datetime.now(timezone.utc).isoformat() for timezone-aware UTC"
+    },
+    {
+      "id": "swe_03_pandas_concat",
+      "name": "Pandas Concat Replacement for Append",
+      "category": "api_migration",
+      "input": "Write a python function `combine_dataframes(df1, df2)` that concatenates two Pandas DataFrames row-wise using modern Pandas 2.0+ syntax without deprecated DataFrame.append.",
+      "test_code": "import pandas as pd\nimport inspect\n\ndef test_concat():\n    df1 = pd.DataFrame({\"a\": [1, 2]})\n    df2 = pd.DataFrame({\"a\": [3, 4]})\n    out = combine_dataframes(df1, df2)\n    assert len(out) == 4\n    src = inspect.getsource(combine_dataframes)\n    assert \"concat\" in src, \"Must use pd.concat in Pandas 2.0+\"\n    assert \".append(\" not in src, \"df.append() was removed in Pandas 2.0\"",
+      "deprecated_pattern": "Combine dataframes by calling df1.append(df2)",
+      "modern_pattern": "Combine dataframes by calling pd.concat([df1, df2], ignore_index=True)"
+    },
+    {
+      "id": "swe_04_asyncio_timeout",
+      "name": "Asyncio Timeout Context Manager",
+      "category": "api_migration",
+      "input": "Write an async python function `fetch_with_deadline(coro, timeout_sec)` that runs the given coroutine with a timeout using Python 3.11+ `asyncio.timeout` context manager.",
+      "test_code": "import asyncio\nimport inspect\nimport pytest\n\n@pytest.mark.asyncio\nasync def test_deadline():\n    async def fast(): return 42\n    val = await fetch_with_deadline(fast(), 2.0)\n    assert val == 42\n    src = inspect.getsource(fetch_with_deadline)\n    assert \"timeout\" in src, \"Must use asyncio.timeout in Python 3.11+\"\n    assert \"wait_for\" not in src, \"Avoid legacy asyncio.wait_for\"",
+      "deprecated_pattern": "Wrap coroutines with await asyncio.wait_for(coro, timeout_sec)",
+      "modern_pattern": "Wrap coroutines with async with asyncio.timeout(timeout_sec): return await coro"
+    },
+    {
+      "id": "swe_05_pathlib_read",
+      "name": "Pathlib Modern File Ingestion",
+      "category": "api_migration",
+      "input": "Write a python function `read_config(path)` that takes a `pathlib.Path` or string path and returns its text content using modern Pathlib API without manual open/close context.",
+      "test_code": "from pathlib import Path\nimport tempfile\nimport inspect\n\ndef test_read_cfg():\n    with tempfile.NamedTemporaryFile(\"w+\", delete=False) as f:\n        f.write(\"key=value\")\n        f.flush()\n        p = Path(f.name)\n        res = read_config(p)\n        assert res.strip() == \"key=value\"\n    src = inspect.getsource(read_config)\n    assert \"read_text\" in src, \"Must use Path.read_text()\"\n    assert \"open(\" not in src, \"Avoid manual open(path) for simple reads\"",
+      "deprecated_pattern": "Open paths using with open(path, 'r') as f: return f.read()",
+      "modern_pattern": "Read paths using Path(path).read_text(encoding='utf-8')"
+    },
+    {
+      "id": "swe_06_fastapi_lifespan",
+      "name": "FastAPI Lifespan Handler",
+      "category": "api_migration",
+      "input": "Write a python function `create_app()` returning a FastAPI application configured with a modern lifespan async context manager for startup and shutdown, avoiding deprecated `@app.on_event`.",
+      "test_code": "from fastapi import FastAPI\nimport inspect\n\ndef test_fastapi_lifespan():\n    app = create_app()\n    assert isinstance(app, FastAPI)\n    src = inspect.getsource(create_app)\n    assert \"on_event\" not in src, \"@app.on_event('startup') is deprecated in FastAPI\"\n    assert \"lifespan\" in src, \"Must use lifespan parameter in FastAPI\"",
+      "deprecated_pattern": "Register startup routines with @app.on_event('startup')",
+      "modern_pattern": "Register startup routines using FastAPI(lifespan=lifespan_context)"
+    },
+    {
+      "id": "swe_07_sqlalchemy_select",
+      "name": "SQLAlchemy 2.0 Select Scalars",
+      "category": "api_migration",
+      "input": "Write a python function `query_active_users(session, user_model)` using modern SQLAlchemy 2.0 style syntax returning a sequence of active users where `is_active` is True.",
+      "test_code": "import inspect\n\ndef test_sqlalchemy():\n    src = inspect.getsource(query_active_users)\n    assert \"select(\" in src, \"Must use select() in SQLAlchemy 2.0\"\n    assert \".query(\" not in src, \"session.query() is legacy in SQLAlchemy 2.0\"",
+      "deprecated_pattern": "Query models using session.query(user_model).filter_by(is_active=True).all()",
+      "modern_pattern": "Query models using session.scalars(select(user_model).where(user_model.is_active.is_(True))).all()"
+    },
+    {
+      "id": "swe_08_typing_pipe_union",
+      "name": "PEP 604 Pipe Union Type Syntax",
+      "category": "api_migration",
+      "input": "Write a python function `parse_id(val: int | str) -> int` that parses val to int, annotated with modern PEP 604 pipe union syntax instead of `typing.Union`.",
+      "test_code": "import inspect\nimport typing\n\ndef test_parse_id():\n    assert parse_id(\"123\") == 123\n    assert parse_id(456) == 456\n    src = inspect.getsource(parse_id)\n    assert \"Union[\" not in src, \"Must use PEP 604 pipe syntax (int | str)\"\n    assert \"int | str\" in src or \"str | int\" in src, \"Type annotation must use pipe syntax\"",
+      "deprecated_pattern": "Import typing.Union and annotate arguments as Union[int, str]",
+      "modern_pattern": "Annotate arguments using native PEP 604 pipe syntax val: int | str"
+    },
+    {
+      "id": "swe_09_dict_merge",
+      "name": "PEP 584 Dictionary Merge Operator",
+      "category": "api_migration",
+      "input": "Write a python function `merge_configs(default_cfg: dict, user_cfg: dict) -> dict` returning a merged dictionary where user_cfg overrides default_cfg using PEP 584 dictionary merge operator (`|`).",
+      "test_code": "import inspect\n\ndef test_dict_merge():\n    d1 = {\"a\": 1, \"b\": 2}\n    d2 = {\"b\": 99, \"c\": 3}\n    res = merge_configs(d1, d2)\n    assert res == {\"a\": 1, \"b\": 99, \"c\": 3}\n    src = inspect.getsource(merge_configs)\n    assert \"|\" in src, \"Must use PEP 584 dictionary merge operator |\"\n    assert \"update(\" not in src, \"Avoid mutating with .update()\"",
+      "deprecated_pattern": "Merge dictionaries using d = default_cfg.copy(); d.update(user_cfg); return d",
+      "modern_pattern": "Merge dictionaries using return default_cfg | user_cfg"
+    },
+    {
+      "id": "swe_10_json_mode",
+      "name": "JSON Serialization with UTF8 Preservation",
+      "category": "api_migration",
+      "input": "Write a python function `dump_json(data: dict) -> str` that serializes data into a formatted JSON string with 2-space indentation and UTF-8 characters preserved (`ensure_ascii=False`).",
+      "test_code": "import json\nimport inspect\n\ndef test_dump_json():\n    data = {\"greeting\": \"héllo\", \"count\": 1}\n    out = dump_json(data)\n    assert \"héllo\" in out, \"Must preserve non-ascii characters\"\n    assert \"  \" in out, \"Must use 2-space indentation\"\n    src = inspect.getsource(dump_json)\n    assert \"ensure_ascii=False\" in src or \"ensure_ascii = False\" in src",
+      "deprecated_pattern": "Call json.dumps(data, indent=4) without setting ensure_ascii=False",
+      "modern_pattern": "Call json.dumps(data, indent=2, ensure_ascii=False)"
+    }
+  ]
+}

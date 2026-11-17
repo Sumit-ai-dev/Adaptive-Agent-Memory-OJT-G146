@@ -67,7 +67,9 @@ manifests/
 benchmarks/results/
 
 # Large downloaded benchmark corpora (ALFWorld / HotpotQA / ToolBench, ~2.2 GB)
-benchmarks/data/
+benchmarks/data/*
+!benchmarks/data/swe/
+!benchmarks/data/toolbench/toolbench_adversarial_30.json
 
 # Harvested literature PDFs and derived artifacts
 research_papers/
