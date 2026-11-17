@@ -17,7 +17,7 @@
 
 
 **GenAI OJT Capstone Project: Group G146**  
-**Authors:** Kasat Sakshi Dattaprasad & Sumit Das  
+**Authors:** Sakshi Kasat & Sumit Das  
 
 ---
 
@@ -346,7 +346,7 @@ Complete production-grade architectural and engineering documentation is maintai
 | [15-deployment.md](docs/15-deployment.md) | Deployment Architecture | Multi-environment topology, runner script, and zero-GPU strategy. |
 | [16-cost-analysis.md](docs/16-cost-analysis.md) | Cost Analysis | Node token consumption, economic ROI (61.4% savings), and storage. |
 | [17-roadmap.md](docs/17-roadmap.md) | 12-Week Roadmap | Milestone delivery logs, Definition of Done, and risk mitigations. |
-| [18-team-responsibilities.md](docs/18-team-responsibilities.md) | Team Responsibilities | Engineering division between Kasat Sakshi Dattaprasad and Sumit Das. |
+| [18-team-responsibilities.md](docs/18-team-responsibilities.md) | Team Responsibilities | Engineering division between Sakshi Kasat and Sumit Das. |
 | [19-readme.md](docs/19-readme.md) | Documentation Guide | Master catalog and codebase structural roadmap. |
 | [20-adrs.md](docs/20-adrs.md) | Architecture Decision Records | Formal ADRs detailing choices, alternatives, and trade-offs. |
 | [21-traceability.md](docs/21-traceability.md) | Traceability Matrix | End-to-end mapping from business requirements to test cases. |
@@ -357,7 +357,7 @@ Complete production-grade architectural and engineering documentation is maintai
 
 **GenAI / Agentic AI OJT Capstone: Group G146**
 
-- **Kasat Sakshi Dattaprasad** ([@SakshiKasat18](https://github.com/SakshiKasat18)): Memory Intelligence, Asymmetric EMA Trust Engine, Vector Persistence Layer, Full-Stack Gateway Integration, System Governance & Documentation.
+- **Sakshi Kasat** ([@SakshiKasat18](https://github.com/SakshiKasat18)): Memory Intelligence, Asymmetric EMA Trust Engine, Vector Persistence Layer, Full-Stack Gateway Integration, System Governance & Documentation.
 - **Sumit Das** ([@Sumit-ai-dev](https://github.com/Sumit-ai-dev)): Agent Orchestration, Cognitive Loop Execution, Universal BYOK Model Gateway, Deterministic Outcome Evaluator, Benchmark Suite.
 
 ---

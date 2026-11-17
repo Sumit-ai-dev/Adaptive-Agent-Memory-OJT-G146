@@ -39,7 +39,7 @@ export default function Footer() {
                 rel="noopener noreferrer"
                 className="font-medium text-indigo-600 dark:text-indigo-400 hover:underline"
               >
-                Kasat Sakshi Dattaprasad (@SakshiKasat18)
+                Sakshi Kasat (@SakshiKasat18)
               </a>.
             </div>
           </div>

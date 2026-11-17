@@ -7,7 +7,7 @@ requires-python = ">=3.9"
 license = "MIT"
 authors = [
     {name = "Sumit Das", email = "sumitds2005@gmail.com"},
-    {name = "Kasat Sakshi Dattaprasad", email = "sakshisamu1809@gmail.com"},
+    {name = "Sakshi Kasat", email = "sakshisamu1809@gmail.com"},
 ]
 keywords = ["ai", "memory", "agent", "trust", "langgraph", "pgvector", "negative-transfer", "rag"]
 classifiers = [

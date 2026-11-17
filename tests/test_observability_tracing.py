@@ -1,6 +1,6 @@
 """
 Unit and Integration Tests for Distributed Tracing & Token Cost Tracking (Issue #36).
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 """
 
 from unittest.mock import MagicMock, patch

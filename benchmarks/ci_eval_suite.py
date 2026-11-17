@@ -1,6 +1,6 @@
 """
 Automated LLM Regression Benchmarking Suite for CI/CD Pipelines (Issue #37).
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 
 Executes 10 representative frozen tasks across Coding, Reasoning, and Tool Execution
 to detect prompt drift, regression anomalies, and Pass@1 degradation before PR merges.

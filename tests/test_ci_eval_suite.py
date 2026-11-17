@@ -1,6 +1,6 @@
 """
 Unit and Integration Tests for Automated LLM Regression Benchmarking Suite (Issue #37).
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 """
 
 import pytest

@@ -1,6 +1,6 @@
 """
 Unit tests for Memory Intelligence Models and LangGraph Nodes.
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 Verifies:
 1. Pydantic v2 data models and serialization.
 2. Composite retrieval scoring (0.70 Sim + 0.30 Trust) and cutoff invariants.

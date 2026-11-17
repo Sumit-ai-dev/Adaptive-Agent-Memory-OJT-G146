@@ -154,7 +154,7 @@ safe_memories = mem.recall("Fix SQLite locked error")`
                   rel="noopener noreferrer"
                   className="text-[#1A1A1A] dark:text-zinc-200 font-medium hover:underline"
                 >
-                  Kasat Sakshi Dattaprasad (@SakshiKasat18)
+                  Sakshi Kasat (@SakshiKasat18)
                 </a>.
               </div>
 

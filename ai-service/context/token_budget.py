@@ -1,6 +1,6 @@
 """
 Token Budgeting, Counting, and Cost Estimation Engine.
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 
 Provides:
 - Deterministic token counting matching BPE tokenization (tiktoken with robust fallback)

@@ -1,6 +1,6 @@
 """
 Observability, distributed tracing, and token cost telemetry module.
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 """
 
 from ai_service.observability.tracer import (

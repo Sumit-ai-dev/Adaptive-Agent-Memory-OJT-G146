@@ -1,6 +1,6 @@
 """
 Dynamic Context Compaction for Experiential Memories.
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 
 Implements deterministic rank-then-cut context compaction for experiential memories
 under strict token budgets (Theorem 1 / Issue #38):

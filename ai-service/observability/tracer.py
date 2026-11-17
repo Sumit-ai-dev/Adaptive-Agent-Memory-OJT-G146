@@ -1,6 +1,6 @@
 """
 Distributed Tracing, Observability & Token Cost Tracking Engine.
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 
 Provides production-grade OpenTelemetry and Langfuse distributed tracing integration
 for the 5-node cyclical LangGraph cognitive workflow:

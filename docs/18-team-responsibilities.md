@@ -6,7 +6,7 @@
 
 ---
 
-## Student 1: Kasat Sakshi Dattaprasad (Memory Intelligence + Trust Engine + Full-Stack Gateway)
+## Student 1: Sakshi Kasat (Memory Intelligence + Trust Engine + Full-Stack Gateway)
 
 - **Requirements & System Governance:**
   - Lead author of BRD, PRD, TRD, API Specification, and Database Design specifications.

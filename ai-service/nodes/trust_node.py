@@ -1,6 +1,6 @@
 """
 LangGraph Node 5: Trust Lifecycle Engine (trust_node.py)
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 
 Implements Asymmetric Exponential Moving Average (A-EMA):
     - Success (R >= 0.80): S_{t+1} = 0.85 * S_t + 0.15 * 1.0 (Steady climb)

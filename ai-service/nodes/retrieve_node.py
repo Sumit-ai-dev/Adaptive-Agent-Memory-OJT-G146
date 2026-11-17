@@ -1,6 +1,6 @@
 """
 LangGraph Node 1: Memory Retrieval Engine (retrieve_node.py)
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 
 Implements composite memory ranking:
     CompositeScore = 0.70 * Similarity + 0.30 * TrustScore

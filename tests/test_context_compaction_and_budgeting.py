@@ -1,6 +1,6 @@
 """
 Unit and Integration Tests for Dynamic Context Compaction & Runtime Token/Cost Budgeting (Issue #38).
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 """
 
 import pytest
