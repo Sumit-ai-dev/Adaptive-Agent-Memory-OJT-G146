@@ -13,7 +13,7 @@ python-dotenv>=1.2.4
 PyJWT[crypto]>=2.8.0              # backend/security/auth.py (JWT decoding and verification)
 
 # --- Agent orchestration ---
-langgraph>=1.2.21                 # ai_service/graph.py
+langgraph>=1.2.22                 # ai_service/graph.py
 typing-extensions>=4.16.0         # models/state.py
 
 # --- Numerics / trust mathematics ---
