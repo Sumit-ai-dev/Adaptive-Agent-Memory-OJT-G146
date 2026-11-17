@@ -7,7 +7,7 @@
 fastapi>=0.162.5
 uvicorn>=0.30.0
 pydantic>=2.14.3
-pydantic-settings>=2.5.0          # ai_service/config.py
+pydantic-settings>=2.16.3          # ai_service/config.py
 httpx>=0.28.1
 python-dotenv>=1.2.4
 PyJWT[crypto]>=2.8.0              # backend/security/auth.py (JWT decoding and verification)
