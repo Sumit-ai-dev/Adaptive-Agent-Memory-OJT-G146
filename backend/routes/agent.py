@@ -7,11 +7,13 @@ Executions are persisted to SQLite (task_executions table) so history survives
 server restarts.
 """
 
+from datetime import datetime, timezone
 import json
 import logging
 import secrets
 import sqlite3
 from typing import Any, Dict, List, Optional
+import uuid
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
@@ -161,6 +163,55 @@ async def _save_execution_to_store(execution: TaskExecution) -> None:
     except Exception as exc:
         logger.warning(f"Could not persist execution {execution.id} to shared_store: {exc}")
         _save_execution_to_db(execution)
+
+    # Synchronize conversation thread and message turns if session_id is provided
+    sid = getattr(execution, "session_id", None)
+    if sid:
+        try:
+            from models.conversation import Conversation, ConversationMessage
+
+            existing_conv = await shared_store.get_conversation(sid)
+            task_prompt = (getattr(execution, "task_input", "") or "New Conversation")[:60]
+            if not existing_conv:
+                conv = Conversation(
+                    id=sid,
+                    user_id=getattr(execution, "user_id", None),
+                    title=task_prompt,
+                    is_pinned=False,
+                    created_at=getattr(execution, "created_at", datetime.now(timezone.utc)),
+                    updated_at=getattr(execution, "created_at", datetime.now(timezone.utc)),
+                )
+                await shared_store.create_conversation(conv)
+            else:
+                await shared_store.update_conversation(
+                    conv_id=sid,
+                    user_id=getattr(execution, "user_id", None),
+                )
+
+            if execution.task_input:
+                user_msg = ConversationMessage(
+                    id=str(uuid.uuid4()),
+                    conversation_id=sid,
+                    user_id=getattr(execution, "user_id", None),
+                    role="user",
+                    content=execution.task_input,
+                    created_at=getattr(execution, "created_at", datetime.now(timezone.utc)),
+                )
+                await shared_store.add_conversation_message(user_msg)
+
+            output_text = getattr(execution, "output", "") or getattr(execution, "result", "")
+            if output_text:
+                asst_msg = ConversationMessage(
+                    id=str(uuid.uuid4()),
+                    conversation_id=sid,
+                    user_id=getattr(execution, "user_id", None),
+                    role="assistant",
+                    content=str(output_text),
+                    created_at=datetime.now(timezone.utc),
+                )
+                await shared_store.add_conversation_message(asst_msg)
+        except Exception as conv_exc:
+            logger.warning(f"Could not sync execution {execution.id} to conversation {sid}: {conv_exc}")
 
 
 def _load_executions_from_db(
