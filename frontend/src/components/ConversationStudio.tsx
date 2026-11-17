@@ -1,28 +1,17 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  MessageSquare,
-  Plus,
-  Send,
-  Shield,
-  Sparkles,
   ChevronDown,
-  Cpu,
   KeyRound,
-  PanelLeftClose,
-  PanelLeftOpen,
   PanelRightClose,
   RefreshCw,
-  ChevronRight,
-  Database,
-  Terminal,
   Activity,
   Check,
   X,
-  User,
-  Clock,
+  Pencil,
+  Trash2,
 } from 'lucide-react'
 import type { TaskDomain, TaskExecution, ChatMessage, SessionSummary } from '../types'
-import { executeAgentTask, fetchSessions, fetchExecutions } from '../services/api'
+import { executeAgentTask, fetchSessions, fetchExecutions, deleteSession, renameSession } from '../services/api'
 import MarkdownRenderer from './MarkdownRenderer'
 import ExecutionStepper from './ExecutionStepper'
 import ContextInspector from './ContextInspector'
@@ -34,15 +23,14 @@ interface ModelOption {
   name: string
   subname: string
   logo?: string
-  isIcon?: boolean
 }
 
 const MODEL_OPTIONS: ModelOption[] = [
-  { id: 'groq', name: 'Groq Cloud', subname: 'Fast (Default)', logo: '/images/models/groq.webp' },
-  { id: 'gemini', name: 'Google Gemini Flash', subname: 'Hosted', logo: '/images/models/gemini.webp' },
+  { id: 'groq', name: 'Llama-3.3-70B', subname: 'Groq Cloud (Fast)', logo: '/images/models/groq.webp' },
+  { id: 'gemini', name: 'Gemini 1.5 Flash', subname: 'Google Cloud', logo: '/images/models/gemini.webp' },
   { id: 'openai', name: 'GPT-4o Mini', subname: 'OpenAI', logo: '/images/models/openai.webp' },
-  { id: 'ollama', name: 'Ollama Local', subname: 'llama3.2', logo: '/images/models/ollama.webp' },
-  { id: 'mock', name: 'Deterministic Mock', subname: 'Offline / Test', isIcon: true },
+  { id: 'ollama', name: 'Llama-3.2', subname: 'Ollama Local', logo: '/images/models/ollama.webp' },
+  { id: 'mock', name: 'Mock Engine', subname: 'Offline Test' },
 ]
 
 const DOMAIN_OPTIONS: { id: TaskDomain; label: string }[] = [
@@ -65,7 +53,7 @@ const STARTER_PROMPTS = [
     domain: 'research' as TaskDomain,
   },
   {
-    title: 'Negative Transfer Trap Test',
+    title: 'API Deprecation Trap Test',
     prompt: 'Execute a coding task that intentionally tests handling of deprecated API parameters and trap isolation.',
     domain: 'coding' as TaskDomain,
   },
@@ -88,8 +76,115 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string>(() => `sess_${Date.now()}`)
   const [sessionTitle, setSessionTitle] = useState<string>('New Conversation')
-  const [isSidebarOpen, setIsSidebarOpen] = useState<boolean>(true)
-  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(false)
+  const [isInspectorOpen, setIsInspectorOpen] = useState<boolean>(true)
+
+  // Thread Rename and Delete States
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null)
+  const [editTitleValue, setEditTitleValue] = useState<string>('')
+
+  const handleStartRename = (s: SessionSummary, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setEditingSessionId(s.sessionId)
+    setEditTitleValue(s.title)
+  }
+
+  const handleSaveRename = async (sessionId: string) => {
+    const trimmed = editTitleValue.trim()
+    if (!trimmed) {
+      setEditingSessionId(null)
+      return
+    }
+
+    setSessions((prev) =>
+      prev.map((s) => (s.sessionId === sessionId ? { ...s, title: trimmed } : s))
+    )
+    if (sessionId === currentSessionId) {
+      setSessionTitle(trimmed)
+    }
+    setEditingSessionId(null)
+
+    await renameSession(sessionId, trimmed)
+  }
+
+  const handleDeleteThread = async (sessionId: string, e: React.MouseEvent) => {
+    e.stopPropagation()
+    setSessions((prev) => prev.filter((s) => s.sessionId !== sessionId))
+
+    if (sessionId === currentSessionId) {
+      startNewSession()
+    }
+
+    await deleteSession(sessionId)
+  }
+
+  // Resizable Panel States (with min/max bounds and localStorage persistence)
+  const [threadsWidth, setThreadsWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('aema_studio_threads_width')
+      return saved ? Math.min(380, Math.max(180, Number(saved))) : 240
+    } catch {
+      return 240
+    }
+  })
+  const [inspectorWidth, setInspectorWidth] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('aema_studio_inspector_width')
+      return saved ? Math.min(520, Math.max(280, Number(saved))) : 340
+    } catch {
+      return 340
+    }
+  })
+  const [isResizing, setIsResizing] = useState<'threads' | 'inspector' | null>(null)
+
+  const handleStartResizeThreads = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing('threads')
+    const startX = e.clientX
+    const startW = threadsWidth
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = moveEvent.clientX - startX
+      const nextW = Math.min(380, Math.max(180, startW + delta))
+      setThreadsWidth(nextW)
+      try {
+        localStorage.setItem('aema_studio_threads_width', String(nextW))
+      } catch {}
+    }
+
+    const onMouseUp = () => {
+      setIsResizing(null)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
+
+  const handleStartResizeInspector = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing('inspector')
+    const startX = e.clientX
+    const startW = inspectorWidth
+
+    const onMouseMove = (moveEvent: MouseEvent) => {
+      const delta = startX - moveEvent.clientX
+      const nextW = Math.min(520, Math.max(280, startW + delta))
+      setInspectorWidth(nextW)
+      try {
+        localStorage.setItem('aema_studio_inspector_width', String(nextW))
+      } catch {}
+    }
+
+    const onMouseUp = () => {
+      setIsResizing(null)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('mouseup', onMouseUp)
+    }
+
+    window.addEventListener('mousemove', onMouseMove)
+    window.addEventListener('mouseup', onMouseUp)
+  }
 
   // Message & Stream States
   const [messages, setMessages] = useState<ConversationMessage[]>([])
@@ -97,7 +192,6 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
   const [isExecuting, setIsExecuting] = useState(false)
   const [currentStage, setCurrentStage] = useState<'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'idle' | 'complete'>('idle')
   const [selectedExecution, setSelectedExecution] = useState<TaskExecution | null>(null)
-  const [expandedTraceMsgId, setExpandedTraceMsgId] = useState<string | null>(null)
 
   // Configuration States
   const [domain, setDomain] = useState<TaskDomain>('coding')
@@ -119,12 +213,10 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const modelDropdownRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll on message changes
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, isExecuting])
 
-  // Click outside to close dropdowns
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
@@ -135,7 +227,6 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Load existing sessions on mount
   useEffect(() => {
     loadSessions()
   }, [])
@@ -145,28 +236,23 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
     setSessions(list)
   }
 
-  // Restore session executions when currentSessionId changes
   const switchSession = async (sessionId: string) => {
     if (sessionId === currentSessionId && messages.length > 0) return
     setCurrentSessionId(sessionId)
     const matchingSession = sessions.find((s) => s.sessionId === sessionId)
     setSessionTitle(matchingSession?.title || 'Conversation')
 
-    // Fetch executions for this session from SQLite
     const runs = await fetchExecutions(50, sessionId)
     if (runs && runs.length > 0) {
-      // Sort chronologically (oldest to newest)
       const sorted = [...runs].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
       const reconstructed: ConversationMessage[] = []
       sorted.forEach((run, idx) => {
-        // User turn
         reconstructed.push({
           id: `msg_u_${run.id}_${idx}`,
           role: 'user',
           content: run.taskInput,
           timestamp: run.createdAt,
         })
-        // Assistant turn
         reconstructed.push({
           id: `msg_a_${run.id}_${idx}`,
           role: 'assistant',
@@ -206,13 +292,11 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
     setIsExecuting(true)
     setCurrentStage('retrieval')
 
-    // If first message in this session, update session title
     if (messages.length === 0) {
       const shortTitle = promptToSend.slice(0, 42) + (promptToSend.length > 42 ? '...' : '')
       setSessionTitle(shortTitle)
     }
 
-    // Add user message to UI stream immediately
     const userMsgId = `user_${Date.now()}`
     const userMsg: ConversationMessage = {
       id: userMsgId,
@@ -223,7 +307,6 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
     const updatedMessages = [...messages, userMsg]
     setMessages(updatedMessages)
 
-    // Build chat history payload for backend (role, content)
     const historyPayload: ChatMessage[] = updatedMessages.map((m) => ({
       role: m.role,
       content: m.content,
@@ -243,7 +326,6 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
         onStageChange: (stage) => setCurrentStage(stage),
       })
 
-      // Add assistant response to UI stream
       const asstMsg: ConversationMessage = {
         id: `asst_${Date.now()}`,
         role: 'assistant',
@@ -254,14 +336,12 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
       setMessages((prev) => [...prev, asstMsg])
       setSelectedExecution(exec)
       onExecutionComplete?.(exec)
-
-      // Refresh recent sessions list
       loadSessions()
     } catch (err) {
       const errorMsg: ConversationMessage = {
         id: `asst_err_${Date.now()}`,
         role: 'assistant',
-        content: `Error executing task turn: ${err instanceof Error ? err.message : String(err)}`,
+        content: `Error executing task: ${err instanceof Error ? err.message : String(err)}`,
         timestamp: new Date().toISOString(),
       }
       setMessages((prev) => [...prev, errorMsg])
@@ -292,77 +372,124 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
   const currentModel = MODEL_OPTIONS.find((m) => m.id === provider) || MODEL_OPTIONS[0]
 
   return (
-    <div className="flex h-[calc(100vh-140px)] min-h-[640px] rounded-2xl border border-[#E6E6E1] dark:border-[#252B3B] bg-[#FAFAFA] dark:bg-[#0D1017] overflow-hidden shadow-sm">
-      {/* ─── 1. SESSIONS SIDEBAR (COLLAPSIBLE) ─────────────────────────────── */}
+    <div
+      className={`flex flex-1 h-full w-full bg-[#141412] text-[#EDECE8] overflow-hidden ${
+        isResizing ? 'select-none cursor-col-resize' : ''
+      }`}
+    >
+      {/* ─── 1. THREADS SIDEBAR (QUIET obsidian with draggable width) ────────── */}
       <div
-        className={`${
-          isSidebarOpen ? 'w-64' : 'w-0'
-        } shrink-0 transition-all duration-300 ease-in-out border-r border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#131722] flex flex-col overflow-hidden`}
+        className="shrink-0 bg-[#161614] flex flex-col overflow-hidden"
+        style={{ width: `${threadsWidth}px` }}
       >
-        <div className="p-3 border-b border-[#E6E6E1] dark:border-[#252B3B] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MessageSquare size={16} className="text-indigo-600 dark:text-indigo-400" />
-            <span className="text-xs font-semibold tracking-wide text-zinc-900 dark:text-zinc-100">
-              Conversations
-            </span>
-          </div>
-          <button
-            onClick={() => setIsSidebarOpen(false)}
-            className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-            title="Collapse sidebar"
-          >
-            <PanelLeftClose size={15} />
-          </button>
+        {/* Header (No duplicate collapse icon) */}
+        <div className="p-3 border-b border-[#242422] flex items-center justify-between">
+          <span className="font-mono text-[11px] uppercase tracking-wider text-[#7E7D77]">
+            Threads
+          </span>
+          <span className="font-mono text-[10px] text-[#5A5955]">
+            {sessions.length} recorded
+          </span>
         </div>
 
-        {/* New Chat Button */}
-        <div className="p-3">
+        {/* New Thread Action */}
+        <div className="p-2.5 border-b border-[#242422]">
           <button
             onClick={startNewSession}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm transition-all cursor-pointer"
+            className="w-full py-1.5 px-2.5 rounded border border-[#2E2E2A] bg-[#1E1E1B] hover:bg-[#252522] text-[#EDECE8] font-medium text-xs text-left flex items-center justify-between transition-colors cursor-pointer"
           >
-            <Plus size={15} />
-            <span>New Chat</span>
+            <span>+ New Thread</span>
+            <span className="font-mono text-[10px] text-[#7E7D77]">&crarr;</span>
           </button>
         </div>
 
-        {/* Session List */}
-        <div className="flex-1 overflow-y-auto px-2 py-1 space-y-1">
+        {/* Thread List */}
+        <div className="flex-1 overflow-y-auto p-2 space-y-0.5">
           {sessions.length === 0 && messages.length === 0 ? (
-            <div className="p-4 text-center text-xs text-zinc-400 font-mono">
-              No recent sessions.
+            <div className="p-4 text-center text-[11px] text-[#7E7D77] font-mono">
+              No previous threads.
             </div>
           ) : (
             sessions.map((s) => {
               const isActive = s.sessionId === currentSessionId
+              const isEditing = editingSessionId === s.sessionId
+
               return (
                 <div
                   key={s.sessionId}
-                  onClick={() => switchSession(s.sessionId)}
-                  className={`group flex flex-col p-2.5 rounded-xl cursor-pointer text-left transition-all ${
+                  onClick={() => {
+                    if (!isEditing) switchSession(s.sessionId)
+                  }}
+                  className={`group relative px-2.5 py-2 rounded text-xs transition-colors cursor-pointer ${
                     isActive
-                      ? 'bg-indigo-50/70 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800/60 shadow-xs'
-                      : 'hover:bg-zinc-100/70 dark:hover:bg-[#1A1F2C] border border-transparent'
+                      ? 'bg-[#22221E] text-white font-medium border border-[#2E2E2A]'
+                      : 'text-[#9E9D96] hover:text-[#EDECE8] hover:bg-[#1E1E1B]'
                   }`}
                 >
-                  <div className="flex items-center justify-between gap-1">
-                    <span
-                      className={`text-xs font-medium truncate ${
-                        isActive
-                          ? 'text-indigo-700 dark:text-indigo-300 font-semibold'
-                          : 'text-zinc-700 dark:text-zinc-300'
-                      }`}
-                    >
-                      {s.title}
-                    </span>
-                    <span className="shrink-0 text-[10px] font-mono px-1.5 py-0.5 rounded-full bg-zinc-100 dark:bg-zinc-800 text-zinc-500">
-                      {s.turnCount}
-                    </span>
-                  </div>
-                  <span className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1">
-                    <Clock size={10} />
-                    {new Date(s.lastActive).toLocaleDateString([], { month: 'short', day: 'numeric' })}
-                  </span>
+                  {isEditing ? (
+                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="text"
+                        value={editTitleValue}
+                        onChange={(e) => setEditTitleValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveRename(s.sessionId)
+                          if (e.key === 'Escape') setEditingSessionId(null)
+                        }}
+                        autoFocus
+                        className="flex-1 min-w-0 bg-[#141412] border border-[#3E3E38] rounded px-1.5 py-0.5 text-xs text-white focus:outline-none focus:border-[#4EAA79]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSaveRename(s.sessionId)}
+                        className="text-[#4EAA79] hover:text-white p-0.5 rounded cursor-pointer"
+                        title="Save rename"
+                      >
+                        <Check size={12} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingSessionId(null)}
+                        className="text-[#7E7D77] hover:text-white p-0.5 rounded cursor-pointer"
+                        title="Cancel"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-center justify-between gap-1">
+                        <div className="truncate font-medium text-[11px] flex-1">
+                          {s.title}
+                        </div>
+
+                        {/* ChatGPT-style Hover Actions: Rename and Delete */}
+                        <div className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button
+                            type="button"
+                            onClick={(e) => handleStartRename(s, e)}
+                            className="p-1 rounded text-[#7E7D77] hover:text-white hover:bg-[#282824] transition-colors cursor-pointer"
+                            title="Rename thread"
+                          >
+                            <Pencil size={11} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteThread(s.sessionId, e)}
+                            className="p-1 rounded text-[#7E7D77] hover:text-[#D9534F] hover:bg-[#2E1E1E] transition-colors cursor-pointer"
+                            title="Delete thread"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between text-[10px] text-[#7E7D77] font-mono mt-0.5">
+                        <span>{s.turnCount} {s.turnCount === 1 ? 'turn' : 'turns'}</span>
+                        <span>{new Date(s.lastActive).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               )
             })
@@ -370,148 +497,178 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
         </div>
       </div>
 
-      {/* ─── 2. MAIN CONVERSATION STREAM AREA ─────────────────────────────── */}
-      <div className="flex-1 flex flex-col min-w-0 bg-transparent relative">
-        {/* Top Control Bar */}
-        <div className="px-4 py-2.5 border-b border-[#E6E6E1] dark:border-[#252B3B] bg-white/80 dark:bg-[#131722]/80 backdrop-blur-md flex flex-wrap items-center justify-between gap-2 z-10">
-          <div className="flex items-center gap-2 min-w-0">
-            {!isSidebarOpen && (
-              <button
-                onClick={() => setIsSidebarOpen(true)}
-                className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-                title="Open sessions sidebar"
-              >
-                <PanelLeftOpen size={16} />
-              </button>
-            )}
-            <div className="flex items-center gap-1.5 truncate">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-              <span className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 truncate">
+      {/* Resizable Divider Handle: Threads */}
+      <div
+        onMouseDown={handleStartResizeThreads}
+        className="w-1.5 shrink-0 bg-[#242422] hover:bg-[#4EAA79]/80 active:bg-[#4EAA79] cursor-col-resize transition-colors relative z-20 select-none group flex items-center justify-center"
+        title="Drag to resize Threads panel"
+      >
+        <div className="w-0.5 h-6 rounded-full bg-[#3E3E38] group-hover:bg-[#4EAA79] transition-colors" />
+      </div>
+
+      {/* ─── 2. MAIN CONVERSATIONAL WORKSPACE ─────────────────────────────── */}
+      <div className="flex-1 flex flex-col min-w-0 bg-[#141412] relative overflow-hidden">
+        {/* Top Control Bar (Clean Two-Tier Structure: Session Status + Dedicated Tooling Strip) */}
+        <div className="border-b border-[#242422] bg-[#161614] shrink-0">
+          {/* Tier 1: Session Identity & Inspector Toggle */}
+          <div className="h-11 px-4 flex items-center justify-between border-b border-[#20201D] gap-3">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <span className={`w-2 h-2 rounded-full shrink-0 ${isExecuting ? 'bg-[#E67E22] animate-pulse' : 'bg-[#4EAA79]'}`} />
+              <span className="text-xs font-semibold text-[#EDECE8] truncate max-w-md">
                 {sessionTitle}
               </span>
+              <span className="text-[10px] font-mono text-[#7E7D77] shrink-0 px-1.5 py-0.5 rounded bg-[#1A1A17] border border-[#242422]">
+                {messages.length} {messages.length === 1 ? 'msg' : 'msgs'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => setIsInspectorOpen(!isInspectorOpen)}
+                className={`flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono rounded border transition-colors cursor-pointer ${
+                  isInspectorOpen
+                    ? 'border-[#3E3E38] bg-[#22221E] text-white font-medium'
+                    : 'border-[#2E2E2A] bg-[#181816] text-[#7E7D77] hover:text-[#EDECE8]'
+                }`}
+                title="Toggle Cognitive Inspector"
+              >
+                <Activity size={12} className={isInspectorOpen ? 'text-[#4EAA79]' : ''} />
+                <span>Cognitive Trace</span>
+              </button>
             </div>
           </div>
 
-          {/* Model, Domain, BYOK Controls */}
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Domain Dropdown */}
-            <select
-              value={domain}
-              onChange={(e) => setDomain(e.target.value as TaskDomain)}
-              className="px-2.5 py-1 text-xs font-medium rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#181D29] text-zinc-700 dark:text-zinc-300 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-            >
-              {DOMAIN_OPTIONS.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.label}
-                </option>
-              ))}
-            </select>
+          {/* Tier 2: Clean Engine Selection & Guardrail Toggles */}
+          <div className="h-10 px-4 flex items-center justify-between text-xs font-mono bg-[#141412] gap-3 overflow-x-auto">
+            {/* Left: Engine & Domain Configuration */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Model Selector with Logo */}
+              <div className="relative" ref={modelDropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
+                  className="flex items-center gap-1.5 px-2.5 py-1 text-xs rounded border border-[#2E2E2A] bg-[#181816] text-[#EDECE8] hover:bg-[#1E1E1B] transition-colors cursor-pointer"
+                >
+                  {currentModel.logo ? (
+                    <img src={currentModel.logo} alt="" className="w-3.5 h-3.5 object-contain rounded shrink-0" />
+                  ) : (
+                    <span className="w-3.5 h-3.5 rounded bg-[#2A2A26] text-[#A3A29D] flex items-center justify-center text-[8px] font-bold shrink-0">
+                      M
+                    </span>
+                  )}
+                  <span className="font-medium">{currentModel.name}</span>
+                  <ChevronDown size={11} className="text-[#7E7D77]" />
+                </button>
 
-            {/* Provider Dropdown */}
-            <div className="relative" ref={modelDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#181D29] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+                {isModelDropdownOpen && (
+                  <div className="absolute left-0 mt-1 w-56 rounded border border-[#2E2E2A] bg-[#1A1A17] shadow-xl py-1 z-50 font-mono text-xs">
+                    {MODEL_OPTIONS.map((opt) => (
+                      <button
+                        key={opt.id}
+                        onClick={() => {
+                          setProvider(opt.id)
+                          setIsModelDropdownOpen(false)
+                        }}
+                        className={`w-full flex items-center justify-between px-3 py-2 text-left hover:bg-[#242420] transition-colors ${
+                          provider === opt.id ? 'text-[#EDECE8] font-semibold bg-[#22221E]' : 'text-[#9E9D96]'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          {opt.logo ? (
+                            <img src={opt.logo} alt="" className="w-4 h-4 object-contain rounded shrink-0" />
+                          ) : (
+                            <span className="w-4 h-4 rounded bg-[#2A2A26] text-[#A3A29D] flex items-center justify-center text-[9px] font-bold shrink-0">
+                              M
+                            </span>
+                          )}
+                          <div>
+                            <div>{opt.name}</div>
+                            <div className="text-[10px] text-[#7E7D77]">{opt.subname}</div>
+                          </div>
+                        </div>
+                        {provider === opt.id && <Check size={12} className="text-[#4EAA79]" />}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Domain Selector */}
+              <select
+                value={domain}
+                onChange={(e) => setDomain(e.target.value as TaskDomain)}
+                className="px-2.5 py-1 text-xs font-mono rounded border border-[#2E2E2A] bg-[#181816] text-[#EDECE8] focus:outline-none cursor-pointer"
               >
-                <Cpu size={13} className="text-indigo-600 dark:text-indigo-400" />
-                <span>{currentModel.name}</span>
-                <ChevronDown size={12} className="text-zinc-400" />
-              </button>
+                {DOMAIN_OPTIONS.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.label}
+                  </option>
+                ))}
+              </select>
 
-              {isModelDropdownOpen && (
-                <div className="absolute right-0 mt-1 w-52 rounded-xl border border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#181D29] shadow-lg py-1 z-50">
-                  {MODEL_OPTIONS.map((opt) => (
-                    <button
-                      key={opt.id}
-                      onClick={() => {
-                        setProvider(opt.id)
-                        setIsModelDropdownOpen(false)
-                      }}
-                      className={`w-full flex items-center justify-between px-3 py-2 text-xs text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors ${
-                        provider === opt.id ? 'text-indigo-600 dark:text-indigo-400 font-semibold bg-indigo-50/50 dark:bg-indigo-950/30' : 'text-zinc-700 dark:text-zinc-300'
-                      }`}
-                    >
-                      <div>
-                        <div className="font-medium">{opt.name}</div>
-                        <div className="text-[10px] text-zinc-400">{opt.subname}</div>
-                      </div>
-                      {provider === opt.id && <Check size={14} />}
-                    </button>
-                  ))}
-                </div>
-              )}
+              {/* BYOK Button */}
+              <button
+                onClick={() => setShowKeyModal(true)}
+                className={`flex items-center gap-1.5 px-2 py-1 rounded border text-[11px] font-mono transition-colors cursor-pointer ${
+                  apiKeys[provider]
+                    ? 'border-[#2E4234] bg-[#1E2E24] text-[#4EAA79]'
+                    : 'border-[#2E2E2A] bg-[#181816] text-[#7E7D77] hover:text-[#EDECE8]'
+                }`}
+                title="Configure custom BYOK API Key"
+              >
+                <KeyRound size={12} />
+                <span>{apiKeys[provider] ? 'Key Set' : 'BYOK'}</span>
+              </button>
             </div>
 
-            {/* BYOK Button */}
-            <button
-              onClick={() => setShowKeyModal(true)}
-              className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#181D29] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-              title="Configure Bring Your Own Key"
-            >
-              <KeyRound size={12} className={apiKeys[provider] ? 'text-emerald-500' : 'text-zinc-400'} />
-              <span>BYOK</span>
-            </button>
+            {/* Right: Guardrails Toggles */}
+            <div className="flex items-center gap-2 shrink-0">
+              {/* Memory Toggle */}
+              <label className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#2E2E2A] bg-[#181816] text-[11px] font-mono text-[#EDECE8] cursor-pointer hover:bg-[#1E1E1B] transition-colors select-none">
+                <input
+                  type="checkbox"
+                  checked={memoryEnabled}
+                  onChange={(e) => setMemoryEnabled(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-[#2E2E2A] bg-[#141412] text-[#4EAA79] accent-[#4EAA79]"
+                />
+                <span className={memoryEnabled ? 'text-[#4EAA79] font-medium' : 'text-[#7E7D77]'}>
+                  AEMA Memory
+                </span>
+              </label>
 
-            {/* Memory Enabled Toggle */}
-            <label className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={memoryEnabled}
-                onChange={(e) => setMemoryEnabled(e.target.checked)}
-                className="w-3.5 h-3.5 rounded text-indigo-600 focus:ring-indigo-500 border-zinc-300 dark:border-zinc-700"
-              />
-              <span className={memoryEnabled ? 'text-indigo-600 dark:text-indigo-400 font-medium' : ''}>
-                AEMA Memory
-              </span>
-            </label>
-
-            {/* Simulate Failure Toggle */}
-            <label className="flex items-center gap-1 text-[11px] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={simulateFailure}
-                onChange={(e) => setSimulateFailure(e.target.checked)}
-                className="w-3.5 h-3.5 rounded text-rose-600 focus:ring-rose-500 border-zinc-300 dark:border-zinc-700"
-              />
-              <span className={simulateFailure ? 'text-rose-600 dark:text-rose-400 font-medium' : ''}>
-                Simulate Trap
-              </span>
-            </label>
-
-            {/* Toggle Inspector Pane Button */}
-            <button
-              onClick={() => setIsInspectorOpen(!isInspectorOpen)}
-              className={`flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-lg border transition-colors cursor-pointer ${
-                isInspectorOpen
-                  ? 'border-indigo-600 bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400'
-                  : 'border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#181D29] text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800'
-              }`}
-              title="Toggle AEMA Cognitive Inspector Pane"
-            >
-              <Activity size={13} />
-              <span>Inspector</span>
-            </button>
+              {/* Trap Test Toggle */}
+              <label className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#2E2E2A] bg-[#181816] text-[11px] font-mono text-[#EDECE8] cursor-pointer hover:bg-[#1E1E1B] transition-colors select-none">
+                <input
+                  type="checkbox"
+                  checked={simulateFailure}
+                  onChange={(e) => setSimulateFailure(e.target.checked)}
+                  className="w-3.5 h-3.5 rounded border-[#2E2E2A] bg-[#141412] text-[#D9534F] accent-[#D9534F]"
+                />
+                <span className={simulateFailure ? 'text-[#D9534F] font-medium' : 'text-[#7E7D77]'}>
+                  Trap Test
+                </span>
+              </label>
+            </div>
           </div>
         </div>
 
-        {/* Conversation Stream Scroll Area */}
-        <div className="flex-1 overflow-y-auto px-4 md:px-8 py-6 space-y-6">
+        {/* Message Scroll Area */}
+        <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
           {messages.length === 0 ? (
-            /* Empty State Hero */
-            <div className="max-w-2xl mx-auto mt-8 p-8 rounded-2xl border border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#131722] text-center shadow-xs">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mx-auto mb-4 border border-indigo-100 dark:border-indigo-900/40">
-                <Shield size={24} />
+            /* Quiet Empty State */
+            <div className="max-w-xl mx-auto mt-12 text-center space-y-4">
+              <div className="text-xs font-mono uppercase tracking-widest text-[#7E7D77]">
+                Autonomous Execution Studio
               </div>
-              <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
-                AEMA Experiential Conversation Studio
+              <h3 className="font-serif-headline text-2xl font-normal text-[#EDECE8]">
+                Ready for task instructions
               </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-2 max-w-md mx-auto leading-relaxed">
-                Multi-turn autonomous execution with persistent reliability memory. Every turn queries verified procedural lessons (<span className="text-indigo-600 font-semibold">+σ</span>), avoids known pitfalls (<span className="text-rose-500 font-semibold">-π</span>), and updates empirical trust via A-EMA.
+              <p className="text-xs text-[#7E7D77] leading-relaxed max-w-md mx-auto">
+                Prompts retrieve verified operational strategies (<span className="text-[#4EAA79]">+&sigma;</span>), bypass known traps (<span className="text-[#D9534F]">-&pi;</span>), and update reliability scores via A-EMA.
               </p>
 
-              {/* Starter Prompt Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-6 text-left">
+              {/* Starter Prompts */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mt-6 text-left">
                 {STARTER_PROMPTS.map((starter, i) => (
                   <div
                     key={i}
@@ -519,13 +676,10 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                       setDomain(starter.domain)
                       handleSendMessage(starter.prompt, starter.domain)
                     }}
-                    className="p-3.5 rounded-xl border border-[#E6E6E1] dark:border-[#252B3B] bg-[#FAFAFA] dark:bg-[#181D29] hover:border-indigo-400 dark:hover:border-indigo-600 cursor-pointer transition-all group"
+                    className="p-3 rounded border border-[#242422] bg-[#161614] hover:bg-[#1E1E1B] hover:border-[#383834] cursor-pointer transition-colors"
                   >
-                    <div className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 flex items-center justify-between">
-                      <span>{starter.title}</span>
-                      <ChevronRight size={13} className="opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </div>
-                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2">
+                    <div className="text-xs font-medium text-[#EDECE8]">{starter.title}</div>
+                    <p className="text-[10px] text-[#7E7D77] mt-1 line-clamp-2 font-mono">
                       {starter.prompt}
                     </p>
                   </div>
@@ -541,108 +695,51 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
               return (
                 <div
                   key={msg.id}
-                  className={`flex gap-3 max-w-3xl ${isUser ? 'ml-auto justify-end' : 'mr-auto justify-start'}`}
+                  className={`flex flex-col space-y-1.5 max-w-3xl ${
+                    isUser ? 'ml-auto items-end' : 'mr-auto items-start'
+                  }`}
                 >
-                  {!isUser && (
-                    <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 mt-0.5 shadow-xs">
-                      <Shield size={16} />
-                    </div>
-                  )}
+                  <div className="font-mono text-[10px] text-[#7E7D77] px-1 flex items-center gap-1.5">
+                    {!isUser && currentModel.logo && (
+                      <img src={currentModel.logo} alt="" className="w-3 h-3 object-contain rounded shrink-0" />
+                    )}
+                    <span>{isUser ? 'User' : `AEMA &bull; ${currentModel.name}`}</span>
+                  </div>
 
-                  <div className={`flex flex-col space-y-1.5 ${isUser ? 'items-end' : 'items-start'}`}>
-                    {/* Message Bubble */}
-                    <div
-                      className={`px-4 py-3 rounded-2xl text-xs leading-relaxed max-w-2xl transition-all ${
-                        isUser
-                          ? 'bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 rounded-tr-xs shadow-xs'
-                          : 'bg-white text-zinc-900 dark:bg-[#131722] dark:text-zinc-100 border border-[#E6E6E1] dark:border-[#252B3B] rounded-tl-xs shadow-xs'
-                      }`}
-                    >
-                      {isUser ? (
-                        <p className="whitespace-pre-wrap font-sans">{msg.content}</p>
-                      ) : (
-                        <MarkdownRenderer content={msg.content} />
-                      )}
-                    </div>
-
-                    {/* Per-Response AEMA Execution Bar (Hybrid Option A & B) */}
-                    {!isUser && exec && (
-                      <div className="w-full flex flex-col space-y-1.5">
-                        <div className="flex items-center gap-2 flex-wrap text-[11px]">
-                          {/* Trace Selector Pill */}
-                          <button
-                            onClick={() => {
-                              setSelectedExecution(exec)
-                              setIsInspectorOpen(true)
-                            }}
-                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border font-mono text-[11px] transition-all cursor-pointer ${
-                              selectedExecution?.id === exec.id
-                                ? 'bg-indigo-50 border-indigo-300 text-indigo-700 dark:bg-indigo-950/60 dark:border-indigo-800 dark:text-indigo-300'
-                                : 'bg-zinc-100 dark:bg-zinc-800/80 border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400'
-                            }`}
-                          >
-                            <Terminal size={11} />
-                            <span>Trace #{exec.id.replace('exec_', '')}</span>
-                          </button>
-
-                          {/* Outcome Quality Badge */}
-                          <span
-                            className={`px-2 py-0.5 rounded-md font-mono text-[10px] font-bold uppercase ${
-                              typeof exec.outcomeScore === 'number' && exec.outcomeScore >= 0.8
-                                ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400'
-                                : typeof exec.outcomeScore === 'number' && exec.outcomeScore <= 0.3
-                                ? 'bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-400'
-                                : typeof exec.outcomeScore === 'number'
-                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400'
-                                : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400'
-                            }`}
-                          >
-                            R: {typeof exec.outcomeScore === 'number' ? exec.outcomeScore.toFixed(2) : 'N/A'}
-                          </span>
-
-                          {/* Memory Count */}
-                          {exec.retrievedExperiences && exec.retrievedExperiences.length > 0 && (
-                            <span className="text-zinc-500 dark:text-zinc-400 flex items-center gap-1 font-mono text-[10px]">
-                              <Database size={10} />
-                              {exec.retrievedExperiences.length} {exec.retrievedExperiences.length === 1 ? 'memory' : 'memories'}
-                            </span>
-                          )}
-
-                          {/* Inline strategy quick toggle */}
-                          {exec.retrievedExperiences?.[0]?.experience && (
-                            <button
-                              onClick={() => setExpandedTraceMsgId(expandedTraceMsgId === msg.id ? null : msg.id)}
-                              className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer font-medium"
-                            >
-                              {expandedTraceMsgId === msg.id ? 'Hide Strategy ▲' : 'Show Strategy ▼'}
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Expandable Strategy Preview (Option B Accordion) */}
-                        {expandedTraceMsgId === msg.id && exec.retrievedExperiences?.[0]?.experience && (
-                          <div className="p-3 rounded-xl border border-indigo-100 dark:border-indigo-950/70 bg-indigo-50/40 dark:bg-indigo-950/20 text-xs space-y-1.5 animate-fadeIn">
-                            <div className="font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-1.5">
-                              <Sparkles size={12} className="text-indigo-600 dark:text-indigo-400" />
-                              <span>Verified Operational Strategy (+σ):</span>
-                            </div>
-                            <p className="text-zinc-700 dark:text-zinc-300 font-mono text-[11px]">
-                              "{exec.retrievedExperiences[0].experience.strategyLesson}"
-                            </p>
-                            {exec.retrievedExperiences[0].experience.pitfallWarning && (
-                              <div className="pt-1 text-rose-700 dark:text-rose-300 text-[11px] font-mono">
-                                <span className="font-bold">Avoid Pitfall (-π):</span> "{exec.retrievedExperiences[0].experience.pitfallWarning}"
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
+                  <div
+                    className={`p-4 rounded-lg text-xs leading-relaxed max-w-2xl ${
+                      isUser
+                        ? 'bg-[#1E1E1B] border border-[#2E2E2A] text-white'
+                        : 'bg-[#161614] border border-[#242422] text-[#EDECE8]'
+                    }`}
+                  >
+                    {isUser ? (
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    ) : (
+                      <MarkdownRenderer content={msg.content} />
                     )}
                   </div>
 
-                  {isUser && (
-                    <div className="w-8 h-8 rounded-xl bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center shrink-0 mt-0.5">
-                      <User size={15} />
+                  {/* Assistant Run Meta */}
+                  {!isUser && exec && (
+                    <div className="flex items-center gap-3 text-[11px] font-mono text-[#7E7D77] px-1">
+                      <button
+                        onClick={() => {
+                          setSelectedExecution(exec)
+                          setIsInspectorOpen(true)
+                        }}
+                        className="hover:text-white transition-colors cursor-pointer text-[#4EAA79]"
+                      >
+                        Inspect Trace #{exec.id.replace('exec_', '')} &rarr;
+                      </button>
+                      <span>&bull;</span>
+                      <span>Outcome: {exec.outcomeScore && exec.outcomeScore >= 0.7 ? 'SUCCESS' : 'FAILURE'}</span>
+                      {exec.retrievedExperiences && exec.retrievedExperiences.length > 0 && (
+                        <>
+                          <span>&bull;</span>
+                          <span>{exec.retrievedExperiences.length} memories used</span>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>
@@ -652,22 +749,20 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Live Execution Progression Strip (During active processing) */}
+        {/* Live Active Bar */}
         {isExecuting && (
-          <div className="px-4 py-2 border-t border-[#E6E6E1] dark:border-[#252B3B] bg-indigo-50/80 dark:bg-indigo-950/40 flex items-center justify-between text-xs animate-pulse">
-            <div className="flex items-center gap-2 text-indigo-700 dark:text-indigo-300 font-medium">
-              <RefreshCw size={14} className="animate-spin text-indigo-600" />
-              <span>AEMA Cycle Active: Stage [{currentStage.toUpperCase().replace('_', ' ')}]</span>
+          <div className="px-4 py-2 border-t border-[#242422] bg-[#1A1A17] flex items-center justify-between text-xs font-mono text-[#EDECE8]">
+            <div className="flex items-center gap-2">
+              <RefreshCw size={13} className="animate-spin text-[#E67E22]" />
+              <span>Cognitive Cycle: Stage [{currentStage.toUpperCase()}]</span>
             </div>
-            <span className="text-[11px] font-mono text-indigo-600 dark:text-indigo-400">
-              Applying Bilateral Constraints...
-            </span>
+            <span className="text-[10px] text-[#7E7D77]">Processing...</span>
           </div>
         )}
 
-        {/* Bottom Message Composer */}
-        <div className="p-3 md:p-4 border-t border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#131722]">
-          <div className="relative flex items-end rounded-2xl border border-[#E6E6E1] dark:border-[#252B3B] bg-[#FAFAFA] dark:bg-[#181D29] focus-within:border-indigo-500 focus-within:ring-2 focus-within:ring-indigo-500/20 transition-all p-1.5">
+        {/* Bottom Message Input */}
+        <div className="p-4 border-t border-[#242422] bg-[#161614]">
+          <div className="border border-[#2E2E2A] rounded-lg bg-[#181816] p-2 flex flex-col gap-2">
             <textarea
               ref={textareaRef}
               rows={2}
@@ -675,53 +770,62 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={handleKeyDown}
               disabled={isExecuting}
-              placeholder="Ask AEMA agent or give a task... (Shift+Enter for newline, Enter to submit)"
-              className="flex-1 bg-transparent px-3 py-2 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 resize-none focus:outline-none disabled:opacity-60"
+              placeholder="Send task instructions or query the agent... (Shift+Enter for newline, Enter to run)"
+              className="bg-transparent text-xs text-[#EDECE8] placeholder-[#5A5955] focus:outline-none resize-none p-1 disabled:opacity-50"
             />
-            <button
-              onClick={() => handleSendMessage()}
-              disabled={!inputText.trim() || isExecuting}
-              className={`p-2.5 rounded-xl font-semibold flex items-center justify-center transition-all cursor-pointer ${
-                inputText.trim() && !isExecuting
-                  ? 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
-                  : 'bg-zinc-200 dark:bg-zinc-800 text-zinc-400 cursor-not-allowed'
-              }`}
-              title="Send message"
-            >
-              {isExecuting ? <RefreshCw size={15} className="animate-spin" /> : <Send size={15} />}
-            </button>
+            <div className="flex items-center justify-between pt-1 border-t border-[#22221F]">
+              <span className="text-[10px] font-mono text-[#5A5955]">Enter to execute</span>
+              <button
+                onClick={() => handleSendMessage()}
+                disabled={!inputText.trim() || isExecuting}
+                className="px-3 py-1 rounded bg-[#EDECE8] text-[#141412] font-medium text-xs hover:bg-white transition-colors cursor-pointer disabled:opacity-40"
+              >
+                {isExecuting ? 'Running...' : 'Execute Run'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* ─── 3. RIGHT INSPECTOR SPLIT-PANE / DRAWER ───────────────────────── */}
+      {/* Resizable Divider Handle: Inspector */}
       {isInspectorOpen && (
-        <div className="w-80 md:w-96 shrink-0 border-l border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#131722] flex flex-col overflow-hidden transition-all duration-300">
-          <div className="p-3 border-b border-[#E6E6E1] dark:border-[#252B3B] flex items-center justify-between bg-zinc-50/50 dark:bg-[#181D29]/50">
-            <div className="flex items-center gap-1.5">
-              <Activity size={15} className="text-indigo-600 dark:text-indigo-400" />
-              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
-                AEMA Trace Inspector
-              </span>
-            </div>
+        <div
+          onMouseDown={handleStartResizeInspector}
+          className="w-1.5 shrink-0 bg-[#242422] hover:bg-[#4EAA79]/80 active:bg-[#4EAA79] cursor-col-resize transition-colors relative z-20 select-none group flex items-center justify-center"
+          title="Drag to resize Cognitive Trace panel"
+        >
+          <div className="w-0.5 h-6 rounded-full bg-[#3E3E38] group-hover:bg-[#4EAA79] transition-colors" />
+        </div>
+      )}
+
+      {/* ─── 3. RIGHT INSPECTOR PANEL (CALM TIMELINE with draggable width) ─── */}
+      {isInspectorOpen && (
+        <aside
+          className="shrink-0 bg-[#161614] flex flex-col overflow-y-auto"
+          style={{ width: `${inspectorWidth}px` }}
+        >
+          <div className="p-3 border-b border-[#242422] flex items-center justify-between">
+            <span className="font-mono text-[11px] uppercase tracking-wider text-[#7E7D77]">
+              Cognitive Trace
+            </span>
             <button
               onClick={() => setIsInspectorOpen(false)}
-              className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
-              title="Close Inspector"
+              className="p-1 rounded text-[#7E7D77] hover:text-[#EDECE8] transition-colors cursor-pointer"
+              title="Close inspector"
             >
-              <PanelRightClose size={15} />
+              <PanelRightClose size={14} />
             </button>
           </div>
 
           <div className="flex-1 overflow-y-auto p-4 space-y-4">
             {selectedExecution ? (
               <>
-                <div className="p-3 rounded-xl bg-zinc-50 dark:bg-[#181D29] border border-[#E6E6E1] dark:border-[#252B3B] space-y-1">
-                  <div className="flex items-center justify-between text-[11px] font-mono">
-                    <span className="font-semibold">{selectedExecution.id}</span>
-                    <span className="text-indigo-600 dark:text-indigo-400 font-bold uppercase">{selectedExecution.taskDomain}</span>
+                <div className="p-3 rounded border border-[#242422] bg-[#141412] font-mono text-xs space-y-1">
+                  <div className="flex items-center justify-between text-[#EDECE8] font-bold">
+                    <span>{selectedExecution.id}</span>
+                    <span className="text-[#4EAA79] uppercase">{selectedExecution.taskDomain}</span>
                   </div>
-                  <div className="text-[11px] text-zinc-500 truncate">
+                  <div className="text-[11px] text-[#7E7D77] truncate">
                     Input: "{selectedExecution.taskInput}"
                   </div>
                 </div>
@@ -730,49 +834,46 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                 <ContextInspector execution={selectedExecution} />
               </>
             ) : (
-              <div className="p-8 text-center text-xs text-zinc-400 font-mono">
-                No execution selected. Click "Trace" on any response in the stream to inspect its cognitive cycle.
+              <div className="p-8 text-center text-xs text-[#7E7D77] font-mono">
+                No execution selected. Run a task or select a response to view its 5-node trace.
               </div>
             )}
           </div>
-        </div>
+        </aside>
       )}
 
       {/* ─── BYOK Modal ───────────────────────────────────────────────────── */}
       {showKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-xs p-4">
-          <div className="w-full max-w-md rounded-2xl border border-[#E6E6E1] dark:border-[#252B3B] bg-white dark:bg-[#131722] p-5 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md rounded-lg border border-[#242422] bg-[#161614] p-5 shadow-2xl space-y-4 text-[#EDECE8]">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <KeyRound size={18} className="text-indigo-600 dark:text-indigo-400" />
-                <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                  Configure BYOK API Key ({currentModel.name})
-                </h3>
-              </div>
+              <span className="text-xs font-mono font-semibold uppercase tracking-wider text-[#EDECE8]">
+                API Key Configuration ({currentModel.name})
+              </span>
               <button
                 onClick={() => setShowKeyModal(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+                className="text-[#7E7D77] hover:text-white"
               >
-                <X size={16} />
+                <X size={15} />
               </button>
             </div>
 
-            <p className="text-xs text-zinc-500 leading-relaxed">
-              Your API key is stored strictly in your browser's local memory and sent directly to the backend for this session. It is never stored permanently.
+            <p className="text-xs text-[#7E7D77] leading-relaxed">
+              Keys are stored strictly in your local browser cache and forwarded for this session. They are never retained on the server.
             </p>
 
             <input
               type="password"
               defaultValue={apiKeys[provider] || ''}
-              placeholder={`Enter ${currentModel.name} API Key...`}
+              placeholder={`Enter ${currentModel.name} Key...`}
               id="byok-input"
-              className="w-full px-3 py-2 text-xs rounded-xl border border-[#E6E6E1] dark:border-[#252B3B] bg-zinc-50 dark:bg-[#181D29] text-zinc-900 dark:text-zinc-100 focus:outline-none focus:ring-1 focus:ring-indigo-500 font-mono"
+              className="w-full px-3 py-2 text-xs rounded border border-[#2E2E2A] bg-[#141412] text-[#EDECE8] focus:outline-none font-mono"
             />
 
             <div className="flex justify-end gap-2 pt-2">
               <button
                 onClick={() => setShowKeyModal(false)}
-                className="px-3 py-1.5 rounded-xl border border-zinc-200 dark:border-zinc-800 text-xs font-medium text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                className="px-3 py-1.5 rounded border border-[#2E2E2A] text-xs font-medium text-[#7E7D77] hover:text-white"
               >
                 Cancel
               </button>
@@ -781,7 +882,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                   const input = document.getElementById('byok-input') as HTMLInputElement
                   saveApiKey(input?.value || '')
                 }}
-                className="px-4 py-1.5 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 shadow-sm"
+                className="px-4 py-1.5 rounded bg-[#EDECE8] text-[#141412] text-xs font-medium hover:bg-white"
               >
                 Save Key
               </button>
