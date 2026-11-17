@@ -124,6 +124,85 @@ class BaseMemoryStore(ABC):
         """Hard-delete an experience record (for GDPR/PII compliance)."""
         raise NotImplementedError("delete_experience is not implemented on this store.")
 
+    # ─── Execution Trace Persistence ─────────────────────────────────────────
+
+    def _ensure_in_memory_executions(self) -> None:
+        if not hasattr(self, "_executions_cache"):
+            self._executions_cache: Dict[str, Any] = {}
+
+    async def save_execution(self, execution: Any) -> None:
+        """Persist a task execution record to durable storage or fallback cache."""
+        self._ensure_in_memory_executions()
+        self._executions_cache[execution.id] = execution
+
+    async def get_execution(self, execution_id: str) -> Optional[Any]:
+        """Fetch a specific execution trace by ID."""
+        self._ensure_in_memory_executions()
+        return self._executions_cache.get(execution_id)
+
+    async def list_executions(
+        self,
+        domain: Optional[str] = None,
+        memory_mode: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        """List paginated execution records with multi-tenant filtering."""
+        self._ensure_in_memory_executions()
+        items = list(self._executions_cache.values())
+        filtered = []
+        for ex in items:
+            ex_domain = getattr(getattr(ex, "task_domain", None), "value", str(getattr(ex, "task_domain", "")))
+            ex_mode = getattr(getattr(ex, "memory_mode", None), "value", str(getattr(ex, "memory_mode", "")))
+            if domain and domain != "all" and ex_domain != domain:
+                continue
+            if memory_mode and memory_mode != "all" and ex_mode != memory_mode:
+                continue
+            if session_id and getattr(ex, "session_id", None) != session_id:
+                continue
+            if user_id and getattr(ex, "user_id", None) != user_id:
+                continue
+            if unauthenticated_only and (getattr(ex, "user_id", None) is not None and getattr(ex, "user_id", None) != "anonymous"):
+                continue
+            filtered.append(ex)
+        return len(filtered), filtered[offset : offset + limit]
+
+    async def list_sessions(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List distinct conversational sessions."""
+        self._ensure_in_memory_executions()
+        seen: Dict[str, Dict[str, Any]] = {}
+        for ex in self._executions_cache.values():
+            if user_id and getattr(ex, "user_id", None) != user_id:
+                continue
+            if unauthenticated_only and (getattr(ex, "user_id", None) is not None and getattr(ex, "user_id", None) != "anonymous"):
+                continue
+            sid = getattr(ex, "session_id", None)
+            if sid and sid not in seen:
+                seen[sid] = {
+                    "sessionId": sid,
+                    "title": (getattr(ex, "task_input", "") or "New Conversation")[:60],
+                    "lastActive": str(getattr(ex, "created_at", "")),
+                    "turnCount": 1,
+                }
+            elif sid:
+                seen[sid]["turnCount"] += 1
+        return list(seen.values())[:limit]
+
+    async def clear_executions(self) -> int:
+        """Clear execution trace records."""
+        self._ensure_in_memory_executions()
+        count = len(self._executions_cache)
+        self._executions_cache.clear()
+        return count
+
 
 class SQLiteMemoryStore(BaseMemoryStore):
     """
@@ -206,11 +285,46 @@ class SQLiteMemoryStore(BaseMemoryStore):
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_probation_fp ON probation_task_fingerprints(experience_id, fingerprint)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_probation_exec ON probation_task_fingerprints(execution_id)")
 
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS task_executions (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    user_id TEXT,
+                    task_input TEXT NOT NULL,
+                    task_domain TEXT NOT NULL,
+                    memory_mode TEXT NOT NULL,
+                    memory_enabled INTEGER NOT NULL DEFAULT 1,
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    outcome_score REAL,
+                    latency_ms INTEGER DEFAULT 0,
+                    tokens_used INTEGER DEFAULT 0,
+                    new_experience_created INTEGER DEFAULT 0,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_user ON task_executions(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_session ON task_executions(session_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_created ON task_executions(created_at DESC)")
+
             # Idempotent migration for existing SQLite databases
             cursor.execute("PRAGMA table_info(experiences)")
             columns = [col[1] for col in cursor.fetchall()]
             if "probation_successes" not in columns:
                 cursor.execute("ALTER TABLE experiences ADD COLUMN probation_successes INTEGER NOT NULL DEFAULT 0")
+
+            cursor.execute("PRAGMA table_info(task_executions)")
+            exec_cols = [c[1] for c in cursor.fetchall()]
+            if "session_id" not in exec_cols:
+                try:
+                    cursor.execute("ALTER TABLE task_executions ADD COLUMN session_id TEXT")
+                except Exception:
+                    pass
+            if "user_id" not in exec_cols:
+                try:
+                    cursor.execute("ALTER TABLE task_executions ADD COLUMN user_id TEXT")
+                except Exception:
+                    pass
 
             conn.commit()
             if self.auto_seed:
@@ -799,6 +913,196 @@ class SQLiteMemoryStore(BaseMemoryStore):
             updated_at=row["updated_at"],
         )
 
+    async def save_execution(self, execution: Any) -> None:
+        """Persist a TaskExecution record into SQLite and memory cache."""
+        await super().save_execution(execution)
+        try:
+            payload = (
+                execution.model_dump_json(by_alias=True)
+                if hasattr(execution, "model_dump_json")
+                else json.dumps(execution)
+            )
+            created_val = getattr(execution, "created_at", None)
+            created_str = (
+                created_val.isoformat()
+                if hasattr(created_val, "isoformat")
+                else (str(created_val) if created_val else datetime.utcnow().isoformat())
+            )
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO task_executions (
+                        id, session_id, user_id, task_input, task_domain, memory_mode, memory_enabled,
+                        status, outcome_score, latency_ms, tokens_used,
+                        new_experience_created, payload_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        getattr(execution, "id", None) or getattr(execution, "execution_id", ""),
+                        getattr(execution, "session_id", None),
+                        getattr(execution, "user_id", None),
+                        (getattr(execution, "task_input", "") or "")[:500],
+                        getattr(getattr(execution, "task_domain", None), "value", str(getattr(execution, "task_domain", ""))),
+                        getattr(getattr(execution, "memory_mode", None), "value", str(getattr(execution, "memory_mode", ""))),
+                        int(getattr(execution, "memory_enabled", True)),
+                        getattr(getattr(execution, "status", None), "value", str(getattr(execution, "status", "completed"))),
+                        getattr(execution, "outcome_score", None),
+                        getattr(execution, "latency_ms", 0),
+                        getattr(execution, "tokens_used", 0),
+                        int(getattr(execution, "new_experience_created", False)),
+                        payload,
+                        created_str,
+                    ),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning(f"Could not persist execution {getattr(execution, 'id', '')} to SQLite: {exc}")
+
+    async def get_execution(self, execution_id: str) -> Optional[Any]:
+        """Fetch a specific execution trace by ID from SQLite."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT payload_json FROM task_executions WHERE id = ?", (execution_id,))
+                row = cursor.fetchone()
+                if row:
+                    from models.task import TaskExecution
+                    return TaskExecution.model_validate_json(row[0])
+        except Exception as exc:
+            logger.warning(f"SQLite lookup failed for execution {execution_id}: {exc}")
+        return await super().get_execution(execution_id)
+
+    async def list_executions(
+        self,
+        domain: Optional[str] = None,
+        memory_mode: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                where_clauses: List[str] = []
+                params: List[Any] = []
+                if domain and domain != "all":
+                    where_clauses.append("task_domain = ?")
+                    params.append(domain)
+                if memory_mode and memory_mode != "all":
+                    where_clauses.append("memory_mode = ?")
+                    params.append(memory_mode)
+                if session_id:
+                    where_clauses.append("session_id = ?")
+                    params.append(session_id)
+                if user_id:
+                    where_clauses.append("user_id = ?")
+                    params.append(user_id)
+                elif unauthenticated_only:
+                    where_clauses.append("(user_id IS NULL OR user_id = 'anonymous')")
+
+                base_count = "SELECT COUNT(*) FROM task_executions"
+                base_select = "SELECT payload_json FROM task_executions"
+                if where_clauses:
+                    filter_str = " WHERE " + " AND ".join(where_clauses)
+                    count_sql = base_count + filter_str
+                    select_sql = base_select + filter_str + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                else:
+                    count_sql = base_count
+                    select_sql = base_select + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+
+                cursor.execute(count_sql, params)
+                total = cursor.fetchone()[0]
+                cursor.execute(select_sql, params + [limit, offset])
+                rows = cursor.fetchall()
+
+                from models.task import TaskExecution
+                items: List[Any] = []
+                for (payload_json,) in rows:
+                    try:
+                        items.append(TaskExecution.model_validate_json(payload_json))
+                    except Exception as exc:
+                        logger.warning(f"Could not deserialize execution row: {exc}")
+                return total, items
+        except Exception as exc:
+            logger.warning(f"SQLite list_executions failed: {exc}")
+            return await super().list_executions(domain, memory_mode, session_id, user_id, unauthenticated_only, limit, offset)
+
+    async def list_sessions(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                if user_id:
+                    cursor.execute(
+                        """
+                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                        FROM task_executions
+                        WHERE session_id IS NOT NULL AND session_id != '' AND user_id = ?
+                        GROUP BY session_id
+                        ORDER BY last_active DESC
+                        LIMIT ?
+                        """,
+                        (user_id, limit),
+                    )
+                elif unauthenticated_only:
+                    cursor.execute(
+                        """
+                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                        FROM task_executions
+                        WHERE session_id IS NOT NULL AND session_id != '' AND (user_id IS NULL OR user_id = 'anonymous')
+                        GROUP BY session_id
+                        ORDER BY last_active DESC
+                        LIMIT ?
+                        """,
+                        (limit,),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                        FROM task_executions
+                        WHERE session_id IS NOT NULL AND session_id != ''
+                        GROUP BY session_id
+                        ORDER BY last_active DESC
+                        LIMIT ?
+                        """,
+                        (limit,),
+                    )
+                rows = cursor.fetchall()
+                sessions = []
+                for row in rows:
+                    sessions.append({
+                        "sessionId": row[0],
+                        "title": (row[1] or "New Conversation")[:60],
+                        "lastActive": str(row[2]),
+                        "turnCount": row[3],
+                    })
+                return sessions
+        except Exception as exc:
+            logger.warning(f"SQLite list_sessions failed: {exc}")
+            return await super().list_sessions(user_id, unauthenticated_only, limit)
+
+    async def clear_executions(self) -> int:
+        await super().clear_executions()
+        try:
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM task_executions")
+                count = cursor.fetchone()[0]
+                cursor.execute("DELETE FROM task_executions")
+                conn.commit()
+                return count
+        except Exception as exc:
+            logger.warning(f"SQLite clear_executions failed: {exc}")
+            return 0
+
 
 class PostgresMemoryStore(BaseMemoryStore):
     """
@@ -926,6 +1230,28 @@ class PostgresMemoryStore(BaseMemoryStore):
             # Idempotent migration for existing PostgreSQL databases
             await conn.execute("ALTER TABLE experiences ADD COLUMN IF NOT EXISTS probation_successes INTEGER NOT NULL DEFAULT 0;")
 
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS task_executions (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    user_id TEXT,
+                    task_input TEXT NOT NULL,
+                    task_domain TEXT NOT NULL,
+                    memory_mode TEXT NOT NULL,
+                    memory_enabled INTEGER NOT NULL DEFAULT 1,
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    outcome_score DOUBLE PRECISION,
+                    latency_ms INTEGER DEFAULT 0,
+                    tokens_used INTEGER DEFAULT 0,
+                    new_experience_created INTEGER DEFAULT 0,
+                    payload_json TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_task_exec_user ON task_executions(user_id);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_task_exec_session ON task_executions(session_id);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_task_exec_created ON task_executions(created_at DESC);")
+
             try:
                 await conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_pg_exp_embedding ON experiences
@@ -1051,6 +1377,199 @@ class PostgresMemoryStore(BaseMemoryStore):
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    async def save_execution(self, execution: Any) -> None:
+        """Persist a TaskExecution record into PostgreSQL."""
+        await super().save_execution(execution)
+        pool = await self._get_pool()
+        try:
+            payload = (
+                execution.model_dump_json(by_alias=True)
+                if hasattr(execution, "model_dump_json")
+                else json.dumps(execution)
+            )
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO task_executions (
+                        id, session_id, user_id, task_input, task_domain, memory_mode, memory_enabled,
+                        status, outcome_score, latency_ms, tokens_used,
+                        new_experience_created, payload_json, created_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                        session_id = EXCLUDED.session_id,
+                        user_id = EXCLUDED.user_id,
+                        task_input = EXCLUDED.task_input,
+                        task_domain = EXCLUDED.task_domain,
+                        memory_mode = EXCLUDED.memory_mode,
+                        memory_enabled = EXCLUDED.memory_enabled,
+                        status = EXCLUDED.status,
+                        outcome_score = EXCLUDED.outcome_score,
+                        latency_ms = EXCLUDED.latency_ms,
+                        tokens_used = EXCLUDED.tokens_used,
+                        new_experience_created = EXCLUDED.new_experience_created,
+                        payload_json = EXCLUDED.payload_json;
+                    """,
+                    getattr(execution, "id", None) or getattr(execution, "execution_id", ""),
+                    getattr(execution, "session_id", None),
+                    getattr(execution, "user_id", None),
+                    (getattr(execution, "task_input", "") or "")[:500],
+                    getattr(getattr(execution, "task_domain", None), "value", str(getattr(execution, "task_domain", ""))),
+                    getattr(getattr(execution, "memory_mode", None), "value", str(getattr(execution, "memory_mode", ""))),
+                    int(getattr(execution, "memory_enabled", True)),
+                    getattr(getattr(execution, "status", None), "value", str(getattr(execution, "status", "completed"))),
+                    getattr(execution, "outcome_score", None),
+                    getattr(execution, "latency_ms", 0),
+                    getattr(execution, "tokens_used", 0),
+                    int(getattr(execution, "new_experience_created", False)),
+                    payload,
+                )
+        except Exception as exc:
+            logger.warning(f"Could not persist execution {getattr(execution, 'id', '')} to PostgreSQL: {exc}")
+
+    async def get_execution(self, execution_id: str) -> Optional[Any]:
+        """Fetch a specific execution trace by ID from PostgreSQL."""
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT payload_json FROM task_executions WHERE id = $1", execution_id)
+                if row:
+                    from models.task import TaskExecution
+                    return TaskExecution.model_validate_json(row["payload_json"])
+        except Exception as exc:
+            logger.warning(f"PostgreSQL lookup failed for execution {execution_id}: {exc}")
+        return await super().get_execution(execution_id)
+
+    async def list_executions(
+        self,
+        domain: Optional[str] = None,
+        memory_mode: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                where_clauses: List[str] = []
+                params: List[Any] = []
+                idx = 1
+                if domain and domain != "all":
+                    where_clauses.append(f"task_domain = ${idx}")
+                    params.append(domain)
+                    idx += 1
+                if memory_mode and memory_mode != "all":
+                    where_clauses.append(f"memory_mode = ${idx}")
+                    params.append(memory_mode)
+                    idx += 1
+                if session_id:
+                    where_clauses.append(f"session_id = ${idx}")
+                    params.append(session_id)
+                    idx += 1
+                if user_id:
+                    where_clauses.append(f"user_id = ${idx}")
+                    params.append(user_id)
+                    idx += 1
+                elif unauthenticated_only:
+                    where_clauses.append("(user_id IS NULL OR user_id = 'anonymous')")
+
+                base_count = "SELECT COUNT(*) FROM task_executions"
+                base_select = "SELECT payload_json FROM task_executions"
+                if where_clauses:
+                    filter_str = " WHERE " + " AND ".join(where_clauses)
+                    count_sql = base_count + filter_str
+                    select_sql = base_select + filter_str + f" ORDER BY created_at DESC LIMIT ${idx} OFFSET ${idx + 1}"
+                else:
+                    count_sql = base_count
+                    select_sql = base_select + f" ORDER BY created_at DESC LIMIT ${idx} OFFSET ${idx + 1}"
+
+                total = await conn.fetchval(count_sql, *params) or 0
+                rows = await conn.fetch(select_sql, *params, limit, offset)
+
+                from models.task import TaskExecution
+                items: List[Any] = []
+                for r in rows:
+                    try:
+                        items.append(TaskExecution.model_validate_json(r["payload_json"]))
+                    except Exception as exc:
+                        logger.warning(f"Could not deserialize execution row: {exc}")
+                return total, items
+        except Exception as exc:
+            logger.warning(f"PostgreSQL list_executions failed: {exc}")
+            return await super().list_executions(domain, memory_mode, session_id, user_id, unauthenticated_only, limit, offset)
+
+    async def list_sessions(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                if user_id:
+                    rows = await conn.fetch(
+                        """
+                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                        FROM task_executions
+                        WHERE session_id IS NOT NULL AND session_id != '' AND user_id = $1
+                        GROUP BY session_id, task_input
+                        ORDER BY last_active DESC
+                        LIMIT $2
+                        """,
+                        user_id,
+                        limit,
+                    )
+                elif unauthenticated_only:
+                    rows = await conn.fetch(
+                        """
+                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                        FROM task_executions
+                        WHERE session_id IS NOT NULL AND session_id != '' AND (user_id IS NULL OR user_id = 'anonymous')
+                        GROUP BY session_id, task_input
+                        ORDER BY last_active DESC
+                        LIMIT $1
+                        """,
+                        limit,
+                    )
+                else:
+                    rows = await conn.fetch(
+                        """
+                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                        FROM task_executions
+                        WHERE session_id IS NOT NULL AND session_id != ''
+                        GROUP BY session_id, task_input
+                        ORDER BY last_active DESC
+                        LIMIT $1
+                        """,
+                        limit,
+                    )
+                sessions = []
+                for r in rows:
+                    sessions.append({
+                        "sessionId": r["session_id"],
+                        "title": (r["task_input"] or "New Conversation")[:60],
+                        "lastActive": str(r["last_active"]),
+                        "turnCount": r["turn_count"],
+                    })
+                return sessions
+        except Exception as exc:
+            logger.warning(f"PostgreSQL list_sessions failed: {exc}")
+            return await super().list_sessions(user_id, unauthenticated_only, limit)
+
+    async def clear_executions(self) -> int:
+        await super().clear_executions()
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                val = await conn.fetchval("SELECT COUNT(*) FROM task_executions")
+                await conn.execute("DELETE FROM task_executions")
+                return val or 0
+        except Exception as exc:
+            logger.warning(f"PostgreSQL clear_executions failed: {exc}")
+            return 0
 
     async def add_experience(self, exp: Experience) -> str:
         if exp.embedding is None:
