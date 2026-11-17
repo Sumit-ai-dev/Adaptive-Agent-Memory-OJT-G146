@@ -3,6 +3,14 @@ Pydantic v2 Models Package for Adaptive Agent Memory System.
 """
 
 from models.domain import TaskDomain
+from models.conversation import (
+    Conversation,
+    ConversationCreateRequest,
+    ConversationUpdateRequest,
+    ConversationMessage,
+    ConversationMessageCreateRequest,
+    ConversationListResponse,
+)
 from models.experience import (
     Experience,
     ExperienceMatch,
@@ -22,6 +30,12 @@ from models.task import (
 
 __all__ = [
     "TaskDomain",
+    "Conversation",
+    "ConversationCreateRequest",
+    "ConversationUpdateRequest",
+    "ConversationMessage",
+    "ConversationMessageCreateRequest",
+    "ConversationListResponse",
     "Experience",
     "ExperienceMatch",
     "ExperienceStatus",
