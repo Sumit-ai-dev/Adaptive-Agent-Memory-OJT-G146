@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AEMA Autonomous Memory Studio</title>
+  <style>
+    :root {
+      --bg: #09090b;
+      --surface: #121215;
+      --surface-elevated: #18181b;
+      --border: #27272a;
+      --border-focus: #38bdf8;
+      --text: #f4f4f5;
+      --text-muted: #a1a1aa;
+      --accent-sky: #38bdf8;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --radius: 8px;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 440px;
+      max-height: 580px;
+      overflow-y: auto;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.5;
+      padding: 14px;
+      user-select: none;
+    }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    /* Header */
+    .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-icon {
+      width: 24px;
+      height: 24px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-sky);
+      font-weight: 700;
+      font-size: 13px;
+      font-family: var(--font-mono);
+    }
+
+    .brand-title {
+      font-weight: 600;
+      font-size: 13px;
+      letter-spacing: -0.01em;
+    }
+
+    .version-tag {
+      font-size: 10px;
+      padding: 1px 5px;
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+    }
+
+    .status-dot.offline {
+      background: var(--accent-rose);
+      box-shadow: none;
+    }
+
+    /* Controls Bar */
+    .controls-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+
+    select, input[type="text"] {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 11px;
+      border-radius: 6px;
+      padding: 5px 8px;
+      outline: none;
+      transition: border-color 0.15s ease;
+    }
+
+    select:focus, input[type="text"]:focus {
+      border-color: var(--border-focus);
+    }
+
+    .toggle-group {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .toggle-label {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+
+    .toggle-label input {
+      accent-color: var(--accent-sky);
+      cursor: pointer;
+    }
+
+    /* Prompt Box */
+    .prompt-box {
+      margin-bottom: 10px;
+    }
+
+    .clip-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      border-radius: 6px;
+      padding: 4px 8px;
+      margin-bottom: 6px;
+      font-size: 11px;
+      color: var(--accent-sky);
+    }
+
+    .clip-banner span {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 320px;
+    }
+
+    .clip-banner button {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+    }
+
+    textarea {
+      width: 100%;
+      height: 72px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      color: var(--text);
+      padding: 8px 10px;
+      font-family: var(--font-sans);
+      font-size: 12px;
+      resize: vertical;
+      outline: none;
+      line-height: 1.4;
+      transition: border-color 0.15s ease;
+    }
+
+    textarea:focus {
+      border-color: var(--border-focus);
+    }
+
+    /* Execute Button */
+    .action-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .btn-primary {
+      background: var(--text);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: opacity 0.15s ease;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      opacity: 0.9;
+    }
+
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .shortcut-hint {
+      font-size: 10px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    /* Cognitive Pipeline Stepper */
+    .stepper-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 10px;
+      margin-bottom: 12px;
+    }
+
+    .stepper-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      margin-bottom: 8px;
+    }
+
+    .stepper-nodes {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 4px;
+    }
+
+    .stepper-node {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      padding: 6px 4px;
+      text-align: center;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+      transition: all 0.2s ease;
+    }
+
+    .stepper-node.active {
+      border-color: var(--accent-sky);
+      color: var(--accent-sky);
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .stepper-node.complete {
+      border-color: var(--accent-emerald);
+      color: var(--accent-emerald);
+      background: rgba(16, 185, 129, 0.08);
+    }
+
+    .stepper-node.failed {
+      border-color: var(--accent-rose);
+      color: var(--accent-rose);
+      background: rgba(244, 63, 94, 0.08);
+    }
+
+    .stepper-node .node-title {
+      font-size: 9px;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+
+    .stepper-node .node-detail {
+      font-size: 10px;
+      font-weight: 600;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    /* Output Console */
+    .output-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 12px;
+    }
+
+    .output-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-elevated);
+      font-size: 11px;
+    }
+
+    .output-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-ghost {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text-muted);
+      font-size: 10px;
+      padding: 2px 7px;
+      cursor: pointer;
+    }
+
+    .btn-ghost:hover {
+      color: var(--text);
+      border-color: var(--text-muted);
+    }
+
+    .output-content {
+      padding: 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      max-height: 150px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+      color: #e4e4e7;
+      user-select: text;
+    }
+
+    .output-placeholder {
+      color: var(--text-muted);
+      font-style: italic;
+    }
+
+    /* Footer */
+    .footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      padding-top: 6px;
+    }
+
+    .footer a {
+      color: var(--accent-sky);
+      text-decoration: none;
+    }
+
+    .footer a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <!-- Header -->
+  <div class="header">
+    <div class="brand">
+      <div class="brand-icon">Æ</div>
+      <div class="brand-title">AEMA Studio</div>
+      <span class="version-tag">v2.0.0</span>
+    </div>
+    <div class="status-badge">
+      <span id="statusDot" class="status-dot"></span>
+      <span id="statusText">Online</span>
+    </div>
+  </div>
+
+  <!-- Config Bar -->
+  <div class="controls-row">
+    <select id="domainSelect">
+      <option value="general">General</option>
+      <option value="coding" selected>Coding</option>
+      <option value="research">Research</option>
+      <option value="analysis">Analysis</option>
+      <option value="planning">Planning</option>
+    </select>
+    <div class="toggle-group">
+      <label class="toggle-label" title="Enable AEMA Experiential Memory Bank">
+        <input type="checkbox" id="memoryToggle" checked>
+        <span>Memory</span>
+      </label>
+      <label class="toggle-label" title="Simulate deliberate negative transfer trap">
+        <input type="checkbox" id="trapToggle">
+        <span>Trap Test</span>
+      </label>
+    </div>
+  </div>
+
+  <!-- Clip Banner -->
+  <div id="clipBanner" class="clip-banner">
+    <span id="clipSourceLabel">Clipped from active tab</span>
+    <button id="dismissClipBtn" title="Dismiss">&times;</button>
+  </div>
+
+  <!-- Prompt Input -->
+  <div class="prompt-box">
+    <textarea id="taskInput" placeholder="Enter task instruction or select text on any page..." autofocus></textarea>
+  </div>
+
+  <!-- Action Row -->
+  <div class="action-row">
+    <button id="executeBtn" class="btn-primary">
+      <span>Execute with Memory</span>
+    </button>
+    <div class="shortcut-hint" id="metricsLabel">Ctrl+Enter to run</div>
+  </div>
+
+  <!-- 5-Node Cognitive Stepper -->
+  <div class="stepper-card">
+    <div class="stepper-header">
+      <span>5-Node Cognitive Cycle</span>
+      <span id="cycleStatus">Idle</span>
+    </div>
+    <div class="stepper-nodes">
+      <div id="nodeRetrieve" class="stepper-node">
+        <div class="node-title">1. Retrieve</div>
+        <div class="node-detail" id="nodeRetrieveVal">-</div>
+      </div>
+      <div id="nodeExecute" class="stepper-node">
+        <div class="node-title">2. Execute</div>
+        <div class="node-detail" id="nodeExecuteVal">-</div>
+      </div>
+      <div id="nodeEvaluate" class="stepper-node">
+        <div class="node-title">3. Evaluate</div>
+        <div class="node-detail" id="nodeEvaluateVal">-</div>
+      </div>
+      <div id="nodeReflect" class="stepper-node">
+        <div class="node-title">4. Reflect</div>
+        <div class="node-detail" id="nodeReflectVal">-</div>
+      </div>
+      <div id="nodeTrust" class="stepper-node">
+        <div class="node-title">5. A-EMA</div>
+        <div class="node-detail" id="nodeTrustVal">-</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Output Console -->
+  <div class="output-card">
+    <div class="output-header">
+      <span>Execution Output</span>
+      <div class="output-actions">
+        <button id="copyBtn" class="btn-ghost">Copy</button>
+        <button id="clearBtn" class="btn-ghost">Clear</button>
+      </div>
+    </div>
+    <div id="outputContent" class="output-content">
+      <span class="output-placeholder">Agent outputs and streaming tokens appear here...</span>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <span>Theorem 1 Deterministic Quarantine</span>
+    <a href="http://localhost:5173/dashboard?demo=true&tab=studio" target="_blank" id="openStudioLink">Open Full Studio &rarr;</a>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
