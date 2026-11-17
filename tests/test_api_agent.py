@@ -92,3 +92,24 @@ def test_agent_executions_clear_authorized_and_unauthorized():
         res_bearer = client.delete("/api/agent/executions", headers={"Authorization": "Bearer secret-test-admin-key"})
         assert res_bearer.status_code == 200
 
+
+def test_agent_execute_stream_endpoint_mock_provider():
+    """Verify that POST /api/v1/agent/execute/stream emits real-time SSE events and terminal done event."""
+    payload = {
+        "taskInput": "Which planet is closest to the Sun?",
+        "domain": "research",
+        "memoryEnabled": True,
+        "memoryMode": "adaptive",
+        "provider": "mock",
+    }
+
+    response = client.post("/api/v1/agent/execute/stream", json=payload)
+    assert response.status_code == 200, f"Expected 200, got {response.status_code}: {response.text}"
+    assert "text/event-stream" in response.headers["content-type"]
+
+    content = response.text
+    assert "event: start" in content, "Missing start event in SSE stream"
+    assert "event: node_complete" in content, "Missing node_complete event in SSE stream"
+    assert "event: done" in content, "Missing done event in SSE stream"
+    assert '"execution_id":' in content or '"executionId":' in content
+
