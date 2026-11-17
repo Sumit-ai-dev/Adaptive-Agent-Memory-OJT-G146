@@ -4,9 +4,10 @@ Supports LiteLLM (when installed), OpenAI-compatible providers (Groq, NVIDIA NIM
 local Ollama, OpenAI, Gemini, Anthropic), and deterministic Mock emulator.
 """
 
+import asyncio
 import json
 import logging
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, AsyncGenerator, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -296,6 +297,115 @@ class UniversalLLMClient:
                 return raw_ans, tokens
 
         return self._generate_mock_response(messages, json_mode)
+
+    async def generate_stream(
+        self,
+        messages: List[Dict[str, str]],
+        config: Optional[ProviderConfig] = None,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        seed: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Asynchronously stream chat completion tokens from LiteLLM, AsyncOpenAI, or Mock generator.
+        Yields raw token string chunks in real time as they arrive over the wire.
+        """
+        cfg = config or self.default_config
+        if cfg is None:
+            raise ProviderConfigurationError(
+                "No provider configuration supplied. Pass an explicit ProviderConfig."
+            )
+        provider = cfg.provider
+        effective_seed = cfg.seed if seed is None else seed
+        validate_seed(provider, effective_seed)
+
+        if provider == ModelProvider.MOCK:
+            content, _ = self._generate_mock_response(messages, json_mode=False)
+            words = content.split(" ")
+            for i, word in enumerate(words):
+                chunk = word + (" " if i < len(words) - 1 else "")
+                yield chunk
+                await asyncio.sleep(0.005)
+            return
+
+        # 1. Native Google Gemini REST integration
+        if provider == ModelProvider.GEMINI:
+            try:
+                content, _ = await self._generate_gemini_native(
+                    messages=messages,
+                    cfg=cfg,
+                    json_mode=False,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                )
+                words = content.split(" ")
+                for i, word in enumerate(words):
+                    chunk = word + (" " if i < len(words) - 1 else "")
+                    yield chunk
+                    await asyncio.sleep(0.005)
+                return
+            except Exception as ge:
+                logger.warning(f"Gemini native streaming failed: {ge}")
+
+        # 2. Try litellm with stream=True
+        if litellm is not None:
+            try:
+                litellm_model = cfg.model
+                if provider == ModelProvider.GROQ and not litellm_model.startswith("groq/"):
+                    litellm_model = f"groq/{litellm_model}"
+                elif provider == ModelProvider.OLLAMA and not litellm_model.startswith("ollama/"):
+                    litellm_model = f"ollama/{litellm_model}"
+
+                resolved_key = (
+                    (cfg.api_key or "").strip()
+                    or getattr(settings, f"{provider.value.upper()}_API_KEY", None)
+                    or ProviderConfig.default_for(provider).api_key
+                )
+
+                response = await litellm.acompletion(
+                    model=litellm_model,
+                    messages=messages,
+                    api_key=resolved_key,
+                    base_url=cfg.base_url,
+                    temperature=temperature if temperature is not None else cfg.temperature,
+                    max_tokens=max_tokens or cfg.max_tokens,
+                    stream=True,
+                )
+                async for chunk in response:
+                    delta = ""
+                    if hasattr(chunk, "choices") and chunk.choices:
+                        delta = getattr(chunk.choices[0].delta, "content", "") or ""
+                    if delta:
+                        yield delta
+                return
+            except Exception as e:
+                logger.warning(f"LiteLLM streaming failed for {provider.value}: {e}. Trying AsyncOpenAI streaming fallback.")
+
+        # 3. OpenAI-compatible Async client streaming fallback
+        client, model, _ = self._get_client_and_model(cfg)
+        if client is not None:
+            try:
+                kwargs: Dict[str, Any] = {
+                    "model": model,
+                    "messages": messages,
+                    "temperature": temperature if temperature is not None else cfg.temperature,
+                    "max_tokens": max_tokens or cfg.max_tokens,
+                    "stream": True,
+                }
+                if effective_seed is not None:
+                    kwargs["seed"] = int(effective_seed)
+
+                response = await client.chat.completions.create(**kwargs)
+                async for chunk in response:
+                    delta = ""
+                    if chunk.choices and hasattr(chunk.choices[0], "delta"):
+                        delta = getattr(chunk.choices[0].delta, "content", "") or ""
+                    if delta:
+                        yield delta
+                return
+            except Exception as e:
+                logger.error(f"AsyncOpenAI streaming failed: {e}")
+                raise
 
     async def _generate_gemini_native(
         self,

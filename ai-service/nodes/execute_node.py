@@ -29,12 +29,20 @@ from models.provider import ModelProvider, ProviderConfig
 from models.state import AgentState
 
 try:
+    from langchain_core.runnables import RunnableConfig
+except ImportError:
+    RunnableConfig = Any  # type: ignore
+
+try:
     from ai_service.tools.search import search_tool
 except ImportError:
     search_tool = None
 
 
-async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
+async def execute_node(
+    state: AgentState | Dict[str, Any],
+    config: Optional[RunnableConfig] = None,
+) -> Dict[str, Any]:
     """
     Asynchronous LangGraph node function for task execution.
     Applies bilateral prompt constraints and routes execution through the LLM gateway.
@@ -235,10 +243,25 @@ async def execute_node(state: AgentState | Dict[str, Any]) -> Dict[str, Any]:
     # Call Universal LLM Gateway with error-safe handling. Passing `temperature` explicitly overrides the
     # config default; passing None leaves the config/provider default in force.
     has_provider_error = False
+    token_queue = state.get("token_queue")
+    if token_queue is None and config and isinstance(config, dict):
+        cfg_inner = config.get("configurable", {})
+        if isinstance(cfg_inner, dict):
+            token_queue = cfg_inner.get("token_queue")
     try:
-        final_answer, tokens = await llm_gateway.generate(
-            messages, config=provider_config, temperature=requested_temperature,
-        )
+        if token_queue is not None:
+            accumulated_chunks: List[str] = []
+            async for chunk in llm_gateway.generate_stream(
+                messages, config=provider_config, temperature=requested_temperature,
+            ):
+                accumulated_chunks.append(chunk)
+                await token_queue.put(("token", {"chunk": chunk}))
+            final_answer = "".join(accumulated_chunks)
+            tokens = count_tokens(final_answer) + prompt_tokens
+        else:
+            final_answer, tokens = await llm_gateway.generate(
+                messages, config=provider_config, temperature=requested_temperature,
+            )
     except Exception as e:
         logger.error(f"Universal LLM gateway call failed in execute_node: {e}", exc_info=True)
         final_answer = f"Execution encountered a model provider error: {str(e)}"
