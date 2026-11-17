@@ -599,10 +599,13 @@ async def list_sessions(
         if effective_user:
             rows = conn.execute(
                 """
-                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                FROM task_executions
-                WHERE session_id IS NOT NULL AND session_id != '' AND user_id = ?
-                GROUP BY session_id
+                SELECT t1.session_id,
+                       (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                       MAX(t1.created_at) as last_active,
+                       COUNT(*) as turn_count
+                FROM task_executions t1
+                WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND t1.user_id = ?
+                GROUP BY t1.session_id
                 ORDER BY last_active DESC
                 LIMIT ?
                 """,
@@ -611,10 +614,13 @@ async def list_sessions(
         elif unauthenticated_only:
             rows = conn.execute(
                 """
-                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                FROM task_executions
-                WHERE session_id IS NOT NULL AND session_id != '' AND (user_id IS NULL OR user_id = 'anonymous')
-                GROUP BY session_id
+                SELECT t1.session_id,
+                       (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                       MAX(t1.created_at) as last_active,
+                       COUNT(*) as turn_count
+                FROM task_executions t1
+                WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND (t1.user_id IS NULL OR t1.user_id = 'anonymous')
+                GROUP BY t1.session_id
                 ORDER BY last_active DESC
                 LIMIT ?
                 """,
@@ -623,10 +629,13 @@ async def list_sessions(
         else:
             rows = conn.execute(
                 """
-                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                FROM task_executions
-                WHERE session_id IS NOT NULL AND session_id != ''
-                GROUP BY session_id
+                SELECT t1.session_id,
+                       (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                       MAX(t1.created_at) as last_active,
+                       COUNT(*) as turn_count
+                FROM task_executions t1
+                WHERE t1.session_id IS NOT NULL AND t1.session_id != ''
+                GROUP BY t1.session_id
                 ORDER BY last_active DESC
                 LIMIT ?
                 """,

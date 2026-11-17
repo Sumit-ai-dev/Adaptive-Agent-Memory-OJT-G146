@@ -958,6 +958,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
                 conn.commit()
         except Exception as exc:
             logger.warning(f"Could not persist execution {getattr(execution, 'id', '')} to SQLite: {exc}")
+            raise
 
     async def get_execution(self, execution_id: str) -> Optional[Any]:
         """Fetch a specific execution trace by ID from SQLite."""
@@ -1042,10 +1043,13 @@ class SQLiteMemoryStore(BaseMemoryStore):
                 if user_id:
                     cursor.execute(
                         """
-                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                        FROM task_executions
-                        WHERE session_id IS NOT NULL AND session_id != '' AND user_id = ?
-                        GROUP BY session_id
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND t1.user_id = ?
+                        GROUP BY t1.session_id
                         ORDER BY last_active DESC
                         LIMIT ?
                         """,
@@ -1054,10 +1058,13 @@ class SQLiteMemoryStore(BaseMemoryStore):
                 elif unauthenticated_only:
                     cursor.execute(
                         """
-                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                        FROM task_executions
-                        WHERE session_id IS NOT NULL AND session_id != '' AND (user_id IS NULL OR user_id = 'anonymous')
-                        GROUP BY session_id
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND (t1.user_id IS NULL OR t1.user_id = 'anonymous')
+                        GROUP BY t1.session_id
                         ORDER BY last_active DESC
                         LIMIT ?
                         """,
@@ -1066,10 +1073,13 @@ class SQLiteMemoryStore(BaseMemoryStore):
                 else:
                     cursor.execute(
                         """
-                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                        FROM task_executions
-                        WHERE session_id IS NOT NULL AND session_id != ''
-                        GROUP BY session_id
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != ''
+                        GROUP BY t1.session_id
                         ORDER BY last_active DESC
                         LIMIT ?
                         """,
@@ -1426,6 +1436,7 @@ class PostgresMemoryStore(BaseMemoryStore):
                 )
         except Exception as exc:
             logger.warning(f"Could not persist execution {getattr(execution, 'id', '')} to PostgreSQL: {exc}")
+            raise
 
     async def get_execution(self, execution_id: str) -> Optional[Any]:
         """Fetch a specific execution trace by ID from PostgreSQL."""
@@ -1512,10 +1523,13 @@ class PostgresMemoryStore(BaseMemoryStore):
                 if user_id:
                     rows = await conn.fetch(
                         """
-                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                        FROM task_executions
-                        WHERE session_id IS NOT NULL AND session_id != '' AND user_id = $1
-                        GROUP BY session_id, task_input
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND t1.user_id = $1
+                        GROUP BY t1.session_id
                         ORDER BY last_active DESC
                         LIMIT $2
                         """,
@@ -1525,10 +1539,13 @@ class PostgresMemoryStore(BaseMemoryStore):
                 elif unauthenticated_only:
                     rows = await conn.fetch(
                         """
-                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                        FROM task_executions
-                        WHERE session_id IS NOT NULL AND session_id != '' AND (user_id IS NULL OR user_id = 'anonymous')
-                        GROUP BY session_id, task_input
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND (t1.user_id IS NULL OR t1.user_id = 'anonymous')
+                        GROUP BY t1.session_id
                         ORDER BY last_active DESC
                         LIMIT $1
                         """,
@@ -1537,10 +1554,13 @@ class PostgresMemoryStore(BaseMemoryStore):
                 else:
                     rows = await conn.fetch(
                         """
-                        SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-                        FROM task_executions
-                        WHERE session_id IS NOT NULL AND session_id != ''
-                        GROUP BY session_id, task_input
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != ''
+                        GROUP BY t1.session_id
                         ORDER BY last_active DESC
                         LIMIT $1
                         """,
@@ -1548,9 +1568,10 @@ class PostgresMemoryStore(BaseMemoryStore):
                     )
                 sessions = []
                 for r in rows:
+                    title_val = r["title"] if "title" in r else r.get("task_input", "New Conversation")
                     sessions.append({
                         "sessionId": r["session_id"],
-                        "title": (r["task_input"] or "New Conversation")[:60],
+                        "title": (title_val or "New Conversation")[:60],
                         "lastActive": str(r["last_active"]),
                         "turnCount": r["turn_count"],
                     })
