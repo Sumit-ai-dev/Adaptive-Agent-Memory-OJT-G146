@@ -28,7 +28,7 @@ pgvector>=0.3.0                   # ai_service/memory/store.py (pgvector integra
 sentence-transformers>=6.3.0      # ai_service/embedder.py (hash fallback if absent)
 
 # --- Model gateway, Token Budgeting & Observability ---
-openai>=3.50.0                    # ai_service/llm_client.py (AsyncOpenAI)
+openai>=3.51.0                    # ai_service/llm_client.py (AsyncOpenAI)
 tiktoken>=0.14.0                  # ai_service/context/token_budget.py (token counting)
 langfuse>=5.2.0                   # ai_service/observability/tracer.py (distributed tracing)
 
