@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Play, Sparkles, AlertOctagon, Terminal, KeyRound, ChevronDown, Check, Cpu } from 'lucide-react'
+import { Play, Sparkles, Terminal, KeyRound, ChevronDown, Check, Cpu } from 'lucide-react'
 import type { TaskDomain } from '../types'
 
 type ProviderType = 'gemini' | 'groq' | 'ollama' | 'openai' | 'mock'
@@ -150,13 +150,13 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
   }
 
   return (
-    <div className="rounded-2xl border p-5 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-4">
+    <div className="rounded-lg border border-[#242422] p-5 bg-[#161614] text-[#EDECE8] space-y-4">
       {/* Console Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Terminal size={16} className="text-indigo-600 dark:text-indigo-400" />
-          <h3 className="text-sm font-semibold text-[#18181B] dark:text-[#F4F4F6]">
-            Execution Console
+          <Terminal size={15} className="text-[#4EAA79]" />
+          <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-[#EDECE8]">
+            Quick Task Launcher
           </h3>
         </div>
       </div>
@@ -170,36 +170,35 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
             placeholder="Describe an agent task to execute..."
-            className="w-full p-3 text-xs font-mono rounded-xl border outline-none transition-colors
-              bg-zinc-50 border-[#E6E6E1] text-[#18181B] focus:border-indigo-600 focus:bg-white
-              dark:bg-[#1A1F2C] dark:border-[#252B3B] dark:text-[#F4F4F6] dark:focus:border-indigo-400 dark:focus:bg-[#131722]"
+            className="w-full p-3 text-xs font-mono rounded-lg border outline-none transition-colors
+              bg-[#141412] border-[#2E2E2A] text-[#EDECE8] placeholder-[#5A5955] focus:border-[#4EAA79]"
           />
         </div>
 
         {/* Optional BYOK API Key Input */}
         {showKeyInput && provider !== 'mock' && provider !== 'ollama' && (
           <div className="space-y-1.5">
-            <div className="flex items-center gap-2 p-2.5 rounded-xl border bg-zinc-50 dark:bg-[#1A1F2C] border-[#E6E6E1] dark:border-[#252B3B]">
-              <KeyRound size={14} className="text-zinc-400 shrink-0" />
+            <div className="flex items-center gap-2 p-2 rounded-lg border bg-[#141412] border-[#2E2E2A]">
+              <KeyRound size={13} className="text-[#7E7D77] shrink-0" />
               <input
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
                 placeholder={getKeyPlaceholder()}
-                className="w-full text-xs font-mono bg-transparent outline-none text-[#18181B] dark:text-[#F4F4F6] placeholder-zinc-400"
+                className="w-full text-xs font-mono bg-transparent outline-none text-[#EDECE8] placeholder-[#5A5955]"
               />
               {apiKey && (
                 <button
                   type="button"
                   onClick={() => setApiKey('')}
-                  className="text-[10px] font-mono text-zinc-400 hover:text-zinc-600 px-1 cursor-pointer"
+                  className="text-[10px] font-mono text-[#7E7D77] hover:text-[#EDECE8] px-1 cursor-pointer"
                 >
                   Clear
                 </button>
               )}
             </div>
             {keyWarning && (
-              <p className="text-[11px] font-mono text-amber-600 dark:text-amber-400 px-1">
+              <p className="text-[11px] font-mono text-[#E67E22] px-1">
                 {keyWarning}
               </p>
             )}
@@ -208,16 +207,15 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
 
         {/* Controls Bar */}
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5">
             {/* Domain Picker */}
             <div className="flex items-center gap-2">
-              <span className="font-mono text-zinc-400 text-[11px]">DOMAIN:</span>
+              <span className="font-mono text-[#7E7D77] text-[11px]">DOMAIN:</span>
               <select
                 value={domain}
                 onChange={(e) => setDomain(e.target.value as TaskDomain)}
-                className="px-2.5 py-1.5 rounded-lg border font-mono outline-none
-                  bg-white border-[#E6E6E1] text-[#18181B]
-                  dark:bg-[#1A1F2C] dark:border-[#252B3B] dark:text-[#F4F4F6]"
+                className="px-2.5 py-1.5 rounded-lg border font-mono outline-none text-xs cursor-pointer
+                  bg-[#141412] border-[#2E2E2A] text-[#EDECE8]"
               >
                 <option value="coding">Coding</option>
                 <option value="research">Research</option>
@@ -230,15 +228,14 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
             {/* Model Provider Picker with Logos */}
             <div className="relative" ref={modelDropdownRef}>
               <div className="flex items-center gap-2">
-                <span className="font-mono text-zinc-400 text-[11px]">MODEL:</span>
+                <span className="font-mono text-[#7E7D77] text-[11px]">MODEL:</span>
                 <button
                   type="button"
                   onClick={() => setIsModelOpen(!isModelOpen)}
                   className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border font-mono text-xs outline-none transition-colors cursor-pointer
-                    bg-white border-[#E6E6E1] text-[#18181B] hover:border-indigo-400
-                    dark:bg-[#1A1F2C] dark:border-[#252B3B] dark:text-[#F4F4F6] dark:hover:border-indigo-500"
+                    bg-[#141412] border-[#2E2E2A] text-[#EDECE8] hover:bg-[#1E1E1B]"
                 >
-                  <div className="w-4 h-4 rounded-sm flex items-center justify-center shrink-0 overflow-hidden">
+                  <div className="w-3.5 h-3.5 rounded-sm flex items-center justify-center shrink-0 overflow-hidden">
                     {currentModel.logo ? (
                       <img
                         src={currentModel.logo}
@@ -246,18 +243,15 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
                         className="w-full h-full object-contain"
                       />
                     ) : (
-                      <Cpu size={14} className="text-zinc-400" />
+                      <Cpu size={13} className="text-[#7E7D77]" />
                     )}
                   </div>
                   <span className="truncate max-w-[170px] text-[11px] font-medium">
                     {currentModel.name}
-                    <span className="text-zinc-400 ml-1 font-normal font-mono text-[10px]">
-                      ({currentModel.subname})
-                    </span>
                   </span>
                   <ChevronDown
-                    size={12}
-                    className={`text-zinc-400 transition-transform duration-200 shrink-0 ${
+                    size={11}
+                    className={`text-[#7E7D77] transition-transform duration-200 shrink-0 ${
                       isModelOpen ? 'rotate-180' : ''
                     }`}
                   />
@@ -267,9 +261,8 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
               {/* Dropdown Menu */}
               {isModelOpen && (
                 <div
-                  className="absolute left-0 mt-1.5 w-64 rounded-xl border py-1.5 z-50 shadow-xl backdrop-blur-md
-                    bg-white/95 border-[#E6E6E1] text-[#18181B]
-                    dark:bg-[#141926]/95 dark:border-[#252B3B] dark:text-[#F4F4F6]"
+                  className="absolute left-0 mt-1.5 w-60 rounded-lg border py-1.5 z-50 shadow-xl
+                    bg-[#1A1A17] border-[#2E2E2A] text-[#EDECE8]"
                 >
                   {MODEL_OPTIONS.map((opt) => {
                     const isSelected = opt.id === provider
@@ -281,14 +274,14 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
                           setProvider(opt.id)
                           setIsModelOpen(false)
                         }}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
+                        className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs font-mono transition-colors cursor-pointer ${
                           isSelected
-                            ? 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 font-medium'
-                            : 'hover:bg-zinc-100 dark:hover:bg-[#1E2536] text-[#18181B] dark:text-[#F4F4F6]'
+                            ? 'bg-[#22221E] text-white font-medium border-l-2 border-[#4EAA79]'
+                            : 'hover:bg-[#20201D] text-[#9E9D96]'
                         }`}
                       >
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0 bg-zinc-100 dark:bg-zinc-800/80 p-0.5 border border-zinc-200/60 dark:border-zinc-700/60 overflow-hidden">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <div className="w-4 h-4 rounded flex items-center justify-center shrink-0 bg-[#242422] p-0.5 overflow-hidden">
                             {opt.logo ? (
                               <img
                                 src={opt.logo}
@@ -296,18 +289,18 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
                                 className="w-full h-full object-contain"
                               />
                             ) : (
-                              <Cpu size={13} className="text-zinc-400" />
+                              <Cpu size={12} className="text-[#7E7D77]" />
                             )}
                           </div>
                           <div className="truncate">
                             <span className="font-medium">{opt.name}</span>
-                            <span className="text-[10px] text-zinc-400 ml-1.5 font-mono">
+                            <span className="text-[10px] text-[#7E7D77] ml-1.5">
                               ({opt.subname})
                             </span>
                           </div>
                         </div>
                         {isSelected && (
-                          <Check size={14} className="text-indigo-600 dark:text-indigo-400 shrink-0 ml-2" />
+                          <Check size={13} className="text-[#4EAA79] shrink-0 ml-2" />
                         )}
                       </button>
                     )
@@ -321,66 +314,64 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
               <button
                 type="button"
                 onClick={() => setShowKeyInput(!showKeyInput)}
-                className={`flex items-center gap-1.5 px-2 py-1.5 rounded-lg border font-mono text-[11px] transition-colors ${
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border font-mono text-[11px] transition-colors cursor-pointer ${
                   apiKey
-                    ? 'border-emerald-300 text-emerald-700 bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:bg-emerald-950/40'
-                    : 'border-zinc-200 dark:border-zinc-800 text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                    ? 'border-[#3E4E42] text-[#4EAA79] bg-[#1E2E24]'
+                    : 'border-[#2E2E2A] bg-[#141412] text-[#7E7D77] hover:text-[#EDECE8] hover:bg-[#1E1E1B]'
                 }`}
-                title="Enter custom API key for this provider (optional if configured in backend environment)"
+                title="Enter custom API key for this provider"
               >
                 <KeyRound size={12} />
-                <span>{apiKey ? 'API Key Set' : 'BYOK Key'}</span>
+                <span>{apiKey ? 'Key Set' : 'BYOK'}</span>
               </button>
             )}
           </div>
 
           {/* Memory Mode Toggle */}
-          <div className="flex items-center gap-4">
-            <label className="flex items-center gap-2 cursor-pointer">
+          <div className="flex items-center gap-3">
+            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#2E2E2A] bg-[#141412] text-[11px] font-mono text-[#EDECE8] cursor-pointer hover:bg-[#1E1E1B] transition-colors select-none">
               <input
                 type="checkbox"
                 checked={memoryEnabled}
                 onChange={(e) => setMemoryEnabled(e.target.checked)}
-                className="rounded accent-indigo-600"
+                className="w-3.5 h-3.5 rounded border-[#2E2E2A] bg-[#141412] text-[#4EAA79] accent-[#4EAA79]"
               />
-              <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                AEMA Memory (Adaptive)
+              <span className={memoryEnabled ? 'text-[#4EAA79] font-medium' : 'text-[#7E7D77]'}>
+                AEMA
               </span>
             </label>
 
-            <label className="flex items-center gap-2 cursor-pointer" title="Simulate negative transfer trap to observe Theorem 1 quarantine">
+            <label className="flex items-center gap-1.5 px-2.5 py-1 rounded border border-[#2E2E2A] bg-[#141412] text-[11px] font-mono text-[#EDECE8] cursor-pointer hover:bg-[#1E1E1B] transition-colors select-none" title="Simulate negative transfer trap to observe Theorem 1 quarantine">
               <input
                 type="checkbox"
                 checked={simulateFailure}
                 onChange={(e) => setSimulateFailure(e.target.checked)}
-                className="rounded accent-rose-600"
+                className="w-3.5 h-3.5 rounded border-[#2E2E2A] bg-[#141412] text-[#D9534F] accent-[#D9534F]"
               />
-              <span className="font-medium text-rose-600 dark:text-rose-400 flex items-center gap-1">
-                <AlertOctagon size={13} />
-                <span>Simulate Failure Trap</span>
+              <span className={simulateFailure ? 'text-[#D9534F] font-medium' : 'text-[#7E7D77]'}>
+                Trap Test
               </span>
             </label>
-          </div>
 
-          {/* Run Button */}
-          <button
-            type="submit"
-            disabled={isRunning}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all
-              bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 dark:bg-indigo-600 dark:hover:bg-indigo-500 shadow-sm cursor-pointer"
-          >
-            {isRunning ? (
-              <>
-                <Sparkles size={14} className="animate-spin" />
-                <span>Executing Cycle...</span>
-              </>
-            ) : (
-              <>
-                <Play size={14} />
-                <span>Execute Cycle</span>
-              </>
-            )}
-          </button>
+            {/* Run Button */}
+            <button
+              type="submit"
+              disabled={isRunning}
+              className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-[#141412] bg-[#EDECE8] hover:bg-white disabled:opacity-50 transition-colors shadow-sm cursor-pointer"
+            >
+              {isRunning ? (
+                <>
+                  <Sparkles size={13} className="animate-spin" />
+                  <span>Running...</span>
+                </>
+              ) : (
+                <>
+                  <Play size={13} />
+                  <span>Execute</span>
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </form>
     </div>
