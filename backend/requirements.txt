@@ -33,7 +33,7 @@ tiktoken>=0.14.0                  # ai_service/context/token_budget.py (token co
 langfuse>=5.2.0                   # ai_service/observability/tracer.py (distributed tracing)
 
 # --- Test runner ---
-pytest>=8.0.0
+pytest>=9.2.0
 pytest-asyncio>=1.5.0
 
 # --- Agent tools ---
