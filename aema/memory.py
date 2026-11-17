@@ -9,7 +9,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 from pathlib import Path
-from typing import Any, Coroutine, Dict, List, Optional, TypeVar
+from typing import Any, AsyncGenerator, Coroutine, Dict, Generator, List, Optional, TypeVar
 
 from aema._compat import import_pkg, resolve_db_path
 
@@ -25,6 +25,37 @@ def _run_sync(coro: Coroutine[Any, Any, _T]) -> _T:
 
     with ThreadPoolExecutor(max_workers=1) as pool:
         return pool.submit(asyncio.run, coro).result()
+
+
+def _parse_sse_block(block: str) -> Optional[Dict[str, Any]]:
+    """Parse an SSE message block into event type and JSON payload."""
+    event_type = "message"
+    data_str = ""
+    for line in block.strip().split("\n"):
+        if line.startswith("event: "):
+            event_type = line[7:].strip()
+        elif line.startswith("data: "):
+            data_str = line[6:].strip()
+
+    if not data_str:
+        return None
+
+    try:
+        data = json.loads(data_str)
+    except Exception:
+        data = {"raw": data_str}
+
+    delta = None
+    if event_type == "token" and isinstance(data, dict):
+        delta = data.get("chunk") or data.get("delta")
+
+    return {
+        "event": event_type,
+        "data": data,
+        "delta": delta,
+        "node": data.get("node") if isinstance(data, dict) else None,
+        "result": data.get("result") if isinstance(data, dict) else None,
+    }
 
 
 class AdaptiveMemory:
@@ -527,6 +558,79 @@ class AdaptiveMemory:
             "backend": backend,
         }
 
+    async def aexecute_stream(
+        self,
+        task_input: str,
+        domain: str = "general",
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        memory_enabled: bool = True,
+        simulate_failure: bool = False,
+    ) -> AsyncGenerator[Dict[str, Any], None]:
+        """
+        Stream agent execution events and tokens asynchronously via Server-Sent Events (SSE).
+        Yields structured event dictionaries containing lifecycle updates, token deltas, and the final execution result.
+        """
+        effective_user = self._resolve_user(user_id)
+
+        if self.api_url:
+            import httpx
+
+            url = f"{self.api_url}/api/v1/agent/execute/stream"
+            headers = self._headers()
+            headers["Accept"] = "text/event-stream"
+            headers["Content-Type"] = "application/json"
+            payload = {
+                "taskInput": task_input,
+                "taskDomain": domain,
+                "sessionId": session_id,
+                "userId": effective_user,
+                "memoryEnabled": memory_enabled,
+                "simulateFailure": simulate_failure,
+            }
+
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as response:
+                    response.raise_for_status()
+                    buffer = ""
+                    async for chunk in response.aiter_text():
+                        buffer += chunk
+                        while "\n\n" in buffer:
+                            block, buffer = buffer.split("\n\n", 1)
+                            if not block.strip():
+                                continue
+                            parsed = _parse_sse_block(block)
+                            if parsed:
+                                yield parsed
+            return
+
+        # Local execution using graph and internal memory store
+        from ai_service.graph import execute_task_stream
+        from models.domain import TaskDomain
+        from models.task import TaskExecuteRequest
+
+        try:
+            task_domain_val = TaskDomain(domain)
+        except Exception:
+            task_domain_val = TaskDomain.GENERAL
+
+        req = TaskExecuteRequest(
+            task_input=task_input,
+            task_domain=task_domain_val,
+            session_id=session_id,
+            user_id=effective_user,
+            memory_enabled=memory_enabled,
+            simulate_failure=simulate_failure,
+        )
+
+        async for sse_chunk in execute_task_stream(req, memory_store=self._store):
+            for block in sse_chunk.strip().split("\n\n"):
+                if not block.strip():
+                    continue
+                parsed = _parse_sse_block(block)
+                if parsed:
+                    yield parsed
+
     # ── Sync Wrappers (Safe inside both sync scripts and running async loops) ──
 
     def remember(
@@ -635,3 +739,56 @@ class AdaptiveMemory:
             if hit.get("pitfall"):
                 lines.append(f"   Avoid: {hit['pitfall']}")
         return "\n".join(lines)
+
+    def execute_stream(
+        self,
+        task_input: str,
+        domain: str = "general",
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        memory_enabled: bool = True,
+        simulate_failure: bool = False,
+    ) -> Generator[Dict[str, Any], None, None]:
+        """
+        Synchronous generator wrapper for streaming agent execution events and tokens.
+        """
+        import queue
+        import threading
+
+        q: queue.Queue = queue.Queue()
+        sentinel = object()
+
+        async def _consumer():
+            try:
+                async for item in self.aexecute_stream(
+                    task_input=task_input,
+                    domain=domain,
+                    session_id=session_id,
+                    user_id=user_id,
+                    memory_enabled=memory_enabled,
+                    simulate_failure=simulate_failure,
+                ):
+                    q.put(item)
+            except Exception as e:
+                q.put(e)
+            finally:
+                q.put(sentinel)
+
+        def _thread_target():
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(_consumer())
+            finally:
+                loop.close()
+
+        t = threading.Thread(target=_thread_target, daemon=True)
+        t.start()
+
+        while True:
+            item = q.get()
+            if item is sentinel:
+                break
+            if isinstance(item, Exception):
+                raise item
+            yield item

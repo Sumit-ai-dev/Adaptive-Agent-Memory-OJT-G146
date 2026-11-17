@@ -14,6 +14,8 @@ import type {
   OutcomeType,
   RetrievalQuery,
   RetrievalResult,
+  TaskStreamChunk,
+  TaskStreamOptions,
   TrustUpdateOptions,
   TrustUpdateResult,
 } from './types.js';
@@ -681,6 +683,129 @@ export class AEMAClient {
    */
   getQuarantined(): Experience[] {
     return Array.from(this.localStore.values()).filter((e) => e.isQuarantined);
+  }
+
+  /**
+   * Execute an agent task with live streaming token and cognitive stage updates.
+   * Yields TaskStreamChunk items as SSE events arrive from the AEMA gateway.
+   */
+  async *streamTask(options: TaskStreamOptions): AsyncGenerator<TaskStreamChunk, void, unknown> {
+    const payload = {
+      taskInput: options.task,
+      taskDomain: normalizeBackendDomain(options.domain) ?? 'general',
+      userId: this.resolveUser(options.userId),
+      sessionId: options.sessionId,
+      memoryEnabled: options.memoryEnabled ?? true,
+      provider: options.provider,
+      apiKey: options.apiKey,
+      simulateFailure: options.simulateFailure,
+    };
+
+    const url = `${this.baseUrl}/api/v1/agent/execute/stream`;
+    const headers: Record<string, string> = {
+      ...this.getHeaders(),
+      Accept: 'text/event-stream',
+    };
+
+    const res = await this.fetchWithTimeout(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '');
+      throw new Error(`AEMA streamTask failed (${res.status}): ${errText}`);
+    }
+
+    if (!res.body) {
+      throw new Error('AEMA streamTask: response body is not readable.');
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() || '';
+
+        for (const block of blocks) {
+          if (!block.trim()) continue;
+          let eventType = 'message';
+          let dataStr = '';
+
+          for (const line of block.split('\n')) {
+            if (line.startsWith('event: ')) {
+              eventType = line.slice(7).trim();
+            } else if (line.startsWith('data: ')) {
+              dataStr = line.slice(6).trim();
+            }
+          }
+
+          if (!dataStr) continue;
+
+          try {
+            const parsed = JSON.parse(dataStr);
+            if (eventType === 'token') {
+              const delta = typeof parsed.chunk === 'string' ? parsed.chunk : (parsed.delta ?? '');
+              yield {
+                stage: 'execution',
+                node: 'execute_node',
+                delta,
+                content: delta,
+                raw: parsed,
+              };
+            } else if (eventType === 'node_complete') {
+              let stage: TaskStreamChunk['stage'] = 'execution';
+              if (parsed.node === 'retrieve_node') stage = 'retrieval';
+              else if (parsed.node === 'execute_node') stage = 'execution';
+              else if (parsed.node === 'evaluate_node') stage = 'evaluation';
+              else if (parsed.node === 'reflect_node') stage = 'reflection';
+              else if (parsed.node === 'trust_node' || parsed.node === 'trust_update_node') stage = 'trust_update';
+
+              yield {
+                stage,
+                node: parsed.node,
+                content: parsed.summary ?? (typeof parsed.result === 'string' ? parsed.result : undefined),
+                raw: parsed,
+              };
+            } else if (eventType === 'done') {
+              yield {
+                stage: 'complete',
+                isComplete: true,
+                finalAnswer: parsed.result?.final_output ?? parsed.result?.solution ?? parsed.final_output,
+                executionId: parsed.result?.id ?? parsed.execution_id,
+                latencyMs: parsed.result?.latency_ms,
+                raw: parsed,
+              };
+            } else if (eventType === 'error') {
+              yield {
+                stage: 'error',
+                content: parsed.error ?? 'Unknown error during execution',
+                raw: parsed,
+              };
+            } else {
+              yield {
+                stage: 'execution',
+                raw: parsed,
+              };
+            }
+          } catch {
+            if (dataStr === '[DONE]') {
+              yield { stage: 'complete', isComplete: true };
+            }
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
   }
 
   private getHeaders(): Record<string, string> {
