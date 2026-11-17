@@ -10,6 +10,7 @@ pydantic>=2.14.3
 pydantic-settings>=2.5.0          # ai_service/config.py
 httpx>=0.28.1
 python-dotenv>=1.2.4
+PyJWT[crypto]>=2.8.0              # backend/security/auth.py (JWT decoding and verification)
 
 # --- Agent orchestration ---
 langgraph>=1.2.21                 # ai_service/graph.py
