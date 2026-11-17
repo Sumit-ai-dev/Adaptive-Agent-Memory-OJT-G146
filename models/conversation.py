@@ -6,8 +6,8 @@ Provides typed schemas for Conversation threads, Messages, and CRUD operations.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from typing import Any, List, Literal, Optional
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -48,7 +48,7 @@ class ConversationMessage(BaseModel):
     id: str = Field(..., description="Unique message ID")
     conversation_id: str = Field(..., description="Parent conversation ID")
     user_id: Optional[str] = Field(default=None, description="Tenant user ID")
-    role: str = Field(..., description="Message role: user, assistant, or system")
+    role: Literal["user", "assistant", "system"] = Field(..., description="Message role: user, assistant, or system")
     content: str = Field(..., min_length=1, description="Message content")
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -57,8 +57,18 @@ class ConversationMessageCreateRequest(BaseModel):
     """Payload to append a message to a conversation."""
     model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
 
-    role: str = Field(default="user", description="Message role: user or assistant")
+    role: Literal["user", "assistant"] = Field(default="user", description="Message role: user or assistant")
     content: str = Field(..., min_length=1, description="Message content")
+
+    @field_validator("role", mode="before")
+    @classmethod
+    def validate_role(cls, v: Any) -> Any:
+        if isinstance(v, str):
+            v_clean = v.strip().lower()
+            if v_clean not in ("user", "assistant"):
+                raise ValueError("Message role must be either 'user' or 'assistant'.")
+            return v_clean
+        return v
 
 
 class ConversationListResponse(BaseModel):

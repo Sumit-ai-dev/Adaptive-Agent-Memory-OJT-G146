@@ -55,13 +55,26 @@ async def create_conversation(
     user_id = auth.user_id if (auth and auth.is_authenticated) else None
     conv_id = body.id or str(uuid.uuid4())
 
+    existing = await shared_store.get_conversation(conv_id)
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conversation with ID '{conv_id}' already exists.",
+        )
+
     conv = Conversation(
         id=conv_id,
         user_id=user_id,
         title=body.title or "New Conversation",
         is_pinned=body.is_pinned,
     )
-    saved = await shared_store.create_conversation(conv)
+    try:
+        saved = await shared_store.create_conversation(conv)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Conversation with ID '{conv_id}' could not be created: {exc}",
+        )
     return saved
 
 

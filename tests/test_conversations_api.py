@@ -253,5 +253,82 @@ def test_agent_execution_syncs_to_conversation():
     msgs_resp = client.get(f"/api/conversations/{session_id}/messages")
     assert msgs_resp.status_code == 200
     messages = msgs_resp.json()
-    assert len(messages) >= 1
+    assert len(messages) >= 2
     assert any(m["role"] == "user" for m in messages)
+    assert any(m["role"] == "assistant" for m in messages)
+
+
+def test_duplicate_conversation_id_rejected():
+    """Verify that recreating an existing conversation ID is rejected with 409 Conflict."""
+    conv_id = f"conv-dup-{uuid.uuid4().hex[:8]}"
+    res1 = client.post("/api/conversations", json={"id": conv_id, "title": "First"})
+    assert res1.status_code == 201
+
+    res2 = client.post("/api/conversations", json={"id": conv_id, "title": "Overwrite Attempt"})
+    assert res2.status_code == 409
+    assert f"'{conv_id}' already exists" in res2.json()["detail"]
+
+
+def test_unsupported_message_role_rejected():
+    """Verify that unsupported message roles like moderator or hacker are rejected with 422."""
+    conv_id = f"conv-role-{uuid.uuid4().hex[:8]}"
+    client.post("/api/conversations", json={"id": conv_id, "title": "Role Test"})
+
+    res = client.post(
+        f"/api/conversations/{conv_id}/messages",
+        json={"role": "moderator", "content": "Attempted role"},
+    )
+    assert res.status_code == 422
+
+
+def test_cross_tenant_session_collision_prevented():
+    """Verify that reusing another tenant's session ID does not contaminate their thread."""
+    token_alice = create_access_token({"sub": "usr_alice_owner", "role": "user"})
+    token_bob = create_access_token({"sub": "usr_bob_intruder", "role": "user"})
+    session_id = f"session-shared-{uuid.uuid4().hex[:8]}"
+
+    # Alice runs task with this sessionId
+    res_alice = client.post(
+        "/api/agent/execute",
+        json={
+            "taskInput": "Alice private calculation",
+            "taskDomain": "coding",
+            "memoryMode": "adaptive",
+            "sessionId": session_id,
+            "provider": "mock",
+        },
+        headers={"Authorization": f"Bearer {token_alice}"},
+    )
+    assert res_alice.status_code == 200
+
+    # Alice has 2 messages (user + assistant)
+    alice_msgs = client.get(
+        f"/api/conversations/{session_id}/messages",
+        headers={"Authorization": f"Bearer {token_alice}"},
+    )
+    assert alice_msgs.status_code == 200
+    assert len(alice_msgs.json()) == 2
+
+    # Bob tries to execute with Alice's sessionId
+    res_bob = client.post(
+        "/api/agent/execute",
+        json={
+            "taskInput": "Bob injection attempt",
+            "taskDomain": "coding",
+            "memoryMode": "adaptive",
+            "sessionId": session_id,
+            "provider": "mock",
+        },
+        headers={"Authorization": f"Bearer {token_bob}"},
+    )
+    assert res_bob.status_code == 200
+
+    # Alice's conversation still only has Alice's messages
+    alice_msgs_after = client.get(
+        f"/api/conversations/{session_id}/messages",
+        headers={"Authorization": f"Bearer {token_alice}"},
+    )
+    assert alice_msgs_after.status_code == 200
+    messages = alice_msgs_after.json()
+    assert len(messages) == 2
+    assert not any("Bob injection" in m["content"] for m in messages)

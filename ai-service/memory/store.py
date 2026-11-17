@@ -211,6 +211,8 @@ class BaseMemoryStore(ABC):
 
     async def create_conversation(self, conv: Any) -> Any:
         self._ensure_in_memory_conversations()
+        if conv.id in self._conversations_cache:
+            raise ValueError(f"Conversation with id '{conv.id}' already exists")
         self._conversations_cache[conv.id] = conv
         return conv
 
@@ -316,6 +318,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
     def _get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def _get_write_connection(self) -> sqlite3.Connection:
@@ -323,6 +326,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout = 30000")
         conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def _init_tables(self) -> None:
@@ -1248,7 +1252,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
                 cursor = conn.cursor()
                 cursor.execute(
                     """
-                    INSERT OR REPLACE INTO conversations (
+                    INSERT INTO conversations (
                         id, user_id, title, is_pinned, created_at, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?)
                     """,
@@ -2007,11 +2011,6 @@ class PostgresMemoryStore(BaseMemoryStore):
                     """
                     INSERT INTO conversations (id, user_id, title, is_pinned, created_at, updated_at)
                     VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (id) DO UPDATE SET
-                        user_id = EXCLUDED.user_id,
-                        title = EXCLUDED.title,
-                        is_pinned = EXCLUDED.is_pinned,
-                        updated_at = EXCLUDED.updated_at
                     """,
                     getattr(conv, "id", ""),
                     getattr(conv, "user_id", None),
