@@ -36,6 +36,20 @@ REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if REPO_ROOT not in sys.path:
     sys.path.insert(0, REPO_ROOT)
 
+# Windows cross-platform compatibility: ensure ai_service resolves properly
+ai_service_link = os.path.join(REPO_ROOT, "ai_service")
+ai_service_target = os.path.join(REPO_ROOT, "ai-service")
+if (os.path.isfile(ai_service_link) and not os.path.islink(ai_service_link)) or (
+    not os.path.exists(ai_service_link) and os.path.exists(ai_service_target)
+):
+    try:
+        import shutil
+        if os.path.isfile(ai_service_link):
+            os.remove(ai_service_link)
+        shutil.copytree(ai_service_target, ai_service_link, dirs_exist_ok=True)
+    except Exception:
+        pass
+
 from ai_service.graph import execute_task
 from ai_service.memory.store import SQLiteMemoryStore
 from models.domain import ExperienceStatus, MemoryMode, OutcomeQuality, TaskDomain
