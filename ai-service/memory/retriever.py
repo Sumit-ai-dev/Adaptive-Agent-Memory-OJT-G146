@@ -33,6 +33,7 @@ class MemoryRetriever:
         domain: TaskDomain = TaskDomain.GENERAL,
         mode: MemoryMode = MemoryMode.ADAPTIVE,
         top_k: int = 3,
+        user_id: Optional[str] = None,
     ) -> Tuple[List[RetrievedMemory], Dict[str, Any]]:
         """
         Executes constrained retrieval based on the operational memory mode and returns
@@ -54,7 +55,10 @@ class MemoryRetriever:
         query_vec = local_embedder.embed_text(query)
 
         # Retrieve top candidates by raw cosine similarity
-        raw_matches = await self.store.search_similar(query_vec, domain=domain, top_k=top_k * 3)
+        try:
+            raw_matches = await self.store.search_similar(query_vec, domain=domain, top_k=top_k * 3, user_id=user_id)
+        except TypeError:
+            raw_matches = await self.store.search_similar(query_vec, domain=domain, top_k=top_k * 3)
         if not raw_matches:
             return [], diagnostics
 
@@ -152,13 +156,14 @@ class MemoryRetriever:
         domain: TaskDomain = TaskDomain.GENERAL,
         mode: MemoryMode = MemoryMode.ADAPTIVE,
         top_k: int = 3,
+        user_id: Optional[str] = None,
     ) -> List[RetrievedMemory]:
         """
         Executes constrained retrieval based on the operational memory mode.
         Backwards-compatible wrapper returning List[RetrievedMemory].
         """
         results, _ = await self.retrieve_with_diagnostics(
-            query=query, domain=domain, mode=mode, top_k=top_k
+            query=query, domain=domain, mode=mode, top_k=top_k, user_id=user_id
         )
         return results
 

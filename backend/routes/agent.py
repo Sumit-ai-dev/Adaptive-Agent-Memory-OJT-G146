@@ -12,7 +12,7 @@ import logging
 import secrets
 import sqlite3
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Header, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 
 from aema._compat import resolve_db_path
@@ -20,6 +20,12 @@ from ai_service.config import settings
 from ai_service.graph import execute_task, execute_task_stream
 from ai_service.memory.store import BaseMemoryStore, SQLiteMemoryStore, get_memory_store
 from ai_service.security import rate_limiter, security_audit_logger
+from backend.security.auth import (
+    AuthContext,
+    decode_jwt_token,
+    get_auth_context,
+    get_optional_auth_context,
+)
 from models.domain import MemoryMode, TaskDomain
 from models.task import TaskExecuteRequest, TaskExecution
 
@@ -43,6 +49,7 @@ def _filter_in_memory_executions(
     domain: Optional[str] = None,
     memory_mode: Optional[str] = None,
     session_id: Optional[str] = None,
+    user_id: Optional[str] = None,
 ) -> List[TaskExecution]:
     """Filter cached executions when using a non-SQLite store (Postgres/Supabase)."""
     items: List[TaskExecution] = []
@@ -54,6 +61,8 @@ def _filter_in_memory_executions(
         if memory_mode and memory_mode != "all" and ex_mode != memory_mode:
             continue
         if session_id and ex.session_id != session_id:
+            continue
+        if user_id and ex.user_id != user_id:
             continue
         items.append(ex)
     return items
@@ -72,6 +81,7 @@ def _ensure_executions_table() -> None:
         CREATE TABLE IF NOT EXISTS task_executions (
             id                     TEXT PRIMARY KEY,
             session_id             TEXT,
+            user_id                TEXT,
             task_input             TEXT NOT NULL,
             task_domain            TEXT NOT NULL,
             memory_mode            TEXT NOT NULL,
@@ -86,7 +96,7 @@ def _ensure_executions_table() -> None:
         )
         """
     )
-    # Backward compatibility: verify session_id column exists
+    # Backward compatibility: verify session_id and user_id columns exist
     cursor = conn.execute("PRAGMA table_info(task_executions)")
     existing_cols = [row[1] for row in cursor.fetchall()]
     if "session_id" not in existing_cols:
@@ -95,6 +105,12 @@ def _ensure_executions_table() -> None:
             conn.commit()
         except Exception as exc:
             logger.warning(f"Could not add session_id column to task_executions: {exc}")
+    if "user_id" not in existing_cols:
+        try:
+            conn.execute("ALTER TABLE task_executions ADD COLUMN user_id TEXT")
+            conn.commit()
+        except Exception as exc:
+            logger.warning(f"Could not add user_id column to task_executions: {exc}")
     conn.commit()
     conn.close()
 
@@ -110,14 +126,15 @@ def _save_execution_to_db(execution: TaskExecution) -> None:
         conn.execute(
             """
             INSERT OR REPLACE INTO task_executions
-                (id, session_id, task_input, task_domain, memory_mode, memory_enabled,
+                (id, session_id, user_id, task_input, task_domain, memory_mode, memory_enabled,
                  status, outcome_score, latency_ms, tokens_used,
                  new_experience_created, payload_json, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 execution.id,
                 execution.session_id,
+                execution.user_id,
                 (execution.task_input or "")[:500],
                 execution.task_domain.value,
                 execution.memory_mode.value,
@@ -141,6 +158,7 @@ def _load_executions_from_db(
     domain: Optional[str] = None,
     memory_mode: Optional[str] = None,
     session_id: Optional[str] = None,
+    user_id: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
 ) -> "tuple[int, List[TaskExecution]]":
@@ -150,7 +168,12 @@ def _load_executions_from_db(
     """
     db_path = _sqlite_db_path()
     if not db_path:
-        filtered = _filter_in_memory_executions(domain=domain, memory_mode=memory_mode, session_id=session_id)
+        filtered = _filter_in_memory_executions(
+            domain=domain,
+            memory_mode=memory_mode,
+            session_id=session_id,
+            user_id=user_id,
+        )
         return len(filtered), filtered[offset : offset + limit]
 
     try:
@@ -166,6 +189,9 @@ def _load_executions_from_db(
         if session_id:
             where_clauses.append("session_id = ?")
             params.append(session_id)
+        if user_id:
+            where_clauses.append("user_id = ?")
+            params.append(user_id)
 
         # Build parameterized queries with static structure
         base_count_sql = "SELECT COUNT(*) FROM task_executions"
@@ -232,8 +258,8 @@ def verify_agent_execution_auth(
     client_ip: Optional[str] = None,
 ) -> Optional[str]:
     """
-    Validates API key for agent execution when REQUIRE_AGENT_AUTH is enabled.
-    Accepts AGENT_API_KEY or ADMIN_API_KEY. Logs authentication failures with client IP.
+    Validates API key or JWT for agent execution when REQUIRE_AGENT_AUTH is enabled.
+    Accepts AGENT_API_KEY, ADMIN_API_KEY, or valid user Bearer JWT. Logs authentication failures with client IP.
     """
     configured_key = (getattr(settings, "AGENT_API_KEY", None) or "").strip()
     admin_key = (getattr(settings, "ADMIN_API_KEY", None) or "").strip()
@@ -244,18 +270,28 @@ def verify_agent_execution_auth(
         return None
 
     target_keys = [k for k in [configured_key, admin_key] if k]
-    if not target_keys:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="AGENT_API_KEY or ADMIN_API_KEY must be configured on the server when authentication is enforced.",
-        )
-
     token = (x_api_key or "").strip()
     if not token and authorization:
         if authorization.lower().startswith("bearer "):
             token = authorization[7:].strip()
         else:
             token = authorization.strip()
+
+    # 1. Check if token is a valid User Bearer JWT
+    if token and token.count(".") == 2:
+        try:
+            payload = decode_jwt_token(token)
+            uid = payload.get("sub") or payload.get("user_id") or payload.get("id")
+            if uid:
+                return f"user:{uid}"
+        except Exception:
+            pass
+
+    if not target_keys:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="AGENT_API_KEY or ADMIN_API_KEY must be configured on the server when authentication is enforced.",
+        )
 
     if not token or not any(secrets.compare_digest(token, k) for k in target_keys):
         security_audit_logger.record_event(
@@ -314,11 +350,17 @@ async def run_agent_task(
         )
 
     # API Authentication verification
-    verify_agent_execution_auth(
+    caller = verify_agent_execution_auth(
         authorization=authorization,
         x_api_key=x_api_key,
         client_ip=client_ip,
     )
+    if caller and caller.startswith("user:"):
+        request.user_id = caller[5:]
+    elif not request.user_id:
+        opt_auth = get_optional_auth_context(http_request, authorization, x_api_key)
+        if opt_auth and opt_auth.is_authenticated and not opt_auth.is_machine:
+            request.user_id = opt_auth.user_id
 
     try:
         logger.info(
@@ -347,11 +389,29 @@ async def run_agent_task(
     "/execute/stream",
     summary="Execute Agent Task with Real-Time Event & Token Streaming (SSE)",
 )
-async def run_agent_task_stream(request: TaskExecuteRequest):
+async def run_agent_task_stream(
+    request: TaskExecuteRequest,
+    http_request: Request,
+    authorization: Optional[str] = Header(None, description="Admin or Agent authorization header"),
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key", description="Agent API Key header"),
+):
     """
     Executes a task through the 5-node LangGraph orchestration loop with real-time SSE streaming.
     Streams node lifecycle events (node_complete), code generation tokens, and final TaskExecution.
     """
+    client_ip = http_request.client.host if (http_request and http_request.client) else "127.0.0.1"
+    caller = verify_agent_execution_auth(
+        authorization=authorization,
+        x_api_key=x_api_key,
+        client_ip=client_ip,
+    )
+    if caller and caller.startswith("user:"):
+        request.user_id = caller[5:]
+    elif not request.user_id and http_request:
+        opt_auth = get_optional_auth_context(http_request, authorization, x_api_key)
+        if opt_auth and opt_auth.is_authenticated and not opt_auth.is_machine:
+            request.user_id = opt_auth.user_id
+
     async def event_generator():
         try:
             async for sse_chunk in execute_task_stream(request, memory_store=shared_store):
@@ -396,17 +456,24 @@ async def list_executions(
     domain: Optional[str] = Query(None, description="Filter by task domain"),
     memory_mode: Optional[str] = Query(None, description="Filter by memory mode"),
     session_id: Optional[str] = Query(None, alias="sessionId", description="Filter by session ID"),
+    user_id: Optional[str] = Query(None, alias="userId", description="Filter by user ID"),
     limit: int = Query(20, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
 ) -> Dict[str, Any]:
     """
     Lists historical task execution records with optional domain/memory-mode/session_id filtering
     and pagination. Reads from SQLite: persisted across server restarts.
     """
+    effective_user = user_id
+    if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
+        effective_user = auth.user_id
+
     total, items = _load_executions_from_db(
         domain=domain,
         memory_mode=memory_mode,
         session_id=session_id,
+        user_id=effective_user,
         limit=limit,
         offset=offset,
     )
@@ -423,15 +490,23 @@ async def list_executions(
 )
 async def list_sessions(
     limit: int = Query(50, ge=1, le=100),
+    user_id: Optional[str] = Query(None, alias="userId", description="Filter by user ID"),
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
 ) -> List[Dict[str, Any]]:
     """
     Returns unique recent conversation sessions with session ID, title, turn count,
     and last activity timestamp from persisted execution history.
     """
+    effective_user = user_id
+    if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
+        effective_user = auth.user_id
+
     db_path = _sqlite_db_path()
     if not db_path:
         seen: Dict[str, Dict[str, Any]] = {}
         for item in _execution_history:
+            if effective_user and item.user_id != effective_user:
+                continue
             sid = getattr(item, "session_id", None)
             if sid and sid not in seen:
                 seen[sid] = {
@@ -446,17 +521,30 @@ async def list_sessions(
 
     try:
         conn = sqlite3.connect(db_path)
-        rows = conn.execute(
-            """
-            SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
-            FROM task_executions
-            WHERE session_id IS NOT NULL AND session_id != ''
-            GROUP BY session_id
-            ORDER BY last_active DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        if effective_user:
+            rows = conn.execute(
+                """
+                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                FROM task_executions
+                WHERE session_id IS NOT NULL AND session_id != '' AND user_id = ?
+                GROUP BY session_id
+                ORDER BY last_active DESC
+                LIMIT ?
+                """,
+                (effective_user, limit),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT session_id, task_input, MAX(created_at) as last_active, COUNT(*) as turn_count
+                FROM task_executions
+                WHERE session_id IS NOT NULL AND session_id != ''
+                GROUP BY session_id
+                ORDER BY last_active DESC
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
         conn.close()
 
         sessions = []

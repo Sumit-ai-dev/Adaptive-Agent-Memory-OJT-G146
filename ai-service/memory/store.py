@@ -103,6 +103,7 @@ class BaseMemoryStore(ABC):
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Experience]:
         pass
 
@@ -681,6 +682,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Experience]:
         query = "SELECT * FROM experiences WHERE 1=1"
         params: List[Any] = []
@@ -694,7 +696,10 @@ class SQLiteMemoryStore(BaseMemoryStore):
             query += " AND trust_score >= ?"
             params.append(min_trust)
         if user_id is not None:
-            query += " AND user_id = ?"
+            if exact_user_match:
+                query += " AND user_id = ?"
+            else:
+                query += " AND (user_id = ? OR user_id IS NULL)"
             params.append(user_id)
         query += " ORDER BY trust_score DESC, updated_at DESC"
 
@@ -1411,6 +1416,7 @@ class PostgresMemoryStore(BaseMemoryStore):
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Experience]:
         pool = await self._get_pool()
         query = "SELECT * FROM experiences WHERE 1=1"
@@ -1430,7 +1436,10 @@ class PostgresMemoryStore(BaseMemoryStore):
             params.append(min_trust)
             param_idx += 1
         if user_id is not None:
-            query += f" AND user_id = ${param_idx}"
+            if exact_user_match:
+                query += f" AND user_id = ${param_idx}"
+            else:
+                query += f" AND (user_id = ${param_idx} OR user_id IS NULL)"
             params.append(user_id)
             param_idx += 1
 
@@ -1468,7 +1477,7 @@ class PostgresMemoryStore(BaseMemoryStore):
                 FROM experiences
                 WHERE status = 'active'
                   AND ($2::text IS NULL OR task_domain = $2)
-                  AND ($4::text IS NULL OR user_id = $4)
+                  AND ($4::text IS NULL OR user_id = $4 OR user_id IS NULL)
                   AND embedding IS NOT NULL
                 ORDER BY similarity DESC
                 LIMIT $3;
@@ -1662,6 +1671,7 @@ class SupabaseMemoryStore(BaseMemoryStore):
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Experience]:
         params = ["select=*"]
         if domain:
@@ -1671,7 +1681,10 @@ class SupabaseMemoryStore(BaseMemoryStore):
         if min_trust is not None:
             params.append(f"trust_score=gte.{min_trust}")
         if user_id is not None:
-            params.append(f"user_id=eq.{user_id}")
+            if exact_user_match:
+                params.append(f"user_id=eq.{user_id}")
+            else:
+                params.append(f"or=(user_id.eq.{user_id},user_id.is.null)")
         params.append("order=trust_score.desc,updated_at.desc")
 
         url = f"/rest/v1/experiences?{'&'.join(params)}"
@@ -1703,7 +1716,7 @@ class SupabaseMemoryStore(BaseMemoryStore):
                     results = []
                     for r in rows:
                         exp = self._dict_to_experience(r)
-                        if user_id is not None and exp.user_id != user_id:
+                        if user_id is not None and exp.user_id != user_id and exp.user_id is not None:
                             continue
                         sim = float(r.get("similarity", 0.0))
                         results.append((exp, sim))

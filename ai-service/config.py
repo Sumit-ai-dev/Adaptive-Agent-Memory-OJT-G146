@@ -78,6 +78,10 @@ class AIServiceSettings(BaseSettings):
     PORT: int = Field(default=8000, description="Default port for the API server")
     AGENT_API_KEY: Optional[str] = Field(default=None, description="API key required for agent execution when auth is enabled")
     REQUIRE_AGENT_AUTH: bool = Field(default=False, description="When true, requires valid AGENT_API_KEY or ADMIN_API_KEY on /agent/execute")
+    REQUIRE_USER_AUTH: bool = Field(default=False, description="When true, strictly requires authenticated user context or machine API key")
+    SUPABASE_JWT_SECRET: Optional[str] = Field(default=None, description="Supabase GoTrue JWT secret for validating user Bearer tokens")
+    AEMA_JWT_SECRET: str = Field(default="dev-insecure-jwt-secret-do-not-use-in-prod-12345", description="Fallback secret for local JWT signing and test verification")
+    JWT_ALGORITHM: str = Field(default="HS256", description="Algorithm for symmetric JWT validation")
     RATE_LIMIT_REQUESTS_PER_MINUTE: int = Field(default=60, description="Max execution requests per minute per IP")
     CORS_ALLOWED_ORIGINS: list[str] = Field(
         default=[

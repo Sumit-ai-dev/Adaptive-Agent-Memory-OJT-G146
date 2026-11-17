@@ -6,7 +6,7 @@ Provides CRUD and semantic retrieval operations over stored agent experiences.
 import logging
 import secrets
 from typing import Annotated, Any, Dict, List, Optional
-from fastapi import APIRouter, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
 from ai_service.config import settings
@@ -15,6 +15,12 @@ from ai_service.memory.probation import execute_probationary_probe
 from ai_service.nodes.retrieve_node import retrieve_experiences
 from ai_service.nodes.trust_node import update_experience_trust
 from backend.routes.agent import shared_store
+from backend.security.auth import (
+    AuthContext,
+    decode_jwt_token,
+    get_optional_auth_context,
+    require_admin_auth,
+)
 from models.domain import ExperienceStatus, TaskDomain
 from models.experience import Experience, ExperienceMatch
 
@@ -41,15 +47,10 @@ def verify_admin_auth(
 ) -> str:
     """
     Validates administrative credentials for destructive memory mutations and quarantine recoveries.
-    Fails closed with HTTP 503 if ADMIN_API_KEY is not configured.
-    Requires constant-time token comparison via X-Admin-Token or Authorization: Bearer.
+    Fails closed with HTTP 503 if ADMIN_API_KEY is not configured and no admin token is supplied.
+    Supports ADMIN_API_KEY or Admin role Bearer JWTs.
     """
     configured_key = (getattr(settings, "ADMIN_API_KEY", None) or "").strip()
-    if not configured_key:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="ADMIN_API_KEY is not configured on the server. Administrative actions are disabled.",
-        )
 
     token = (x_admin_token or "").strip()
     if not token and authorization:
@@ -58,7 +59,23 @@ def verify_admin_auth(
         else:
             token = authorization.strip()
 
-    if not token or not secrets.compare_digest(token, configured_key):
+    if not configured_key and not (token and token.count(".") == 2):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="ADMIN_API_KEY is not configured on the server. Administrative actions are disabled.",
+        )
+
+    # Check JWT admin role
+    if token and token.count(".") == 2:
+        try:
+            payload = decode_jwt_token(token)
+            role = payload.get("role") or payload.get("app_metadata", {}).get("role")
+            if role == "admin":
+                return f"user:{payload.get('sub') or 'admin'}"
+        except Exception:
+            pass
+
+    if not token or not configured_key or not secrets.compare_digest(token, configured_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Admin authorization required.",
@@ -81,11 +98,17 @@ async def list_memories(
     user_id: Annotated[Optional[str], Query(alias="userId", description="Optional user/tenant namespace filter")] = None,
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
 ) -> List[Dict[str, Any]]:
     """
     Lists persistent agent experiences from memory store.
     Supports domain filtering, trust thresholds, and semantic similarity search.
+    Enforces multi-tenant isolation: non-admin users only access their own private memories plus global baseline memories.
     """
+    effective_user = user_id
+    if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
+        effective_user = auth.user_id
+
     try:
         resolved_status: Optional[ExperienceStatus] = None
         if status_filter and status_filter.lower() != "all":
@@ -103,15 +126,12 @@ async def list_memories(
                     return []
 
         if search:
-            # P0-6: `LocalEmbedder` exposes `embed_text` / `embed_batch`; there is no
-            # `embed`. The AttributeError was absorbed by the handler below and surfaced
-            # as an opaque 500 on every semantic-search request.
             query_emb = embedder.embed_text(search)
             results = await shared_store.search_similar(
                 query_embedding=query_emb,
                 domain=TaskDomain(domain) if domain and domain != "all" else None,
                 top_k=limit,
-                user_id=user_id,
+                user_id=effective_user,
             )
             out = []
             for exp, sim in results:
@@ -129,7 +149,7 @@ async def list_memories(
             domain=TaskDomain(domain) if domain and domain != "all" else None,
             status=resolved_status,
             min_trust=min_trust,
-            user_id=user_id,
+            user_id=effective_user,
         )
 
         paged = all_exps[offset : offset + limit]
@@ -148,9 +168,16 @@ async def list_memories(
     status_code=status.HTTP_201_CREATED,
     summary="Create New Experience Manually",
 )
-async def create_memory(experience: Experience) -> Dict[str, Any]:
+async def create_memory(
+    experience: Experience,
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
+) -> Dict[str, Any]:
     """Manually insert an experience into the memory store."""
     try:
+        # Enforce multi-tenant user attribution
+        if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
+            experience.user_id = auth.user_id
+
         # Enforce server-side lifecycle policy: manually submitted memories
         # start as CANDIDATE with capped initial trust to prevent injection
         experience.status = ExperienceStatus.CANDIDATE
@@ -367,12 +394,19 @@ class MemoryFeedbackRequest(BaseModel):
 
 
 @router.post("/retrieve", response_model=List[ExperienceMatch], summary="Execute composite memory retrieval")
-async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
+async def retrieve_memories_endpoint(
+    payload: MemoryRetrieveRequest,
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
+):
     """
     Executes live memory retrieval using composite scoring:
         CompositeScore = 0.70 * Similarity + 0.30 * TrustScore
     Applies Theorem 1 dual-threshold cutoffs (Sim >= 0.70, Trust >= 0.35).
     """
+    effective_user = payload.user_id
+    if isinstance(auth, AuthContext) and auth.is_authenticated and not auth.is_admin and not auth.is_machine:
+        effective_user = auth.user_id
+
     query_emb = None
     query_text = payload.effective_input
     if query_text:
@@ -386,7 +420,7 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
         if payload.min_similarity is not None
         else (0.60 if local_embedder._model is not None else 0.15)
     )
-    all_candidates = await shared_store.list_experiences(user_id=payload.user_id)
+    all_candidates = await shared_store.list_experiences(user_id=effective_user)
     matches = retrieve_experiences(
         query_embedding=query_emb,
         candidates=all_candidates,
@@ -399,9 +433,12 @@ async def retrieve_memories_endpoint(payload: MemoryRetrieveRequest):
 
 
 @router.post("/search", response_model=List[ExperienceMatch], summary="SDK/MCP alias for composite memory retrieval")
-async def search_memories_endpoint(payload: MemoryRetrieveRequest):
+async def search_memories_endpoint(
+    payload: MemoryRetrieveRequest,
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
+):
     """Alias for /retrieve matching AEMA TypeScript SDK and MCP specification."""
-    return await retrieve_memories_endpoint(payload)
+    return await retrieve_memories_endpoint(payload, auth=auth)
 
 
 @router.post("/trust-update", summary="Execute Asymmetric EMA trust update")
