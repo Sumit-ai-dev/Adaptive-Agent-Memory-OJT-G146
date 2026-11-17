@@ -83,7 +83,7 @@ def check_ollama_status(base_url: str = "http://localhost:11434") -> Tuple[bool,
     tags_url = f"{base_url.rstrip('/')}/api/tags"
     try:
         req = urllib.request.Request(tags_url, headers={"User-Agent": "AEMA-Benchmark/1.0"})
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
+        with urllib.request.urlopen(req, timeout=5.0) as resp:
             if resp.status == 200:
                 data = json.loads(resp.read().decode("utf-8"))
                 models = [m.get("name", "") for m in data.get("models", [])]
@@ -91,6 +91,23 @@ def check_ollama_status(base_url: str = "http://localhost:11434") -> Tuple[bool,
     except Exception:
         pass
     return False, []
+
+
+def warmup_ollama_model(base_url: str, model: str) -> None:
+    """
+    Sends a lightweight generation request to pre-load model weights into
+    GPU VRAM before benchmark execution starts, avoiding cold-start timeouts.
+    """
+    url = f"{base_url.rstrip('/')}/api/generate"
+    payload = json.dumps({"model": model, "prompt": "hello", "stream": False}).encode("utf-8")
+    try:
+        req = urllib.request.Request(url, data=payload, headers={"Content-Type": "application/json"})
+        print(f"[GPU Pre-Flight] Pre-loading '{model}' into GPU VRAM...")
+        with urllib.request.urlopen(req, timeout=120.0) as resp:
+            if resp.status == 200:
+                print(f"[GPU Pre-Flight] Model '{model}' successfully locked into VRAM!")
+    except Exception as e:
+        logger.debug(f"Ollama warm-up notice: {e}")
 
 
 # ==============================================================================

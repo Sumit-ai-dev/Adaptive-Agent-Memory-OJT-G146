@@ -64,7 +64,7 @@ class AIServiceSettings(BaseSettings):
 
     # Execution Bounds
     MAX_CYCLICAL_LOOPS: int = Field(default=3, description="Maximum reflection loops before forced exit")
-    REQUEST_TIMEOUT_SECONDS: float = Field(default=15.0)
+    REQUEST_TIMEOUT_SECONDS: float = Field(default=90.0, description="HTTP timeout in seconds for LLM generation requests")
 
     # Token Budgeting & Context Compaction Bounds (Issue #38)
     MAX_PROMPT_TOKENS: int = Field(default=4096, description="Upper bound for total task prompt context tokens")

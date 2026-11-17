@@ -43,13 +43,13 @@
       "modern_pattern": "Wrap coroutines with async with asyncio.timeout(timeout_sec): return await coro"
     },
     {
-      "id": "swe_05_pathlib_read",
-      "name": "Pathlib Modern File Ingestion",
+      "id": "swe_05_itertools_batched",
+      "name": "Itertools Batched Chunking Migration",
       "category": "api_migration",
-      "input": "Write a python function `read_config(path)` that takes a `pathlib.Path` or string path and returns its text content using modern Pathlib API without manual open/close context.",
-      "test_code": "from pathlib import Path\nimport tempfile\nimport inspect\n\ndef test_read_cfg():\n    with tempfile.NamedTemporaryFile(\"w+\", delete=False) as f:\n        f.write(\"key=value\")\n        f.flush()\n        p = Path(f.name)\n        res = read_config(p)\n        assert res.strip() == \"key=value\"\n    src = inspect.getsource(read_config)\n    assert \"read_text\" in src, \"Must use Path.read_text()\"\n    assert \"open(\" not in src, \"Avoid manual open(path) for simple reads\"",
-      "deprecated_pattern": "Open paths using with open(path, 'r') as f: return f.read()",
-      "modern_pattern": "Read paths using Path(path).read_text(encoding='utf-8')"
+      "input": "Write a python function `batch_items(items, n)` that yields chunks/batches of size n from items using modern Python 3.12+ `itertools.batched` without legacy manual slice while loops.",
+      "test_code": "import inspect\n\ndef test_batch():\n    res = list(batch_items([1, 2, 3, 4, 5], 2))\n    assert [list(b) for b in res] == [[1, 2], [3, 4], [5]]\n    src = inspect.getsource(batch_items)\n    assert \"batched\" in src, \"Must use itertools.batched in Python 3.12+\"",
+      "deprecated_pattern": "Chunk sequences using manual while-loop slicing [i:i+n]",
+      "modern_pattern": "Chunk sequences using itertools.batched(items, n)"
     },
     {
       "id": "swe_06_fastapi_lifespan",

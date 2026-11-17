@@ -228,11 +228,16 @@ def get_sanitized_subprocess_env(workdir: str) -> Dict[str, str]:
         "PYTHONDONTWRITEBYTECODE": "1",
         "PYTHONHASHSEED": "0",
         "PYTHONIOENCODING": "utf-8",
-        "PYTHONPATH": workdir,
+        "PYTHONPATH": os.pathsep.join(filter(None, [workdir, os.environ.get("PYTHONPATH", "")])),
     }
 
-    # Only inherit benign host identity variables if present
-    for key in ("USER", "LOGNAME", "SHELL", "TERM", "VIRTUAL_ENV"):
+    # Only inherit benign host identity and Windows system variables required for DLL loading
+    allowed_keys = (
+        "USER", "LOGNAME", "SHELL", "TERM", "VIRTUAL_ENV",
+        "SYSTEMROOT", "SystemRoot", "WINDIR", "windir", "SYSTEMDRIVE", "SystemDrive",
+        "LOCALAPPDATA", "APPDATA", "TEMP", "TMP", "PROGRAMDATA", "PROGRAMFILES",
+    )
+    for key in allowed_keys:
         if key in os.environ:
             clean_env[key] = os.environ[key]
 
