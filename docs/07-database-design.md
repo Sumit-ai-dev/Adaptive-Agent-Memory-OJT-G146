@@ -2,7 +2,7 @@
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
 **Group:** G146 (GenAI / Agentic AI OJT Capstone)  
-**Status:** Approved Schema Baseline (Month 2 Specification)  
+**Status:** Approved Schema Baseline (Production Release Specification)  
 
 ---
 

@@ -41,8 +41,9 @@
 - **Status:** Accepted & Implemented
 - **Context:** An experience memory must update its trust score based on observed usefulness over repeated tasks. A standard symmetric moving average treats success and failure identically, allowing harmful or outdated advice to linger dangerously in the retrieval pool.
 - **Decision:** Adopt an Asymmetric Exponential Moving Average (A-EMA) formula:
-  - Success ($R_t \ge 0.5$): $S_{t+1} = \alpha S_t + (1 - \alpha) R_t$, with $\alpha = 0.85$ (conservative trust accumulation).
-  - Failure ($R_t < 0.5$): $S_{t+1} = \beta S_t + (1 - \beta) R_t$, with $\beta = 0.70$ (aggressive penalty).
+  - Success ($R_t \ge 0.80$): $S_{t+1} = \alpha S_t + (1 - \alpha) \cdot 1.0$, with $\alpha = 0.85$ (conservative trust accumulation).
+  - Failure ($R_t \le 0.30$): $S_{t+1} = \beta S_t$, with $\beta = 0.70$ (aggressive downward penalty).
+  - Neutral ($0.30 < R_t < 0.80$): $S_{t+1} = \gamma S_t + (1 - \gamma) R_t$, with $\gamma = 0.80$ (proportional adjustment).
 - **Rationale:** Asymmetry ensures that trust is difficult to gain but easy to lose. Flawed lessons are rapidly penalized before they cause cascading negative transfer in related tasks.
 - **Trade-offs:** Requires careful tuning of $\alpha$ and $\beta$ to avoid over-penalizing experiences due to transient external tool errors.
 

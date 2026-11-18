@@ -2,7 +2,7 @@
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
 **Group:** G146 (GenAI / Agentic AI OJT Capstone)  
-**Status:** Approved Specification Baseline (Month 2 Specification)  
+**Status:** Implemented & Verified in Production Release  
 
 ---
 
@@ -70,9 +70,10 @@ Login ──> Dashboard ──> Submit Task Prompt ──> Watch LangGraph Execu
 
 ### 6. Execution Studio & Conversation History Drawer
 - Collapsible sidebar drawer displaying active and historical multi-turn conversation sessions.
-- Session metadata display: automatic title generation from first turn, turn count badge, and relative timestamps.
+- Session metadata display: automatic title generation from first turn, turn count badge, inline rename, and deletion capabilities.
 - Context-aware multi-turn chat stream maintaining conversation history while injecting bilateral strategies and pitfalls into every turn.
 - Instant session switching and thread isolation without leaking executions across conversations.
+- Live cognitive stepper console displaying real-time 5-node transition events and token streaming.
 
 ---
 

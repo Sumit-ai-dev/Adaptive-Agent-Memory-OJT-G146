@@ -2,7 +2,7 @@
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
 **Group:** G146 (GenAI / Agentic AI OJT Capstone)  
-**Status:** Approved Security Specification (Month 2 Specification)  
+**Status:** Implemented & Verified in Production Release  
 
 ---
 
@@ -42,6 +42,8 @@
 - **Restricted Web Retrieval:** The web search (DuckDuckGo) and web reader (Jina AI) tools are constrained to read-only HTTP GET operations.
 - **Sandboxed Code Execution:** The Python REPL tool runs in an isolated sub-process with restricted standard libraries, execution timeout limits (5 seconds max), and disabled filesystem write access.
 - **Network Boundaries:** External tool calls cannot access internal network services, private IP ranges (RFC 1918), or cloud metadata endpoints (`169.254.169.254`).
+- **MCP Server Boundaries:** The Model Context Protocol server operates with strict transport isolation: local Stdio transport enforces OS process sandboxing, while the HTTP SSE transport binds strictly to `localhost:3001` with local-only host verification and CORS checks.
+- **Chrome Extension Security:** The Manifest V3 companion enforces declarative Content Security Policy (CSP), forbids `eval()` and inline scripts, isolates background service worker logic, and stores session tokens ephemerally in Chrome session storage.
 
 ---
 

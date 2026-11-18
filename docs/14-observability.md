@@ -2,7 +2,7 @@
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
 **Group:** G146 (GenAI / Agentic AI OJT Capstone)  
-**Status:** Approved Telemetry Specification (Month 2 Specification)  
+**Status:** Implemented & Verified in Production Release  
 
 ---
 
@@ -73,7 +73,7 @@ Operational and research metrics are tracked continuously to monitor agent perfo
 Full distributed tracing of the cyclical 5-node agent execution is handled natively through **LangSmith** and OpenTelemetry conventions.
 
 ```text
-POST /api/v1/tasks/run
+POST /api/v1/agent/execute (or /execute/stream)
  └── LangGraph: AgentWorkflowRun [Trace Root: run_id]
       ├── Node: retrieve_node
       │    ├── Span: generate_embedding (all-MiniLM-L6-v2) [12ms]
