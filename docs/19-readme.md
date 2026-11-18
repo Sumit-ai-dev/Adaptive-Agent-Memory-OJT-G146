@@ -73,9 +73,18 @@ Adaptive-Agent-Memory-OJT-G146/
 │   ├── package.json               # Node dependencies & Vite build scripts
 │   └── vite.config.ts             # Vite bundler configuration
 │
-├── packages/aema/                 # Portable AEMA TypeScript SDK
-│   ├── src/                       # Client library implementation
+├── packages/aema/                 # Portable AEMA TypeScript SDK & Dual-Transport MCP
+│   ├── src/                       # Client library & Stdio/SSE MCP server
 │   └── package.json               # Standalone npm package definitions
+│
+├── aema/                          # Drop-in Python SDK with SSE streaming parity
+│   ├── memory.py                  # AdaptiveMemory with aexecute_stream & Theorem 1
+│   └── __init__.py                # Package exports & lazy schema loaders
+│
+├── extension/                     # Chrome Extension (Manifest V3)
+│   ├── manifest.json              # MV3 permissions, activeTab, contextMenus
+│   ├── background.js              # Service worker & text selection clipper
+│   └── popup.html / popup.js      # Obsidian studio & real-time 5-node stepper
 │
 ├── tests/                         # Full Pytest Automated Verification Suite
 │   ├── test_agent_graph.py        # End-to-end cognitive loop validation

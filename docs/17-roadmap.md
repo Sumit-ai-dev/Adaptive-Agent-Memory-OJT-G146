@@ -50,6 +50,8 @@ A feature or milestone is defined as complete only when it satisfies all of the 
 - **Interactive 3D Visualizer:** Three.js spatial graph rendering memory nodes color-coded by trust score ($S \ge 0.70$ emerald, $0.35 \le S < 0.70$ amber, $S < 0.35$ crimson).
 - **Industrial Runner Script:** Created `./run_demo.sh` with process inspection, port conflict resolution, readiness polling, and graceful signal handling.
 - **Continuous Integration Pipeline:** Configured GitHub Actions `.github/workflows/ci.yml` supporting offline caching, model fallbacks, and multi-job parallel checks.
+- **Modern Studio & Documentation Platform:** Redesigned obsidian execution studio, live 5-node cognitive runtime console, FAQ accordion, inline thread deletion/renaming, and 3-column documentation system.
+- **Production MCP, Chrome Extension & SDK Parity:** Dual-Transport MCP Server (Stdio + HTTP SSE on Port 3001), Manifest V3 Chrome Extension with context-menu text clipper, and real-time streaming SDKs for TypeScript and Python.
 
 ---
 

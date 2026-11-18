@@ -30,11 +30,9 @@ User task submission → experience retrieval & ranking → memory-augmented age
 10. Central agent dashboard for task execution, experience inspection, and trust visualization.
 
 ## Out of Scope for MVP
-- Fine-tuning, retraining, or modifying the underlying LLM.
-- Storing uncurated raw conversation history or chat transcripts as memory.
-- Multi-LLM provider support.
-- Generalized external SDK / distribution package.
-- Complex multi-agent swarms or unnecessary multi-agent architectures.
-- Multi-user production SaaS infrastructure.
-- Broad autonomous browser automation.
-- Specialized coding-agent fine-tuning.
+- Fine-tuning, retraining, or modifying the underlying LLM weights (remains strictly out of scope: all adaptation is external).
+- Storing uncurated raw conversation history or unverified chat transcripts as memory.
+- Heavyweight multi-agent swarms (unnecessary swarm overhead avoided in favor of the focused 5-node cognitive cycle).
+- In-model parameter updates or specialized base-model fine-tuning.
+- Broad unrestricted browser automation (agent utilizes a focused Manifest V3 Chrome Extension companion for text clipping and execution instead of full web scraping bots).
+- Unbounded billing infrastructure (project adheres strictly to zero-cost development and self-hosted deployment).

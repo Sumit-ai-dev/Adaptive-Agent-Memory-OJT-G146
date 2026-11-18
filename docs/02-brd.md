@@ -66,7 +66,7 @@ To build an evidence-grounded, zero-cost adaptive agent memory architecture that
 | **BR-002** | System automatically extracts reusable experiences | Must | Multi-step runs trigger reflection node; generates structured `{Trigger, Strategy, Pitfall}` with initial confidence. |
 | **BR-003** | System maintains hybrid relational and vector persistence | Must | Experiences, usage counters, trust logs, and vector embeddings are stored transactionally in PostgreSQL + `pgvector`. |
 | **BR-004** | System retrieves experiences using composite ranking | Must | Retrieval ranks candidates via composite formula ($0.70 \times \text{Similarity} + 0.30 \times \text{Trust}$); filters deprecated items. |
-| **BR-005** | System dynamically updates empirical trust scores | Must | Task outcome evaluates $R \in [0, 1]$; updates trust via EMA ($S_{t+1} = 0.8 S_t + 0.2 R$); records audit event. |
+| **BR-005** | System dynamically updates empirical trust scores | Must | Task outcome evaluates $R \in [0, 1]$; updates trust via A-EMA ($S_{t+1} = (1-\alpha)S_t + \alpha$ on success, $(1-\beta)S_t$ on failure); records audit event. |
 | **BR-006** | System enforces experience lifecycle state transitions | Must | Manages states (`CANDIDATE`, `ACTIVE`, `DEPRECATED`); experiences with trust $< 0.35$ are excluded from retrieval. |
 | **BR-007** | User can inspect and curate experiences in dashboard | Must | Web dashboard allows browsing, searching by domain/status, editing lessons, and manual deprecation. |
 | **BR-008** | System logs execution trajectories and trust history | Must | Every execution records node durations, tools invoked, memories retrieved, and token metrics with unique IDs. |
@@ -123,12 +123,12 @@ To build an evidence-grounded, zero-cost adaptive agent memory architecture that
 - Model fine-tuning, parameter retraining, or adapter training (LLM remains completely frozen).
 - Raw conversational chat log dumping.
 - Full multi-tenant enterprise billing or organizational hierarchy.
-- Production multi-language SDK package during the 12-week timeframe.
+- In-model weight retraining or parameter fine-tuning.
 
 ---
 
 ## 12. Future Scope
-- **Offline Memory Clustering & Deduplication:** Background batch workers using `pgvector` cosine distance ($< 0.10$) to consolidate duplicate strategies.
-- **Chrome Extension Companion:** Manifest V3 browser extension consuming the centralized `/api/v1` backend.
-- **Standalone Reusable Python Package:** Publishing the core memory engine as an open-source library (`pip install adaptive-memory`).
-- **Domain-Specific Memory Namespaces:** Dynamically partitioning memory stores by organization, project, or domain for targeted multi-agent retrieval.
+- **Dynamic Cross-Domain Memory Synthesis:** Autonomous distillation connecting lessons discovered across divergent technical domains (e.g., cross-applying coding error handling into financial research).
+- **Decentralized Memory Federation:** P2P synchronization of verified memory banks across distributed agent swarms without central vector stores.
+- **Hardware-Accelerated On-Device Embeddings:** Native WebGPU and Apple Neural Engine acceleration for sub-5ms local vector lookups on edge devices.
+- **Reinforcement Learning from Experience Traces:** Offline RL policy optimization leveraging immutable `trust_history` audit trajectories to pre-seed agent heuristics.

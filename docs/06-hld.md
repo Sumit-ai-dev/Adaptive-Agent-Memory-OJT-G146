@@ -18,7 +18,7 @@ The system is organized into a clean 7-layer architectural stack:
 │   • React 18 + Vite Dashboard [IMPLEMENTED]                              │
 │   • Supabase Auth (GoTrue) Session Management [IMPLEMENTED]              │
 │   • Three.js 3D Memory Core Visualizer [IMPLEMENTED]                     │
-│   • Chrome Extension Manifest V3 [PLANNED CLIENT]                        │
+│   • Chrome Extension Manifest V3 & Dual-Transport MCP [IMPLEMENTED]      │
 └────────────────────────────────────┬─────────────────────────────────────┘
                                      │ HTTP REST / Bearer JWT
 ┌────────────────────────────────────▼─────────────────────────────────────┐
@@ -94,11 +94,11 @@ flowchart TD
 |---|---|---|---|
 | **Web Dashboard** | React 18, Vite, Three.js, Tailwind CSS | Analyst interface, 3D memory visualization, task dispatch, real-time trust monitoring | Implemented |
 | **Authentication & IAM** | Supabase Auth (GoTrue), JWT | User sign-up, sign-in, session tokens, user-isolated Row-Level Security (RLS) | Implemented |
-| **API Gateway** | FastAPI, Uvicorn, Pydantic v2 | REST API endpoints, request validation, CORS, token verification, routing | Core `/health` Implemented |
-| **Agent Workflow Engine** | LangGraph, LangChain Core | 5-node state machine (`retrieve` → `execute` → `evaluate` → `reflect` → `trust`) | Specification Complete |
-| **Model & Tool Gateway** | LiteLLM, Ollama, Groq, DuckDuckGo, Jina | Model-agnostic LLM routing (Llama-3.3, Mistral, Gemini), live web tools, fallback handling | Specification Complete |
-| **Experience Intelligence** | PostgreSQL 15, pgvector, HuggingFace embeddings | Composite retrieval ($0.70\text{Sim} + 0.30\text{Trust}$), EMA trust engine, quarantine | Schema Implemented |
-| **Telemetry & Observability**| LangSmith, PostgreSQL audit tables, Loguru | Run tracing, latency metrics, token tracking, immutable trust history logging | Specification Complete |
+| **API Gateway** | FastAPI, Uvicorn, Pydantic v2 | REST API endpoints, request validation, CORS, token verification, routing | Implemented |
+| **Agent Workflow Engine** | LangGraph, LangChain Core | 5-node state machine (`retrieve` → `execute` → `evaluate` → `reflect` → `trust`) | Implemented |
+| **Model & Tool Gateway** | LiteLLM, Ollama, Groq, DuckDuckGo, Jina | Model-agnostic LLM routing (Llama-3.3, Mistral, Gemini), live web tools, fallback handling | Implemented |
+| **Experience Intelligence** | PostgreSQL 15, pgvector, HuggingFace embeddings | Composite retrieval ($0.70\text{Sim} + 0.30\text{Trust}$), A-EMA trust engine, quarantine | Implemented |
+| **Telemetry & Observability**| LangSmith, PostgreSQL audit tables, Loguru | Run tracing, latency metrics, token tracking, immutable trust history logging | Implemented |
 
 ---
 
