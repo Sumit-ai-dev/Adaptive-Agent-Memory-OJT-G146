@@ -1,5 +1,5 @@
 # ==============================================================================
-# Standalone MCP Overlay Configuration for AEMA
+# Dual-Transport MCP Overlay Configuration for AEMA (Stdio + HTTP SSE)
 # Use this when running the MCP Server connected to an existing host backend
 # Example: docker compose -f docker-compose.mcp.yml up
 # ==============================================================================
@@ -9,11 +9,20 @@ services:
     build:
       context: ./packages/aema
       dockerfile: Dockerfile
-    image: aema/mcp:0.1.1
+    image: aema/mcp:2.0.0
     container_name: aema-mcp-server
+    ports:
+      - "3001:3001"
     environment:
       - NODE_ENV=production
+      - MCP_TRANSPORT=sse
+      - PORT=3001
       - AEMA_API_URL=${AEMA_API_URL:-http://host.docker.internal:8000}
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', (r) => { if (r.statusCode !== 200) process.exit(1); });"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
     stdin_open: true
     tty: true
