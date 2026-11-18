@@ -1,696 +1,923 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import {
-  AlertTriangle,
   ArrowRight,
-  CheckCircle2,
-  Database,
-  Terminal,
-  Code,
   Copy,
   Check,
-  Layers,
+  CheckCircle2,
+  Terminal,
+  Activity,
+  Plus,
   Play,
-  Compass,
-  GitBranch,
+  Pause,
+  Cpu,
 } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import AuthModal from '../components/AuthModal'
-import StatusBadge from '../components/StatusBadge'
-import TheoremSandbox from '../components/TheoremSandbox'
-import BenchmarkMatrix from '../components/BenchmarkMatrix'
-import PromptConsole from '../components/PromptConsole'
-import ExecutionStepper from '../components/ExecutionStepper'
-import { executeAgentTask } from '../services/api'
-import type { TaskExecution, TaskDomain } from '../types'
+
+interface RuntimeStage {
+  node: string
+  title: string
+  detail: string
+  meta?: string
+  badge?: string
+  badgeType?: 'success' | 'danger' | 'neutral'
+}
+
+interface RuntimeScenario {
+  id: string
+  taskTitle: string
+  taskDomain: string
+  statusType: 'success' | 'warn'
+  stages: RuntimeStage[]
+}
+
+const RUNTIME_SCENARIOS: RuntimeScenario[] = [
+  {
+    id: 'stream_decode',
+    taskTitle: 'task_stream_decode.py: Parse raw socket stream with surrogate recovery',
+    taskDomain: 'coding',
+    statusType: 'success',
+    stages: [
+      {
+        node: '1. RETRIEVE',
+        title: 'SQLite Local Vector Store Query',
+        detail: '> Active Strategy: "Surrogateescape byte fallback" (St = 0.94)\n> Quarantined Hazard: "Strict UTF-8 decode" (St = 0.31, Theorem 1 isolated)\n> Filtered Result: 1 safe procedural pattern injected into context',
+        badge: '94% trust',
+        badgeType: 'success',
+      },
+      {
+        node: '2. EXECUTE',
+        title: 'Parameter-Guarded Code Generation',
+        detail: 'def parse_stream(chunk: bytes):\n    # Memory Injected: Apply surrogateescape before json.loads\n    raw = chunk.decode("utf-8", errors="surrogateescape")\n    return json.loads(raw)\n> Execution: Parsed 1,420 stream records in 210ms',
+        meta: '0 prompt bloat',
+      },
+      {
+        node: '3. EVALUATE',
+        title: 'Deterministic Assertion Verification',
+        detail: '> test_stream_decode() ...... PASSED\n> test_malformed_bytes() .... PASSED\n> Binary Outcome: 1.00 (Pass@1 Confirmed)',
+        badge: '100% PASS',
+        badgeType: 'success',
+      },
+      {
+        node: '4. REFLECT',
+        title: 'Procedural Reflection Distillation',
+        detail: 'Lesson: "Surrogateescape safely recovers all chunk boundaries without socket termination."\nTuple Minted: (c="stream bytes", a="surrogateescape", p="strict decode")',
+        meta: 'Tuple Minted',
+      },
+      {
+        node: '5. CALIBRATE',
+        title: 'Asymmetric EMA Calibration',
+        detail: 'Formula: St+1 = 0.85 · 0.94 + 0.15 = 0.960 (+0.020 delta)\nReliability Status: Verified Ground Truth (Active)',
+        badge: 'St = 0.96',
+        badgeType: 'success',
+      },
+    ],
+  },
+  {
+    id: 'db_migration',
+    taskTitle: 'task_db_lock.py: Multi-threaded SQLite writes without WAL mode (Negative Trap)',
+    taskDomain: 'coding',
+    statusType: 'warn',
+    stages: [
+      {
+        node: '1. RETRIEVE',
+        title: 'SQLite Local Vector Store Query',
+        detail: '> Query: "High-concurrency SQLite bulk writes"\n> Candidate Memory: "Naive in-memory write buffer" (St = 0.50, Unverified)',
+        badge: '50% unverified',
+        badgeType: 'neutral',
+      },
+      {
+        node: '2. EXECUTE',
+        title: 'Execution with Unverified Strategy',
+        detail: 'def bulk_insert(records):\n    cursor.executemany("INSERT INTO logs...", records)\n> Error: sqlite3.OperationalError: database is locked',
+        badge: 'Crash',
+        badgeType: 'danger',
+      },
+      {
+        node: '3. EVALUATE',
+        title: 'Deterministic Assertion Verification',
+        detail: '> test_concurrent_writes() ... FAILED (OperationalError)\n> Outcome Score: 0.00 (Failure)\n> Consecutive Failures: k = 3 (Critical Bound Reached)',
+        badge: 'FAIL',
+        badgeType: 'danger',
+      },
+      {
+        node: '4. REFLECT',
+        title: 'Failure Mode Reflection & Trap Identification',
+        detail: 'Identified Trap: Parallel transactions without WAL mode cause database locks.\nAction: Flag naive buffer as deprecated anti-pattern.',
+        meta: 'Hazard Isolated',
+      },
+      {
+        node: '5. CALIBRATE',
+        title: 'Asymmetric EMA Penalty & Theorem 1 Quarantine',
+        detail: 'Formula: St+1 = beta · St = 0.70 · 0.50 = 0.350 <= theta (0.35)\nTheorem 1 Triggered: k* <= 3 consecutive failures.\nStrategy permanently quarantined from future context.',
+        badge: 'QUARANTINED',
+        badgeType: 'danger',
+      },
+    ],
+  },
+]
+
+const FAQ_ITEMS = [
+  {
+    num: '01',
+    q: 'Does AEMA introduce latency to agent execution?',
+    a: 'Memory retrieval executes in under 25 milliseconds via indexed local vectors. Reflection, evaluation, and trust calibration run asynchronously in the background after the response is sent, adding zero blocking overhead to your agent.',
+  },
+  {
+    num: '02',
+    q: 'Where is my data stored?',
+    a: 'By default, everything runs locally using SQLite and Chroma on your machine with zero external network requests. For production clusters, AEMA connects directly to your existing PostgreSQL instance with pgvector for strict multi-tenant isolation.',
+  },
+  {
+    num: '03',
+    q: 'Can I test the studio without signing up?',
+    a: 'Yes. The studio runs in local guest mode by default. You can test prompts, inspect cognitive node transitions, and observe memory quarantine in real time without providing credentials.',
+  },
+  {
+    num: '04',
+    q: 'How does Theorem 1 isolate failing strategies without deleting helpful memories?',
+    a: 'Theorem 1 deterministic quarantine applies a threshold filter (theta = 0.35). When a specific strategy repeatedly causes test failures, its trust score decays exponentially below 0.35 within at most 3 runs (k* <= 3) and is excluded from retrieval. Useful, orthogonal skills remain untouched.',
+  },
+  {
+    num: '05',
+    q: 'Can I bring my own LLM API keys (BYOK) or local models?',
+    a: 'Yes. AEMA supports hosted models (Groq, OpenAI, Google Gemini, Anthropic) as well as 100% offline local Ollama instances (e.g. Llama 3.2, Qwen). Keys can be provided via environment variables or directly in the studio browser cache.',
+  },
+  {
+    num: '06',
+    q: 'How does AEMA prevent prompt bloat and token consumption limits?',
+    a: 'The engine features a Dynamic Context Compactor with token budget circuit breakers. Retrieved memories are compressed and prioritized so only the highest-reliability lessons enter the prompt context within your specified budget.',
+  },
+]
 
 export default function LandingPage() {
   const navigate = useNavigate()
   const [authModalOpen, setAuthModalOpen] = useState(false)
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup'>('signin')
 
-  // Interactive Execution Preview State
-  const [previewRunning, setPreviewRunning] = useState(false)
-  const [previewStage, setPreviewStage] = useState<'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'idle' | 'complete'>('idle')
-  const [previewExecution, setPreviewExecution] = useState<TaskExecution | null>(null)
-  const [previewError, setPreviewError] = useState<string | null>(null)
+  // Integration Tabs State
+  const [activeTab, setActiveTab] = useState<'python' | 'typescript' | 'mcp' | 'rest'>('python')
+  const [copiedCode, setCopiedCode] = useState(false)
 
-  // Copy States
-  const [copiedPypi, setCopiedPypi] = useState(false)
-  const [copiedNpm, setCopiedNpm] = useState(false)
-  const [copiedMcp, setCopiedMcp] = useState(false)
+  // Enforce light linen canvas on landing page to eliminate overscroll dark bounce
+  useEffect(() => {
+    document.documentElement.classList.remove('dark')
+    document.documentElement.style.backgroundColor = '#FAFAF7'
+    document.body.style.backgroundColor = '#FAFAF7'
+    return () => {
+      document.documentElement.style.backgroundColor = ''
+      document.body.style.backgroundColor = ''
+    }
+  }, [])
+
+  // Continuous Live AEMA 5-Node Cognitive Execution State
+  const [activeScenarioIdx, setActiveScenarioIdx] = useState(0)
+  const [activeStageIdx, setActiveStageIdx] = useState(0)
+  const [isPaused, setIsPaused] = useState(false)
+
+  // SpringWinter FAQ Accordion: Set of open indices (default first open)
+  const [openFaqs, setOpenFaqs] = useState<number[]>([0])
+
+  const toggleFaq = (index: number) => {
+    setOpenFaqs((prev) =>
+      prev.includes(index) ? prev.filter((i) => i !== index) : [...prev, index]
+    )
+  }
+
+  useEffect(() => {
+    if (isPaused) return
+
+    const timer = setInterval(() => {
+      setActiveStageIdx((prevStage) => {
+        if (prevStage >= 4) {
+          setActiveScenarioIdx((prevScen) => (prevScen + 1) % RUNTIME_SCENARIOS.length)
+          return 0
+        }
+        return prevStage + 1
+      })
+    }, 2400)
+
+    return () => clearInterval(timer)
+  }, [isPaused])
+
+  const activeScenario = RUNTIME_SCENARIOS[activeScenarioIdx]
+  const currentStage = activeScenario.stages[activeStageIdx]
 
   const handleOpenAuth = (mode: 'signin' | 'signup') => {
     setAuthModalMode(mode)
     setAuthModalOpen(true)
   }
 
-  const handleRunHeroPreview = async (params: {
-    prompt: string
-    domain: TaskDomain
-    memoryEnabled: boolean
-    simulateFailure?: boolean
-  }) => {
-    setPreviewRunning(true)
-    setPreviewStage('retrieval')
-    setPreviewError(null)
-    try {
-      const exec = await executeAgentTask({
-        taskInput: params.prompt,
-        taskDomain: params.domain,
-        memoryEnabled: params.memoryEnabled,
-        simulateFailure: params.simulateFailure,
-        isExplicitDemo: true,
-        onStageChange: (stage) => setPreviewStage(stage),
-      })
-      setPreviewExecution(exec)
-      setPreviewStage('complete')
-    } catch (err: any) {
-      console.error('Public preview execution error:', err)
-      setPreviewError(err?.message || 'Public preview execution encountered an error.')
-      setPreviewStage('idle')
-    } finally {
-      setPreviewRunning(false)
-    }
-  }
-
-  const copyToClipboard = (text: string, setter: (val: boolean) => void) => {
+  const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
-    setter(true)
-    setTimeout(() => setter(false), 2000)
+    setCopiedCode(true)
+    setTimeout(() => setCopiedCode(false), 2000)
   }
 
-  const mcpConfigCode = `{
+  const snippets = {
+    python: `# 1. Install via pip
+# pip install aema
+
+from aema import AdaptiveMemory
+
+# Initialize zero-config local memory (SQLite + Chroma)
+memory = AdaptiveMemory(user_id="dev_01")
+
+# Retrieve verified strategies before executing LLM task
+context = memory.retrieve("Parse nested stream with custom byte encoding")
+
+# Report verified outcome (repeated failures trigger Theorem 1 quarantine)
+memory.feedback(task_id="task_104", success=True)`,
+
+    typescript: `// 1. Install via npm
+// npm i @sumitaidev/aema
+
+import { AemaClient } from "@sumitaidev/aema";
+
+const client = new AemaClient({ apiKey: process.env.AEMA_API_KEY });
+
+// Retrieve high-trust execution lessons
+const memory = await client.retrieve("PostgreSQL connection pool retry");
+
+// Report outcome back to A-EMA calibration engine
+await client.feedback({ memoryId: memory.id, success: true });`,
+
+    mcp: `// Claude Desktop / Cursor IDE Model Context Protocol Config
+// Add to claude_desktop_config.json or cursor settings:
+{
   "mcpServers": {
     "aema-memory": {
       "command": "npx",
       "args": ["-y", "--package=@sumitaidev/aema", "aema-mcp"]
     }
   }
-}`
+}`,
 
-  const pythonSnippet = `from aema import AdaptiveMemory
-
-# Initialize reliability-aware memory (zero-config local SQLite)
-mem = AdaptiveMemory(user_id="dev_1")
-item = mem.remember("Enable SQLite WAL mode for concurrent async workers")
-
-# Record verified outcome (3 failures trigger Theorem 1 quarantine)
-mem.feedback(item["id"], success=True)
-
-# Retrieve only empirical, non-quarantined memories
-safe_memories = mem.recall("Fix SQLite locked error")`
+    rest: `# Direct HTTP REST API (Any Language or Framework)
+curl -X POST https://api.aema.dev/api/agent/execute \\
+  -H "Authorization: Bearer $AEMA_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "taskInput": "Implement recursive directory walk with symlink guards",
+    "taskDomain": "coding",
+    "memoryEnabled": true
+  }'`,
+  }
 
   return (
-    <div className="min-h-screen bg-[#F8F8F6] dark:bg-[#0D0F12] text-[#1A1A1A] dark:text-[#F4F4F6] transition-colors selection:bg-indigo-100 dark:selection:bg-indigo-950 font-sans">
-      {/* Horizontal Navbar */}
-      <Navbar onOpenAuth={handleOpenAuth} />
+    <div className="min-h-screen bg-[#FAFAF7] text-[#141413] flex flex-col selection:bg-[#EAE8E3]">
+      {/* ── Top Atmospheric Hero Header (SpringWinter Sky Aesthetic) ── */}
+      <div className="relative overflow-hidden w-full border-b border-[#EAE8E3]/60">
+        {/* Layer 1: Ethereal Sky & Soft Cloud Backdrop */}
+        <div
+          className="absolute inset-0 z-0 bg-top bg-cover bg-no-repeat pointer-events-none opacity-95 transition-opacity duration-300"
+          style={{
+            backgroundImage: "url('/images/hero-sky-bg.jpg')",
+            maskImage: "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 60%, rgba(0,0,0,0) 100%)",
+            WebkitMaskImage: "linear-gradient(to bottom, rgba(0,0,0,1) 0%, rgba(0,0,0,0.95) 60%, rgba(0,0,0,0) 100%)",
+          }}
+        />
 
-      {/* ─── Hero Section (Asymmetric 55/45 Split) ─────────────────────────── */}
-      <section className="relative pt-16 pb-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832] overflow-hidden">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 lg:gap-8 items-center">
-            
-            {/* Left Column: Narrative, Problem, Intent (7 cols on desktop) */}
-            <div className="lg:col-span-7 space-y-6 text-left">
-              {/* Monospace Descriptor */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md border text-xs font-mono bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832]">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span className="text-zinc-500 dark:text-zinc-400">
-                  Adaptive Experience Memory Architecture
-                </span>
-                <span className="text-zinc-300 dark:text-zinc-700">/</span>
-                <span className="text-indigo-600 dark:text-indigo-400 font-semibold">
-                  v0.1.1 Released
-                </span>
+        {/* Layer 2: Ethereal Atmospheric Mesh Gradient (SpringWinter Pale Sky + Diffuse Mist) */}
+        <div
+          className="absolute inset-0 z-0 pointer-events-none"
+          style={{
+            background:
+              "radial-gradient(ellipse 80% 50% at 50% 0%, rgba(200, 230, 255, 0.35) 0%, rgba(240, 248, 255, 0.1) 70%, transparent 100%), linear-gradient(to bottom, transparent 50%, #FAFAF7 100%)",
+          }}
+        />
+
+        {/* 1. Header Navigation Floating on Sky */}
+        <Navbar onOpenAuth={handleOpenAuth} />
+
+        {/* 2. Expansive Hero Section (Balanced 2-Column Desktop Grid) */}
+        <div className="relative z-10 max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 pt-12 sm:pt-16 pb-20 w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-center">
+            {/* Left Column: Hero Text & Actions (Col 7) */}
+            <div className="lg:col-span-7 space-y-6">
+              {/* Eyebrow Tag */}
+              <div className="text-xs font-mono uppercase tracking-widest text-[#7E7D77]">
+                Experiential Memory for Autonomous Agents
               </div>
 
-              {/* Editorial Headline */}
-              <h1 className="text-4xl sm:text-5xl lg:text-[54px] font-bold tracking-tight text-[#1A1A1A] dark:text-[#F4F4F6] leading-[1.12]">
-                Reliable experiential memory for autonomous AI agents.
+              {/* Headline */}
+              <h1 className="font-serif-headline text-5xl sm:text-6xl lg:text-[64px] font-normal tracking-tight text-[#141413] leading-[1.1]">
+                Memory that actually learns <br className="hidden sm:inline" />
+                from <span className="italic font-normal">what went wrong</span>.
               </h1>
 
-              {/* Explanatory Paragraph (Plain English, High Clarity) */}
-              <p className="text-base text-zinc-600 dark:text-zinc-300 max-w-xl leading-relaxed">
-                Standard agent memory retrieves past experiences by semantic similarity alone, blindly repeating past mistakes and causing task performance to collapse. AEMA separates semantic relevance from empirical reliability, updating trust asymmetrically and isolating negative transfer.
+              {/* Subtitle */}
+              <p className="text-base sm:text-lg text-[#5A5955] leading-relaxed max-w-xl font-normal">
+                Most agents run blind: when an execution fails, the mistake is forgotten and repeated tomorrow. AEMA scores every run, isolates failing patterns, and turns past executions into reliable ground truth.
               </p>
 
-              {/* Research Attribution */}
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 pt-1">
-                Researched and co-developed by{' '}
-                <a
-                  href="https://github.com/Sumit-ai-dev"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#1A1A1A] dark:text-zinc-200 font-medium hover:underline"
-                >
-                  Sumit Das (@Sumit-ai-dev)
-                </a>{' '}
-                and{' '}
-                <a
-                  href="https://github.com/SakshiKasat18"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#1A1A1A] dark:text-zinc-200 font-medium hover:underline"
-                >
-                  Sakshi Kasat (@SakshiKasat18)
-                </a>.
-              </div>
-
-              {/* Strictly Two Focused CTAs */}
-              <div className="pt-2 flex flex-wrap items-center gap-3">
+              {/* Primary Actions */}
+              <div className="flex flex-wrap items-center gap-4 pt-2">
                 <button
-                  onClick={() => navigate('/dashboard?demo=true')}
-                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 transition-all shadow-sm cursor-pointer"
+                  onClick={() => navigate('/dashboard?demo=true&tab=overview')}
+                  className="px-5 py-2.5 rounded bg-[#141413] text-[#FAFAF7] text-xs font-medium hover:bg-[#2B2B28] transition-colors flex items-center gap-2 cursor-pointer shadow-sm"
                 >
-                  <Play size={14} />
-                  <span>Explore Demo</span>
+                  <span>Launch Studio</span>
+                  <ArrowRight size={14} />
                 </button>
-
-                <a
-                  href="#research"
-                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl border text-xs font-medium transition-colors text-zinc-700 dark:text-zinc-300 hover:text-black dark:hover:text-white border-[#E5E5DF] dark:border-[#232832] bg-white dark:bg-[#14171C]"
+                <Link
+                  to="/docs"
+                  className="px-5 py-2.5 rounded border border-[#D5D3CC] bg-white/90 backdrop-blur-sm text-[#141413] text-xs font-medium hover:bg-white transition-colors"
                 >
-                  <span>Read the Research</span>
-                  <ArrowRight size={13} />
-                </a>
+                  Read Documentation
+                </Link>
               </div>
 
-              {/* Compact Package Pills */}
-              <div className="pt-2 flex flex-wrap items-center gap-2 text-xs font-mono">
-                <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832]">
-                  <span className="text-zinc-400">$</span>
-                  <span className="text-zinc-800 dark:text-zinc-200">pip install aema</span>
-                  <button
-                    onClick={() => copyToClipboard('pip install aema', setCopiedPypi)}
-                    className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-1 cursor-pointer"
-                    title="Copy command"
-                  >
-                    {copiedPypi ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 px-2.5 py-1 rounded-md border bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832]">
-                  <span className="text-zinc-400">$</span>
-                  <span className="text-zinc-800 dark:text-zinc-200">npm i @sumitaidev/aema</span>
-                  <button
-                    onClick={() => copyToClipboard('npm i @sumitaidev/aema', setCopiedNpm)}
-                    className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 ml-1 cursor-pointer"
-                    title="Copy command"
-                  >
-                    {copiedNpm ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-                  </button>
-                </div>
+              {/* Four Trust Badges: Strict 2x2 Grid with Exact Vertical Alignment */}
+              <div className="pt-4 grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5 text-xs text-[#5A5955] font-mono max-w-lg">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="text-[#4EAA79] shrink-0" />
+                  <span>Deterministic Bound (k* &le; 3)</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="text-[#4EAA79] shrink-0" />
+                  <span>Asymmetric Calibration (&beta; &gt; &alpha;)</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="text-[#4EAA79] shrink-0" />
+                  <span>Air-Gapped Local SQLite</span>
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 size={13} className="text-[#4EAA79] shrink-0" />
+                  <span>&lt;25ms Vector Retrieval</span>
+                </span>
               </div>
             </div>
 
-            {/* Right Column: Serene Landscape Atmosphere + Layered Product Window (5 cols) */}
-            <div className="lg:col-span-5 relative">
-              {/* Nature Atmospheric Background Plate */}
-              <div className="relative rounded-2xl overflow-hidden border border-[#E5E5DF] dark:border-[#232832] shadow-md bg-zinc-100 dark:bg-zinc-900">
-                <img
-                  src="/images/hero-nature.jpg"
-                  alt="Atmospheric alpine misty landscape"
-                  className="w-full h-56 object-cover object-center filter saturate-90 brightness-95"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent" />
-                <div className="absolute bottom-3 left-4 text-white text-xs font-mono font-medium flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
-                  <span>AEMA Operational Core: Protocol Sandbox</span>
-                </div>
-              </div>
+            {/* Right Column: Live AEMA Cognitive Execution Runtime Console (Col 5) */}
+            <div className="lg:col-span-5">
+              <div className="rounded-2xl border border-[#2E2E2A] bg-[#141412] text-[#EDECE8] shadow-2xl w-full overflow-hidden select-none">
+                {/* Window Header Strip */}
+                <div className="px-4 py-3 bg-[#181816] border-b border-[#242422] flex items-center justify-between">
+                  {/* Window Control Dots */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FF5F56]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#FFBD2E]" />
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#27C93F]" />
+                  </div>
 
-              {/* Layered Real AEMA Studio Window */}
-              <div className="mt-4 rounded-xl border p-4 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] shadow-lg text-left text-xs space-y-3">
-                <div className="flex items-center justify-between border-b pb-2.5 border-[#E5E5DF] dark:border-[#232832]">
-                  <div className="flex items-center gap-2">
-                    <Terminal size={14} className="text-indigo-600 dark:text-indigo-400" />
-                    <span className="font-mono text-[11px] font-semibold text-zinc-700 dark:text-zinc-300">
-                      Live Studio Cycle
+                  {/* Script Name */}
+                  <div className="flex items-center gap-1.5 font-mono text-[11px] text-[#9E9D96]">
+                    <Terminal size={12} className="text-[#6366F1]" />
+                    <span>aema/runtime.py</span>
+                  </div>
+
+                  {/* Stage Status */}
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-[#4EAA79] animate-pulse" />
+                    <span className="text-[10px] font-mono text-[#4EAA79] uppercase font-semibold">
+                      {currentStage.node.split('.')[1]?.trim() || 'CALIBRATE'}
                     </span>
                   </div>
-                  <span className="font-mono text-[10px] text-emerald-700 dark:text-emerald-400 font-semibold px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800">
-                    S(t+1) = 0.85*St + 0.15
+                </div>
+
+                {/* Scenario Selector & Auto-cycle Strip */}
+                <div className="px-3.5 py-2 bg-[#121210] border-b border-[#242422] flex items-center justify-between gap-2 text-xs font-mono">
+                  <div className="flex items-center gap-1.5">
+                    {RUNTIME_SCENARIOS.map((scen, idx) => (
+                      <button
+                        key={scen.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveScenarioIdx(idx)
+                          setActiveStageIdx(0)
+                        }}
+                        className={`px-2.5 py-1 rounded text-[11px] transition-colors cursor-pointer ${
+                          activeScenarioIdx === idx
+                            ? 'bg-[#22221E] text-white font-medium border border-[#3E3E38]'
+                            : 'text-[#7E7D77] hover:text-[#EDECE8] border border-transparent'
+                        }`}
+                      >
+                        {idx === 0 ? 'Trial 1: Recovery' : 'Trial 2: Trap Trap (k*<=3)'}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPaused(!isPaused)}
+                    className="text-[10px] text-[#7E7D77] hover:text-[#EDECE8] flex items-center gap-1 transition-colors cursor-pointer px-2 py-0.5 rounded bg-[#181816] border border-[#262624]"
+                    title={isPaused ? 'Resume auto-cycle' : 'Pause auto-cycle'}
+                  >
+                    {isPaused ? <Play size={10} /> : <Pause size={10} />}
+                    <span>{isPaused ? 'Resume' : 'Auto'}</span>
+                  </button>
+                </div>
+
+                {/* 5-Node Progress Stepper Bar */}
+                <div className="grid grid-cols-5 border-b border-[#242422] bg-[#161614] text-[10px] font-mono">
+                  {['Retrieve', 'Execute', 'Evaluate', 'Reflect', 'Calibrate'].map((stepName, sIdx) => {
+                    const isCurrent = activeStageIdx === sIdx
+                    const isPast = activeStageIdx > sIdx
+                    return (
+                      <button
+                        key={stepName}
+                        type="button"
+                        onClick={() => setActiveStageIdx(sIdx)}
+                        className={`py-1.5 px-1 text-center transition-colors border-r last:border-r-0 border-[#242422] flex flex-col items-center gap-0.5 cursor-pointer ${
+                          isCurrent
+                            ? 'bg-[#1E1E1B] text-white font-semibold border-b-2 border-b-[#4EAA79]'
+                            : isPast
+                            ? 'text-[#9E9D96]'
+                            : 'text-[#5A5955] hover:text-[#7E7D77]'
+                        }`}
+                      >
+                        <span className="text-[9px] text-[#7E7D77]">{sIdx + 1}</span>
+                        <span className="truncate w-full">{stepName}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {/* Active Task Identifier Bar */}
+                <div className="p-3 bg-[#141412] border-b border-[#20201D] flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2 truncate mr-2">
+                    <Cpu size={13} className="text-[#6366F1] shrink-0" />
+                    <span className="font-mono text-[#D8D7D2] text-[11px] truncate">
+                      {activeScenario.taskTitle}
+                    </span>
+                  </div>
+                  <span className="shrink-0 text-[10px] font-mono px-2 py-0.5 rounded bg-[#1C1C18] border border-[#2E2E2A] text-[#9E9D96]">
+                    {activeScenario.taskDomain}
                   </span>
                 </div>
 
-                {/* Micro Stage Rail */}
-                <div className="grid grid-cols-5 gap-1.5 text-center font-mono text-[10px]">
-                  <div className="p-1 rounded bg-zinc-100 dark:bg-[#1C2026] text-zinc-700 dark:text-zinc-300">
-                    Retrieve
+                {/* Live Console Output Box */}
+                <div className="p-4 bg-[#10100E] min-h-[220px] flex flex-col justify-between font-mono text-xs">
+                  <div className="space-y-2.5">
+                    {/* Node Title & Stage Badge */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-[#4EAA79] text-xs font-semibold flex items-center gap-1.5">
+                        <Activity size={12} className="text-[#4EAA79]" />
+                        <span>{currentStage.node}: {currentStage.title}</span>
+                      </span>
+                      {currentStage.badge && (
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-semibold border ${
+                            currentStage.badgeType === 'danger'
+                              ? 'bg-[#2E1E1E] text-[#D9534F] border-[#4E2A2A]'
+                              : currentStage.badgeType === 'neutral'
+                              ? 'bg-[#242420] text-[#E67E22] border-[#3E3E34]'
+                              : 'bg-[#1A261E] text-[#4EAA79] border-[#2E4234]'
+                          }`}
+                        >
+                          {currentStage.badge}
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Detail Preformatted Box */}
+                    <div className="p-3 rounded-lg bg-[#141412] border border-[#242422] text-[#B8B7B2] text-[11px] leading-relaxed whitespace-pre-wrap font-mono">
+                      {currentStage.detail}
+                    </div>
                   </div>
-                  <div className="p-1 rounded bg-zinc-100 dark:bg-[#1C2026] text-zinc-700 dark:text-zinc-300">
-                    Execute
-                  </div>
-                  <div className="p-1 rounded bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 font-semibold">
-                    Evaluate
-                  </div>
-                  <div className="p-1 rounded bg-zinc-100 dark:bg-[#1C2026] text-zinc-700 dark:text-zinc-300">
-                    Reflect
-                  </div>
-                  <div className="p-1 rounded bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-indigo-800 dark:text-indigo-300 font-semibold">
-                    Trust
+
+                  {/* Theoretical Bound Footer */}
+                  <div className="pt-3 mt-3 border-t border-[#1C1C18] flex items-center justify-between text-[10px] text-[#7E7D77]">
+                    <span>Deterministic Bound: k* &le; 3 quarantine</span>
+                    <span className="text-[#4EAA79] font-medium">&lt;25ms retrieval latency</span>
                   </div>
                 </div>
-
-                {/* Live Strategy Injected */}
-                <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-[#1C2026] border border-[#E5E5DF] dark:border-[#232832] font-mono text-[11px] text-zinc-700 dark:text-zinc-300">
-                  <span className="text-zinc-400 block mb-0.5 text-[10px]">RETRIEVED STRATEGY (exp-001):</span>
-                  "Split schema modifications into non-blocking dual-write phases."
-                </div>
-
-                {/* Score Shift */}
-                <div className="flex items-center justify-between text-[11px] font-mono pt-1 text-zinc-500">
-                  <span>Trust Score: 91.0% to 92.4%</span>
-                  <span className="text-emerald-600 dark:text-emerald-400 font-semibold">+1.4% gain</span>
-                </div>
               </div>
-            </div>
-
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 01 / PRINCIPLE: WHY AEMA (Editorial 2-Tier Layout) ─────────────── */}
-      <section id="why-aema" className="py-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832]">
-        <div className="max-w-7xl mx-auto space-y-12">
-          {/* Header Tier */}
-          <div className="space-y-4">
-            <span className="font-mono text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-              01 / Principle
-            </span>
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-              <div className="lg:col-span-7">
-                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A] dark:text-[#F4F4F6] leading-snug">
-                  Memory is not just retrieval. It is the ability to know what to repeat, and what to avoid.
-                </h2>
-              </div>
-              <div className="lg:col-span-5">
-                <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                  When an autonomous agent recalls a flawed or outdated solution, semantic matching reinforces the failure. AEMA turns experiential memory into an empirical feedback loop where past outcomes govern future retrieval.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Three Structural Columns with Hairline Vertical Rules */}
-          <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-[#E5E5DF] dark:divide-[#232832] pt-4">
-            {/* Column 1 */}
-            <div className="py-6 md:py-0 md:pr-8 space-y-2.5">
-              <div className="font-mono text-xs text-indigo-600 dark:text-indigo-400 font-semibold uppercase">
-                1. Remember What Worked
-              </div>
-              <h3 className="text-sm font-semibold text-[#1A1A1A] dark:text-[#F4F4F6]">
-                Bilateral Operational Units
-              </h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Rather than storing unstructured chat logs, memories are structured as 7-tuple operative lessons: situational triggers, affirmative strategies, and negative transfer hazard bounds.
-              </p>
-            </div>
-
-            {/* Column 2 */}
-            <div className="py-6 md:py-0 md:px-8 space-y-2.5">
-              <div className="font-mono text-xs text-emerald-600 dark:text-emerald-400 font-semibold uppercase">
-                2. Measure What to Trust
-              </div>
-              <h3 className="text-sm font-semibold text-[#1A1A1A] dark:text-[#F4F4F6]">
-                Asymmetric EMA Updating
-              </h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Trust climbs cautiously on verified success (alpha = 0.85) but drops sharply upon failure (beta = 0.70). This asymmetry prevents deceptive experiences from masquerading as reliable advice.
-              </p>
-            </div>
-
-            {/* Column 3 */}
-            <div className="py-6 md:py-0 md:pl-8 space-y-2.5">
-              <div className="font-mono text-xs text-rose-600 dark:text-rose-400 font-semibold uppercase">
-                3. Isolate What Failed
-              </div>
-              <h3 className="text-sm font-semibold text-[#1A1A1A] dark:text-[#F4F4F6]">
-                Theorem 1 Quarantine Bounds
-              </h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Persistently harmful experiences are provably isolated after exactly k* = 3 consecutive failures. Once quarantined, memories are automatically excluded from subsequent retrievals.
-              </p>
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
-      {/* ─── 02 / CAUSAL PIPELINE: HOW AEMA WORKS ──────────────────────────── */}
-      <section id="how-it-works" className="py-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832]">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="space-y-2">
-            <span className="font-mono text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-              02 / Architecture
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A] dark:text-[#F4F4F6]">
-              The Causal Engineering Pipeline
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-7xl mx-auto px-6 sm:px-10 lg:px-16 pb-24 w-full">
+        {/* 3. The Core Problem Section (Full Width 3-Column Grid) */}
+        <section className="mt-16 pt-8 w-full">
+          <div className="max-w-3xl mb-12">
+            <div className="text-xs font-mono uppercase tracking-widest text-[#7E7D77] mb-2">
+              The Problem with Standard Memory
+            </div>
+            <h2 className="font-serif-headline text-3xl sm:text-4xl font-normal text-[#141413]">
+              The difference between storing logs and <span className="italic">learning</span>
             </h2>
-            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-2xl">
-              How experiential memory moves from task inception to verified trust update.
+            <p className="mt-3 text-xs sm:text-sm text-[#6B6A65] leading-relaxed">
+              Standard vector databases store everything uncritically. If an agent previously hallucinated a deprecated library or a broken SQL pattern, a vector search retrieves it again simply because the words match.
             </p>
           </div>
 
-          {/* Fine-line Pipeline Flow */}
-          <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 font-mono text-xs">
-            <div className="rounded-xl border p-4 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-2">
-              <span className="text-zinc-400 text-[11px] font-semibold">STAGE 01</span>
-              <div className="font-semibold text-sm font-sans">Trigger</div>
-              <p className="text-[11px] text-zinc-500 font-sans leading-relaxed">
-                Agent receives task with specific operational context and constraints.
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-xs leading-relaxed">
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5">
+              <div className="font-mono text-[11px] uppercase tracking-wider text-[#7E7D77] mb-2 font-medium">
+                1. Stateless Agents
+              </div>
+              <p className="text-[#6B6A65]">
+                Every run begins as a blank slate. When an agent discovers a tricky edge case or API workaround, that insight vanishes when the session ends. Tomorrow, it hits the exact same bug again.
               </p>
             </div>
 
-            <div className="rounded-xl border p-4 bg-white dark:bg-[#14171C] border-indigo-200 dark:border-indigo-900/60 space-y-2">
-              <span className="text-indigo-600 dark:text-indigo-400 text-[11px] font-semibold">STAGE 02</span>
-              <div className="font-semibold text-sm font-sans">Bi-Metric Retrieval</div>
-              <p className="text-[11px] text-zinc-500 font-sans leading-relaxed">
-                Rank = 0.70 × similarity + 0.30 × trust. Quarantined memories (St &lt; 0.35) are filtered out.
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5">
+              <div className="font-mono text-[11px] uppercase tracking-wider text-[#D9534F] mb-2 font-medium">
+                2. Blind Vector RAG
+              </div>
+              <p className="text-[#6B6A65]">
+                Treats every past generation as equal. When an agent invents an invalid function call, that mistake is saved into the index. Over repeated runs, error patterns multiply and poison subsequent prompts.
               </p>
             </div>
 
-            <div className="rounded-xl border p-4 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-2">
-              <span className="text-zinc-400 text-[11px] font-semibold">STAGE 03</span>
-              <div className="font-semibold text-sm font-sans">Context Injection</div>
-              <p className="text-[11px] text-zinc-500 font-sans leading-relaxed">
-                Inject verified strategy lesson and hazard warning into model prompt.
-              </p>
-            </div>
-
-            <div className="rounded-xl border p-4 bg-white dark:bg-[#14171C] border-emerald-200 dark:border-emerald-900/60 space-y-2">
-              <span className="text-emerald-600 dark:text-emerald-400 text-[11px] font-semibold">STAGE 04</span>
-              <div className="font-semibold text-sm font-sans">Evaluation</div>
-              <p className="text-[11px] text-zinc-500 font-sans leading-relaxed">
-                Objective evaluator validates execution outcome against criteria.
-              </p>
-            </div>
-
-            <div className="rounded-xl border p-4 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-2">
-              <span className="text-zinc-400 text-[11px] font-semibold">STAGE 05</span>
-              <div className="font-semibold text-sm font-sans">Trust Update</div>
-              <p className="text-[11px] text-zinc-500 font-sans leading-relaxed">
-                Asymmetric EMA update. If failures reach k* = 3, quarantine triggers.
+            <div className="border-2 border-[#141413] bg-white rounded-lg p-5 relative shadow-sm">
+              <div className="font-mono text-[11px] uppercase tracking-wider text-[#141413] font-bold mb-2">
+                3. AEMA Experiential Memory
+              </div>
+              <p className="text-[#141413]">
+                Tracks the empirical outcome of each run. Negative strategies are penalized faster than positive ones are rewarded (&beta; &gt; &alpha;). Failing strategies are mathematically quarantined so they never reach context again.
               </p>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* ─── 03 / PRODUCT: AEMA IN ACTION (Interactive Studio Console) ─────── */}
-      <section className="py-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832]">
-        <div className="max-w-7xl mx-auto space-y-8">
-          <div className="space-y-2">
-            <span className="font-mono text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-              03 / Product
-            </span>
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* 4. The Five-Stage Cognitive Cycle (Clear, Accessible Descriptions) */}
+        <section className="mt-20 pt-16 border-t border-[#EAE8E3] w-full">
+          <div className="max-w-3xl mb-12">
+            <div className="text-xs font-mono uppercase tracking-widest text-[#7E7D77] mb-2">
+              Empirical Pipeline
+            </div>
+            <h2 className="font-serif-headline text-3xl sm:text-4xl font-normal text-[#141413]">
+              The five-stage cognitive cycle
+            </h2>
+            <p className="mt-3 text-xs sm:text-sm text-[#6B6A65] leading-relaxed">
+              Every query executes through an empirical five-node loop: finding verified memories, guiding the agent, running tests, extracting lessons, and updating mathematical trust.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 w-full text-xs">
+            {/* Stage 1 */}
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5 flex flex-col justify-between">
               <div>
-                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A] dark:text-[#F4F4F6]">
-                  AEMA in Action
-                </h2>
-                <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-                  Experience the live 5-node stepper and observe how trust recalculates in real time.
+                <div className="font-mono text-[11px] font-bold text-[#141413] mb-2">
+                  01 / RETRIEVE
+                </div>
+                <div className="font-medium text-[#141413] text-xs mb-1.5">
+                  Smart Memory Search
+                </div>
+                <p className="text-[#6B6A65] text-[11px] leading-relaxed">
+                  Finds relevant past experiences and checks their reliability score. Failing patterns that were previously quarantined are automatically ignored.
                 </p>
               </div>
-              <StatusBadge status="Available Now" size="sm" />
+              <div className="mt-4 pt-3 border-t border-[#F0EFEA] font-mono text-[10px] text-[#7E7D77]">
+                Fast &lt;25ms lookup
+              </div>
+            </div>
+
+            {/* Stage 2 */}
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5 flex flex-col justify-between">
+              <div>
+                <div className="font-mono text-[11px] font-bold text-[#141413] mb-2">
+                  02 / EXECUTE
+                </div>
+                <div className="font-medium text-[#141413] text-xs mb-1.5">
+                  Guarded Generation
+                </div>
+                <p className="text-[#6B6A65] text-[11px] leading-relaxed">
+                  Guides the agent with proven solutions and clear warnings about known mistakes before it generates code or takes action.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-[#F0EFEA] font-mono text-[10px] text-[#7E7D77]">
+                Zero prompt clutter
+              </div>
+            </div>
+
+            {/* Stage 3 */}
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5 flex flex-col justify-between">
+              <div>
+                <div className="font-mono text-[11px] font-bold text-[#141413] mb-2">
+                  03 / EVALUATE
+                </div>
+                <div className="font-medium text-[#141413] text-xs mb-1.5">
+                  Automatic Verification
+                </div>
+                <p className="text-[#6B6A65] text-[11px] leading-relaxed">
+                  Runs real tests to check if the agent's answer actually works. Passes increase confidence; unexpected errors are flagged immediately.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-[#F0EFEA] font-mono text-[10px] text-[#7E7D77]">
+                Instant pass/fail check
+              </div>
+            </div>
+
+            {/* Stage 4 */}
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5 flex flex-col justify-between">
+              <div>
+                <div className="font-mono text-[11px] font-bold text-[#141413] mb-2">
+                  04 / REFLECT
+                </div>
+                <div className="font-medium text-[#141413] text-xs mb-1.5">
+                  Lesson Extraction
+                </div>
+                <p className="text-[#6B6A65] text-[11px] leading-relaxed">
+                  Extracts the exact lesson from what succeeded or what went wrong, turning the run into a reusable rule for future tasks.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-[#F0EFEA] font-mono text-[10px] text-[#7E7D77]">
+                Learns automatically
+              </div>
+            </div>
+
+            {/* Stage 5 */}
+            <div className="border-2 border-[#141413] bg-white rounded-lg p-5 flex flex-col justify-between shadow-sm">
+              <div>
+                <div className="font-mono text-[11px] font-bold text-[#141413] mb-2">
+                  05 / CALIBRATE
+                </div>
+                <div className="font-medium text-[#141413] text-xs mb-1.5">
+                  Trust Update &amp; Safety Lock
+                </div>
+                <p className="text-[#141413] text-[11px] leading-relaxed">
+                  Adjusts the trust score. Mistakes drop trust quickly so bad habits cannot repeat. If an action fails 3 times, it is permanently locked out.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-[#EAE8E3] font-mono text-[10px] text-[#4EAA79] font-semibold">
+                Theorem 1 Bound (k* &le; 3)
+              </div>
             </div>
           </div>
+        </section>
 
-          <div className="rounded-2xl border p-6 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-5">
-            {previewError && (
-              <div className="rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-4 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-semibold">
-                    <AlertTriangle size={16} />
-                    <span>Public Preview Execution Failed</span>
+        {/* 5. Three Architectural Guarantees (Full Width 3-Column Grid) */}
+        <section className="mt-20 pt-16 border-t border-[#EAE8E3] w-full">
+          <div className="max-w-3xl mb-12">
+            <div className="text-xs font-mono uppercase tracking-widest text-[#7E7D77] mb-2">
+              System Architecture
+            </div>
+            <h2 className="font-serif-headline text-3xl sm:text-4xl font-normal text-[#141413]">
+              Three architectural guarantees
+            </h2>
+            <p className="mt-3 text-xs sm:text-sm text-[#6B6A65] leading-relaxed">
+              AEMA makes agent memory predictable, testable, and mathematically bounded rather than relying on prompt heuristics.
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full text-xs leading-relaxed">
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5">
+              <div className="font-mono text-[11px] uppercase tracking-wider text-[#141413] font-semibold mb-2">
+                1. Deterministic Quarantine
+              </div>
+              <p className="text-[#6B6A65]">
+                Failing strategies are mathematically bounded. If an action repeatedly causes test failures, trust drops below the critical threshold within at most 3 runs (k* &le; 3), locking it in quarantine so it cannot corrupt future generations.
+              </p>
+            </div>
+
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5">
+              <div className="font-mono text-[11px] uppercase tracking-wider text-[#141413] font-semibold mb-2">
+                2. Asymmetric Calibration
+              </div>
+              <p className="text-[#6B6A65]">
+                Penalties for failure are weighted more heavily than rewards for success (&beta; &gt; &alpha;). A single unverified run cannot dominate retrieval, protecting the agent against premature overconfidence.
+              </p>
+            </div>
+
+            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5">
+              <div className="font-mono text-[11px] uppercase tracking-wider text-[#141413] font-semibold mb-2">
+                3. Zero-Leak Infrastructure
+              </div>
+              <p className="text-[#6B6A65]">
+                Runs completely air-gapped on local SQLite and Chroma for development, with zero external network calls. In production, it connects seamlessly to PostgreSQL with pgvector for strict multi-tenant isolation.
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* 5. Empirical Benchmarks Table (Full Width Table) */}
+        <section id="benchmarks" className="mt-20 pt-16 border-t border-[#EAE8E3] w-full">
+          <div className="max-w-3xl mb-10">
+            <div className="text-xs font-mono uppercase tracking-widest text-[#7E7D77] mb-2">
+              Empirical Findings
+            </div>
+            <h2 className="font-serif-headline text-3xl sm:text-4xl font-normal text-[#141413]">
+              Benchmarked against negative transfer
+            </h2>
+            <p className="mt-3 text-xs sm:text-sm text-[#6B6A65] leading-relaxed">
+              When exposed to contradictory evidence and deprecated tool parameters, naive memory agents experience severe performance degradation. AEMA isolates the failures and recovers accuracy.
+            </p>
+          </div>
+
+          <div className="border border-[#EAE8E3] rounded-lg bg-white overflow-hidden w-full shadow-sm">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-[#EAE8E3] bg-[#F7F6F2] font-mono text-[11px] text-[#7E7D77]">
+                  <th className="py-3 px-5 font-medium">Evaluation Suite</th>
+                  <th className="py-3 px-5 font-medium">Task Domain</th>
+                  <th className="py-3 px-5 font-medium">Stateless Baseline</th>
+                  <th className="py-3 px-5 font-medium">Naive Vector RAG</th>
+                  <th className="py-3 px-5 font-medium text-[#141413]">AEMA Engine</th>
+                  <th className="py-3 px-5 font-medium">p-value (McNemar)</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#EAE8E3] text-[#6B6A65] font-mono text-[11px]">
+                <tr>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Confirmatory Trap Suite</td>
+                  <td className="py-3.5 px-5">Coding & Tool Use</td>
+                  <td className="py-3.5 px-5">60.0%</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">0.0% (Poisoned)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">100.0%</td>
+                  <td className="py-3.5 px-5">p = 1.192 &times; 10⁻⁷</td>
+                </tr>
+                <tr>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">HotpotQA Multi-Hop Contradiction</td>
+                  <td className="py-3.5 px-5">Multi-Hop Research</td>
+                  <td className="py-3.5 px-5">52.4%</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">14.8%</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">88.6%</td>
+                  <td className="py-3.5 px-5">p = 4.821 &times; 10⁻⁵</td>
+                </tr>
+                <tr>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">ToolBench API Deprecation</td>
+                  <td className="py-3.5 px-5">Tool Calling</td>
+                  <td className="py-3.5 px-5">64.2%</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">22.0%</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">91.4%</td>
+                  <td className="py-3.5 px-5">p = 2.140 &times; 10⁻⁶</td>
+                </tr>
+                <tr>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">ALFWorld Embodied Planning</td>
+                  <td className="py-3.5 px-5">Planning & Reasoning</td>
+                  <td className="py-3.5 px-5">58.0%</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">31.5%</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">85.0%</td>
+                  <td className="py-3.5 px-5">p = 9.310 &times; 10⁻⁴</td>
+                </tr>
+              </tbody>
+            </table>
+            <div className="px-5 py-3 border-t border-[#EAE8E3] bg-[#FAF9F5] text-[11px] text-[#7E7D77] flex items-center justify-between">
+              <span>*Statistically significant across repeated trials (p &lt; 0.001)</span>
+              <span className="font-mono text-[#141413]">Protocol Frozen (PR #88)</span>
+            </div>
+          </div>
+        </section>
+
+        {/* 6. Multi-Tab Code Integration (Full Width) */}
+        <section id="docs" className="mt-20 pt-16 border-t border-[#EAE8E3] w-full">
+          <div className="max-w-3xl mb-8">
+            <h2 className="font-serif-headline text-3xl sm:text-4xl font-normal text-[#141413]">
+              Integrates into existing agent code
+            </h2>
+            <p className="mt-2 text-xs sm:text-sm text-[#6B6A65]">
+              AEMA is framework-agnostic. Use it with LangGraph, CrewAI, standalone scripts, Claude Desktop, Cursor, or direct REST calls.
+            </p>
+          </div>
+
+          <div className="rounded-lg border border-[#242422] bg-[#141412] text-[#EDECE8] shadow-sm w-full overflow-hidden">
+            {/* Tabs Header */}
+            <div className="flex items-center justify-between px-4 border-b border-[#242422] bg-[#161614]">
+              <div className="flex items-center gap-1 font-mono text-xs">
+                <button
+                  onClick={() => setActiveTab('python')}
+                  className={`px-3.5 py-2.5 border-b-2 transition-colors cursor-pointer ${
+                    activeTab === 'python'
+                      ? 'border-[#EDECE8] text-white font-medium'
+                      : 'border-transparent text-[#7E7D77] hover:text-[#EDECE8]'
+                  }`}
+                >
+                  Python SDK
+                </button>
+                <button
+                  onClick={() => setActiveTab('typescript')}
+                  className={`px-3.5 py-2.5 border-b-2 transition-colors cursor-pointer ${
+                    activeTab === 'typescript'
+                      ? 'border-[#EDECE8] text-white font-medium'
+                      : 'border-transparent text-[#7E7D77] hover:text-[#EDECE8]'
+                  }`}
+                >
+                  TypeScript SDK
+                </button>
+                <button
+                  onClick={() => setActiveTab('mcp')}
+                  className={`px-3.5 py-2.5 border-b-2 transition-colors cursor-pointer ${
+                    activeTab === 'mcp'
+                      ? 'border-[#EDECE8] text-white font-medium'
+                      : 'border-transparent text-[#7E7D77] hover:text-[#EDECE8]'
+                  }`}
+                >
+                  MCP Server
+                </button>
+                <button
+                  onClick={() => setActiveTab('rest')}
+                  className={`px-3.5 py-2.5 border-b-2 transition-colors cursor-pointer ${
+                    activeTab === 'rest'
+                      ? 'border-[#EDECE8] text-white font-medium'
+                      : 'border-transparent text-[#7E7D77] hover:text-[#EDECE8]'
+                  }`}
+                >
+                  REST API
+                </button>
+              </div>
+
+              <button
+                onClick={() => copyToClipboard(snippets[activeTab])}
+                className="flex items-center gap-1.5 text-[11px] font-mono text-[#7E7D77] hover:text-white transition-colors cursor-pointer"
+              >
+                {copiedCode ? <Check size={12} className="text-[#4EAA79]" /> : <Copy size={12} />}
+                <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+              </button>
+            </div>
+
+            {/* Snippet Display */}
+            <pre className="p-6 font-mono text-xs leading-relaxed text-[#B8B7B2] overflow-x-auto min-h-[170px]">
+              <code>{snippets[activeTab]}</code>
+            </pre>
+          </div>
+        </section>
+
+        {/* 7. Frequently Asked Questions (SpringWinter Accordion Layout) */}
+        <section className="mt-20 pt-16 border-t border-[#EAE8E3] w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
+            {/* Left Column: Context & Docs Link (Col 4) */}
+            <div className="lg:col-span-4 space-y-4">
+              <h2 className="font-serif-headline text-3xl sm:text-4xl font-normal text-[#141413] tracking-tight">
+                Frequently asked questions.
+              </h2>
+              <p className="text-xs sm:text-sm text-[#5A5955] leading-relaxed">
+                Learn how AEMA secures agent experiential memory, prevents negative transfer, and integrates into existing pipelines.
+              </p>
+              <div className="pt-2">
+                <Link
+                  to="/docs"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#141413] hover:text-[#5A5955] transition-colors group cursor-pointer"
+                >
+                  <span>Read the docs</span>
+                  <ArrowRight size={13} className="transition-transform group-hover:translate-x-0.5" />
+                </Link>
+              </div>
+            </div>
+
+            {/* Right Column: Numbered Hairline Accordion (Col 8) */}
+            <div className="lg:col-span-8 border-b border-[#EAE8E3]">
+              {FAQ_ITEMS.map((item, idx) => {
+                const isOpen = openFaqs.includes(idx)
+                return (
+                  <div
+                    key={item.num}
+                    className="border-t border-[#EAE8E3] py-5 sm:py-6 transition-colors"
+                  >
+                    <div
+                      onClick={() => toggleFaq(idx)}
+                      className="flex items-start justify-between gap-4 cursor-pointer select-none group"
+                    >
+                      {/* Left: Number + Question */}
+                      <div className="flex items-baseline gap-4 sm:gap-6">
+                        <span className="font-mono text-xs text-[#9E9D96] shrink-0 font-normal">
+                          {item.num}
+                        </span>
+                        <span className="font-medium text-base sm:text-lg text-[#141413] group-hover:text-[#3A3A38] transition-colors tracking-tight leading-snug">
+                          {item.q}
+                        </span>
+                      </div>
+
+                      {/* Right: Circular Toggle Button (Turns solid black when open!) */}
+                      <button
+                        type="button"
+                        aria-label={isOpen ? 'Collapse answer' : 'Expand answer'}
+                        className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 cursor-pointer ${
+                          isOpen
+                            ? 'bg-[#141413] text-white border border-[#141413]'
+                            : 'bg-white text-[#141413] border border-[#D5D3CC] group-hover:border-[#141413]'
+                        }`}
+                      >
+                        <Plus
+                          size={15}
+                          className={`transition-transform duration-200 ${isOpen ? 'rotate-45' : 'rotate-0'}`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Expandable Answer */}
+                    <div
+                      className={`grid transition-all duration-300 ease-in-out overflow-hidden ${
+                        isOpen ? 'grid-rows-[1fr] opacity-100 pt-3' : 'grid-rows-[0fr] opacity-0 pt-0'
+                      }`}
+                    >
+                      <div className="overflow-hidden pl-7 sm:pl-10 pr-6 sm:pr-12">
+                        <p className="text-xs sm:text-sm text-[#5A5955] leading-relaxed">
+                          {item.a}
+                        </p>
+                      </div>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => setPreviewError(null)}
-                    className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-mono"
-                  >
-                    Dismiss
-                  </button>
-                </div>
-                <p className="text-rose-800 dark:text-rose-300 font-mono text-[11px] break-all">
-                  {previewError}
-                </p>
-              </div>
-            )}
-            <PromptConsole onRunTask={handleRunHeroPreview} isRunning={previewRunning} />
-            {previewStage !== 'idle' && (
-              <ExecutionStepper currentStage={previewStage} execution={previewExecution} />
-            )}
-          </div>
-        </div>
-      </section>
-
-      {/* --- 04 / RESEARCH: THEOREM 1 & BENCHMARKS ---------------------------- */}
-      <section id="research" className="py-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832]">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="space-y-2">
-            <span className="font-mono text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-              04 / Research Foundations
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A] dark:text-[#F4F4F6]">
-              Mathematical Proofs and Confirmatory Benchmark
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-2xl">
-              Explore the Theorem 1 deterministic quarantine derivation with canonical S₀ = 0.75, and review our frozen N=30 confirmatory trial results.
-            </p>
-          </div>
-
-          <TheoremSandbox />
-          <BenchmarkMatrix />
-        </div>
-      </section>
-
-      {/* ─── 05 / USE CASES: OPERATIONAL SCENARIOS ──────────────────────────── */}
-      <section className="py-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832]">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="space-y-2">
-            <span className="font-mono text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-              05 / Operational Use Cases
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A] dark:text-[#F4F4F6]">
-              Where Reliable Memory Matters
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-2xl">
-              Real agent workflows where standard semantic retrieval causes negative transfer.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="rounded-2xl border p-5 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <Code size={16} />
-              </div>
-              <h3 className="text-sm font-semibold text-[#1A1A1A] dark:text-[#F4F4F6]">
-                Coding & Refactoring
-              </h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Eliminates recurring API deprecation traps, locking migrations, and token refresh race conditions across code repos.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border p-5 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <Compass size={16} />
-              </div>
-              <h3 className="text-sm font-semibold text-[#1A1A1A] dark:text-[#F4F4F6]">
-                Fact Verification
-              </h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Prevents hallucination cascades when researching conflicting biomedical preprint claims by enforcing peer-reviewed verification.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border p-5 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <Database size={16} />
-              </div>
-              <h3 className="text-sm font-semibold text-[#1A1A1A] dark:text-[#F4F4F6]">
-                Financial Time Series
-              </h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Avoids naive ordinary least squares on heavy-tailed revenue series by systematically applying Huber robust loss.
-              </p>
-            </div>
-
-            <div className="rounded-2xl border p-5 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-2.5">
-              <div className="w-8 h-8 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-400">
-                <GitBranch size={16} />
-              </div>
-              <h3 className="text-sm font-semibold text-[#1A1A1A] dark:text-[#F4F4F6]">
-                Planning & DAG Dispatch
-              </h3>
-              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
-                Injects exponential backoff with full jitter and maintains token concurrency buffers for high-priority agent reflection cycles.
-              </p>
+                )
+              })}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
+      </main>
 
-      {/* ─── 06 / DEVELOPERS & ECOSYSTEM ───────────────────────────────────── */}
-      <section id="developers" className="py-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832]">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="space-y-2">
-            <span className="font-mono text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-              06 / Developers
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A] dark:text-[#F4F4F6]">
-              Production SDKs and MCP Server
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-2xl">
-              Integrate reliability-aware experiential memory in Python, TypeScript, Claude Desktop, or Cursor.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Python SDK */}
-            <div className="rounded-2xl border p-6 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Code size={16} className="text-indigo-600 dark:text-indigo-400" />
-                  <h3 className="text-sm font-semibold">Python SDK (pip install aema)</h3>
-                </div>
-                <StatusBadge status="Available Now" size="sm" />
-              </div>
-              <pre className="p-4 rounded-xl text-xs font-mono bg-[#F8F8F6] dark:bg-[#1C2026] border border-[#E5E5DF] dark:border-[#232832] overflow-x-auto text-zinc-800 dark:text-zinc-200">
-                {pythonSnippet}
-              </pre>
-            </div>
-
-            {/* Model Context Protocol (MCP) */}
-            <div className="rounded-2xl border p-6 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Layers size={16} className="text-indigo-600 dark:text-indigo-400" />
-                  <h3 className="text-sm font-semibold">Model Context Protocol (MCP Server)</h3>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => copyToClipboard(mcpConfigCode, setCopiedMcp)}
-                    className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 transition-colors cursor-pointer"
-                  >
-                    {copiedMcp ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
-                    <span>{copiedMcp ? 'Copied' : 'Copy'}</span>
-                  </button>
-                  <StatusBadge status="Available Now" size="sm" />
-                </div>
-              </div>
-              <pre className="p-4 rounded-xl text-xs font-mono bg-[#F8F8F6] dark:bg-[#1C2026] border border-[#E5E5DF] dark:border-[#232832] overflow-x-auto text-zinc-800 dark:text-zinc-200">
-                {mcpConfigCode}
-              </pre>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* ─── 07 / PLATFORM ROADMAP (Honest Status Badging) ─────────────────── */}
-      <section className="py-20 px-6 border-b border-[#E5E5DF] dark:border-[#232832]">
-        <div className="max-w-7xl mx-auto space-y-12">
-          <div className="space-y-2">
-            <span className="font-mono text-xs font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">
-              07 / Roadmap
-            </span>
-            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-[#1A1A1A] dark:text-[#F4F4F6]">
-              Platform Roadmap & Capabilities
-            </h2>
-            <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 max-w-2xl">
-              Transparent distinction between current releases, interactive demo features, and planned capabilities.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-2xl border p-6 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Open Source Core</h3>
-                <StatusBadge status="Available Now" size="sm" />
-              </div>
-              <ul className="text-xs space-y-2 text-zinc-600 dark:text-zinc-400">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                  <span>PyPI Package <code>aema 0.1.1</code></span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                  <span>npm Package <code>@sumitaidev/aema 0.1.1</code></span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                  <span>Theorem 1 Deterministic Quarantine</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-emerald-500 shrink-0" />
-                  <span>PostgreSQL pgvector & SQLite stores</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border p-6 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">AEMA Cloud Console</h3>
-                <StatusBadge status="Demo" size="sm" />
-              </div>
-              <ul className="text-xs space-y-2 text-zinc-600 dark:text-zinc-400">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-indigo-500 shrink-0" />
-                  <span>Interactive 5-node Execution Studio</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-indigo-500 shrink-0" />
-                  <span>Supabase Authentication & RLS</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-indigo-500 shrink-0" />
-                  <span>Memory Explorer & Quarantine Filters</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 size={13} className="text-indigo-500 shrink-0" />
-                  <span>Live Sandbox with N=30 Benchmark seeds</span>
-                </li>
-              </ul>
-            </div>
-
-            <div className="rounded-2xl border p-6 bg-white dark:bg-[#14171C] border-[#E5E5DF] dark:border-[#232832] space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold">Enterprise Federation</h3>
-                <StatusBadge status="Planned" size="sm" />
-              </div>
-              <ul className="text-xs space-y-2 text-zinc-600 dark:text-zinc-400">
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
-                  <span>Multi-tenant memory partitioning</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
-                  <span>Distributed consensus across agent fleets</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
-                  <span>Automated red-team adversarial injection</span>
-                </li>
-                <li className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-zinc-400 shrink-0" />
-                  <span>SOC2 compliance logging</span>
-                </li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
+      {/* 8. Minimal Footer */}
       <Footer />
 
-      {/* Auth Modal */}
+      {/* 9. Two-Column Auth Modal */}
       <AuthModal
         isOpen={authModalOpen}
         onClose={() => setAuthModalOpen(false)}
-        onSuccess={() => navigate('/dashboard')}
         initialMode={authModalMode}
       />
     </div>

@@ -37,24 +37,24 @@ export default function TheoremSandbox() {
   const isCurrentlyQuarantined = currentSimTrust < theta
 
   return (
-    <div className="rounded-2xl border p-6 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-6">
+    <div className="rounded-lg border border-[#242422] p-5 bg-[#161614] text-[#EDECE8] space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4 border-[#E6E6E1] dark:border-[#252B3B]">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4 border-[#242422]">
         <div>
           <div className="flex items-center gap-2">
-            <Calculator size={18} className="text-indigo-600 dark:text-indigo-400" />
-            <h3 className="text-sm font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+            <Calculator size={16} className="text-[#4EAA79]" />
+            <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-[#EDECE8]">
               Theorem 1 Deterministic Quarantine Sandbox
             </h3>
           </div>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            Isolating negative transfer within exactly <code className="font-mono font-bold text-indigo-600 dark:text-indigo-400">k*</code> consecutive failures.
+          <p className="text-xs text-[#7E7D77] mt-1 font-mono">
+            Isolating negative transfer within exactly <code className="font-mono font-bold text-[#4EAA79]">k*</code> consecutive failures.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono px-3 py-1 rounded-lg border bg-zinc-50 dark:bg-[#1A1F2C] border-[#E6E6E1] dark:border-[#252B3B]">
-            Theorem 1 Bound: <strong className="text-indigo-600 dark:text-indigo-400">k* = {kStar} Failures</strong>
+          <span className="text-xs font-mono px-3 py-1 rounded-lg border bg-[#141412] border-[#2E2E2A] text-[#EDECE8]">
+            Theorem 1 Bound: <strong className="text-[#4EAA79]">k* = {kStar} Failures</strong>
           </span>
         </div>
       </div>
@@ -62,8 +62,8 @@ export default function TheoremSandbox() {
       {/* Hyperparameter Controls */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs font-mono">
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 mb-1">
-            Success Momentum (α): <strong>{alpha.toFixed(2)}</strong>
+          <label className="block text-[#9E9D96] mb-1">
+            Success Momentum (α): <strong className="text-[#EDECE8]">{alpha.toFixed(2)}</strong>
           </label>
           <input
             type="range"
@@ -72,13 +72,13 @@ export default function TheoremSandbox() {
             step="0.01"
             value={alpha}
             onChange={(e) => setAlpha(parseFloat(e.target.value))}
-            className="w-full accent-indigo-600 cursor-pointer"
+            className="w-full accent-[#4EAA79] cursor-pointer"
           />
         </div>
 
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 mb-1">
-            Failure Penalty (β): <strong>{beta.toFixed(2)}</strong>
+          <label className="block text-[#9E9D96] mb-1">
+            Failure Penalty (β): <strong className="text-[#EDECE8]">{beta.toFixed(2)}</strong>
           </label>
           <input
             type="range"
@@ -87,13 +87,13 @@ export default function TheoremSandbox() {
             step="0.01"
             value={beta}
             onChange={(e) => setBeta(parseFloat(e.target.value))}
-            className="w-full accent-indigo-600 cursor-pointer"
+            className="w-full accent-[#D9534F] cursor-pointer"
           />
         </div>
 
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 mb-1">
-            Quarantine Threshold (θ): <strong>{theta.toFixed(2)}</strong>
+          <label className="block text-[#9E9D96] mb-1">
+            Quarantine Threshold (θ): <strong className="text-[#EDECE8]">{theta.toFixed(2)}</strong>
           </label>
           <input
             type="range"
@@ -102,13 +102,13 @@ export default function TheoremSandbox() {
             step="0.01"
             value={theta}
             onChange={(e) => setTheta(parseFloat(e.target.value))}
-            className="w-full accent-indigo-600 cursor-pointer"
+            className="w-full accent-[#E67E22] cursor-pointer"
           />
         </div>
 
         <div>
-          <label className="block text-zinc-600 dark:text-zinc-400 mb-1">
-            Initial Trust (S₀): <strong>{s0.toFixed(2)}</strong>
+          <label className="block text-[#9E9D96] mb-1">
+            Initial Trust (S₀): <strong className="text-[#EDECE8]">{s0.toFixed(2)}</strong>
           </label>
           <input
             type="range"
@@ -117,16 +117,16 @@ export default function TheoremSandbox() {
             step="0.01"
             value={s0}
             onChange={(e) => setS0(parseFloat(e.target.value))}
-            className="w-full accent-indigo-600 cursor-pointer"
+            className="w-full accent-[#EDECE8] cursor-pointer"
           />
         </div>
       </div>
 
       {/* Mathematical Proof Visualizer */}
-      <div className="p-4 rounded-xl border bg-zinc-50 border-[#E6E6E1] dark:bg-[#1A1F2C] dark:border-[#252B3B] space-y-3">
-        <div className="text-xs font-mono text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
-          <span>Formula: <code className="text-indigo-600 dark:text-indigo-400">k* = ⌈(ln θ - ln S₀) / ln β⌉</code></span>
-          <span>= ⌈(ln({theta.toFixed(2)}) - ln({s0.toFixed(2)})) / ln({beta.toFixed(2)})⌉ = <strong>{kStar}</strong></span>
+      <div className="p-4 rounded-lg border bg-[#141412] border-[#242422] space-y-3">
+        <div className="text-xs font-mono text-[#9E9D96] flex items-center justify-between">
+          <span>Formula: <code className="text-[#4EAA79]">k* = ⌈(ln θ - ln S₀) / ln β⌉</code></span>
+          <span>= ⌈(ln({theta.toFixed(2)}) - ln({s0.toFixed(2)})) / ln({beta.toFixed(2)})⌉ = <strong className="text-[#EDECE8]">{kStar}</strong></span>
         </div>
 
         {/* Trajectory Table / Steps */}
@@ -136,11 +136,11 @@ export default function TheoremSandbox() {
               key={step.step}
               className={`p-2.5 rounded-lg border text-center font-mono text-xs transition-all ${
                 step.quarantined
-                  ? 'bg-rose-50 border-rose-200 text-rose-900 dark:bg-rose-950/30 dark:border-rose-900/60 dark:text-rose-300'
-                  : 'bg-white border-[#E6E6E1] text-[#18181B] dark:bg-[#131722] dark:border-[#252B3B] dark:text-[#F4F4F6]'
+                  ? 'bg-[#2E1E1E] border-[#4E2A2A] text-[#D9534F]'
+                  : 'bg-[#181816] border-[#2E2E2A] text-[#EDECE8]'
               }`}
             >
-              <div className="text-[10px] text-zinc-400">
+              <div className="text-[10px] text-[#7E7D77]">
                 {step.step === 0 ? 'Initial (t=0)' : `Failure ${step.step}`}
               </div>
               <div className="text-sm font-bold mt-1">
@@ -157,21 +157,21 @@ export default function TheoremSandbox() {
       {/* Interactive Failure Simulation Tester */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
         <div className="flex items-center gap-3">
-          <div className="text-xs font-mono">
-            Simulated Failures: <strong className="text-indigo-600 dark:text-indigo-400">{simFailures}</strong>
+          <div className="text-xs font-mono text-[#9E9D96]">
+            Simulated Failures: <strong className="text-[#EDECE8]">{simFailures}</strong>
           </div>
-          <div className="text-xs font-mono">
-            Current St: <strong className={isCurrentlyQuarantined ? 'text-rose-600' : 'text-emerald-600'}>
+          <div className="text-xs font-mono text-[#9E9D96]">
+            Current St: <strong className={isCurrentlyQuarantined ? 'text-[#D9534F]' : 'text-[#4EAA79]'}>
               {(currentSimTrust * 100).toFixed(1)}%
             </strong>
           </div>
           {isCurrentlyQuarantined ? (
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300 font-semibold flex items-center gap-1">
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-[#4E2A2A] bg-[#2E1E1E] text-[#D9534F] font-semibold flex items-center gap-1">
               <ShieldAlert size={12} />
               Quarantined
             </span>
           ) : (
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-semibold flex items-center gap-1">
+            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-[#2E4234] bg-[#1E2E24] text-[#4EAA79] font-semibold flex items-center gap-1">
               <CheckCircle size={12} />
               Active in Retrieval
             </span>
@@ -181,16 +181,16 @@ export default function TheoremSandbox() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => setSimFailures((f) => f + 1)}
-            className="px-3 py-1.5 rounded-xl text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 transition-colors cursor-pointer"
+            className="px-3 py-1.5 rounded-lg text-xs font-mono font-medium text-white bg-[#D9534F] hover:bg-[#c8433f] transition-colors cursor-pointer"
           >
             +1 Simulated Failure
           </button>
           <button
             onClick={() => setSimFailures(0)}
-            className="p-1.5 rounded-xl border text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border-[#E6E6E1] dark:border-[#252B3B] cursor-pointer"
+            className="p-1.5 rounded-lg border text-[#7E7D77] hover:text-[#EDECE8] border-[#2E2E2A] bg-[#141412] cursor-pointer"
             title="Reset failures"
           >
-            <RefreshCw size={15} />
+            <RefreshCw size={14} />
           </button>
         </div>
       </div>

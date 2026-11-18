@@ -22,19 +22,19 @@ export default function MemoryCard({
   return (
     <div
       onClick={() => onSelect?.(experience)}
-      className={`rounded-xl border p-4 transition-all cursor-pointer text-left ${
+      className={`rounded-lg border p-4 transition-all cursor-pointer text-left ${
         isSelected
-          ? 'border-indigo-600 bg-indigo-50/30 dark:border-indigo-500 dark:bg-indigo-950/20 shadow-sm'
-          : 'bg-white border-[#E6E6E1] hover:border-zinc-400 dark:bg-[#131722] dark:border-[#252B3B] dark:hover:border-zinc-600'
+          ? 'border-[#4EAA79] bg-[#1E2E24] shadow-sm'
+          : 'bg-[#161614] border-[#242422] hover:border-[#2E2E2A] hover:bg-[#1A1A17]'
       }`}
     >
       {/* Header Bar */}
       <div className="flex items-center justify-between gap-2 mb-3">
         <div className="flex items-center gap-2">
-          <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-zinc-100 text-zinc-700 dark:bg-[#1A1F2C] dark:text-zinc-300 border border-[#E6E6E1] dark:border-[#252B3B]">
+          <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-[#1A1A17] text-[#EDECE8] border border-[#2E2E2A]">
             {experience.id}
           </span>
-          <span className="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">
+          <span className="text-[11px] font-mono text-[#7E7D77] uppercase tracking-wider">
             {experience.taskDomain}
           </span>
         </div>
@@ -43,10 +43,10 @@ export default function MemoryCard({
 
       {/* Trigger Condition */}
       <div className="mb-3">
-        <div className="text-[11px] font-mono font-medium text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+        <div className="text-[10px] font-mono font-medium text-[#7E7D77] uppercase tracking-wider mb-1">
           Operational Trigger
         </div>
-        <div className="text-xs font-medium text-[#18181B] dark:text-[#F4F4F6] line-clamp-2">
+        <div className="text-xs font-medium text-[#EDECE8] line-clamp-2">
           {experience.triggerCondition}
         </div>
       </div>
@@ -54,24 +54,24 @@ export default function MemoryCard({
       {/* Bilateral Units: Strategy Lesson & Hazard Pitfall */}
       <div className="space-y-2 mb-3">
         {/* Strategy Lesson (Affirmative) */}
-        <div className="rounded-lg border p-2.5 bg-emerald-50/60 border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50">
-          <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-emerald-800 dark:text-emerald-400 mb-1">
+        <div className="rounded border p-2.5 bg-[#141E18] border-[#203D2A]">
+          <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-[#4EAA79] mb-1">
             <CheckCircle size={13} className="shrink-0" />
             <span>Affirmative Strategy</span>
           </div>
-          <p className="text-xs text-emerald-950 dark:text-emerald-200 leading-relaxed">
+          <p className="text-xs text-[#EDECE8] leading-relaxed">
             {experience.strategyLesson}
           </p>
         </div>
 
         {/* Hazard Pitfall Warning */}
         {experience.pitfallWarning && (
-          <div className="rounded-lg border p-2.5 bg-rose-50/60 border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/50">
-            <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-rose-800 dark:text-rose-400 mb-1">
+          <div className="rounded border p-2.5 bg-[#221616] border-[#3E2020]">
+            <div className="flex items-center gap-1.5 text-[11px] font-mono font-semibold text-[#D9534F] mb-1">
               <AlertTriangle size={13} className="shrink-0" />
               <span>Hazard Pitfall</span>
             </div>
-            <p className="text-xs text-rose-950 dark:text-rose-200 leading-relaxed">
+            <p className="text-xs text-[#EDECE8] leading-relaxed">
               {experience.pitfallWarning}
             </p>
           </div>
@@ -79,15 +79,15 @@ export default function MemoryCard({
       </div>
 
       {/* Metrics Footer */}
-      <div className="pt-3 border-t border-[#E6E6E1] dark:border-[#252B3B] flex items-center justify-between text-xs">
+      <div className="pt-3 border-t border-[#242422] flex items-center justify-between text-xs">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5" title="Asymmetric EMA Trust Score (St)">
-            <Shield size={13} className="text-indigo-600 dark:text-indigo-400" />
-            <span className="font-mono font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+            <Shield size={13} className="text-[#4EAA79]" />
+            <span className="font-mono font-semibold text-[#EDECE8]">
               {trustPct}%
             </span>
           </div>
-          <div className="flex items-center gap-1 text-zinc-500 dark:text-zinc-400 font-mono text-[11px]" title="Uses and Empirical Success Rate">
+          <div className="flex items-center gap-1 text-[#7E7D77] font-mono text-[11px]" title="Uses and Empirical Success Rate">
             <Cpu size={12} />
             <span>{experience.usesCount} uses</span>
             <span>({successRate}% win)</span>
@@ -96,7 +96,7 @@ export default function MemoryCard({
 
         {/* Quarantine Failures Counter if any */}
         {experience.consecutiveFailures > 0 && (
-          <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300 border border-rose-200 dark:border-rose-800" title="Consecutive failures toward Theorem 1 quarantine threshold k*=3">
+          <span className="font-mono text-[11px] px-1.5 py-0.5 rounded bg-[#2E1E1E] text-[#D9534F] border border-[#4E2A2A]" title="Consecutive failures toward Theorem 1 quarantine threshold k*=3">
             k={experience.consecutiveFailures}/3
           </span>
         )}

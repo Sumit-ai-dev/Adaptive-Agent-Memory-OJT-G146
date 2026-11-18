@@ -21,9 +21,9 @@ function CodeBlock({ language, code }: BlockCodeProps) {
   }
 
   return (
-    <div className="my-2.5 rounded-lg overflow-hidden border border-zinc-200 dark:border-[#252B3B] bg-zinc-900 text-zinc-100 dark:bg-[#0C0E14] text-xs font-mono shadow-sm">
-      <div className="flex items-center justify-between px-3 py-1.5 bg-zinc-800/80 dark:bg-[#131722] border-b border-zinc-700/50 dark:border-[#252B3B] text-[11px] text-zinc-400">
-        <span className="font-semibold uppercase tracking-wider text-[10px] text-zinc-400">
+    <div className="my-2.5 rounded-lg overflow-hidden border border-[#2E2E2A] bg-[#141412] text-[#EDECE8] text-xs font-mono shadow-sm">
+      <div className="flex items-center justify-between px-3 py-1.5 bg-[#1A1A17] border-b border-[#242422] text-[11px] text-[#7E7D77]">
+        <span className="font-semibold uppercase tracking-wider text-[10px] text-[#9E9D96]">
           {language || 'text'}
         </span>
         <button
@@ -34,8 +34,8 @@ function CodeBlock({ language, code }: BlockCodeProps) {
         >
           {copied ? (
             <>
-              <Check size={12} className="text-emerald-400" />
-              <span className="text-emerald-400">Copied</span>
+              <Check size={12} className="text-[#4EAA79]" />
+              <span className="text-[#4EAA79]">Copied</span>
             </>
           ) : (
             <>
@@ -45,7 +45,7 @@ function CodeBlock({ language, code }: BlockCodeProps) {
           )}
         </button>
       </div>
-      <pre className="p-3 overflow-x-auto leading-relaxed text-zinc-200 dark:text-zinc-300">
+      <pre className="p-3 overflow-x-auto leading-relaxed text-[#EDECE8]">
         <code>{code}</code>
       </pre>
     </div>
@@ -76,7 +76,7 @@ function renderInlineFormatting(text: string): React.ReactNode[] {
         tokens.push(
           <code
             key={`inline-code-${keyIdx++}`}
-            className="px-1.5 py-0.5 rounded bg-zinc-200/70 dark:bg-[#252B3B] font-mono text-[11px] text-indigo-600 dark:text-indigo-400 border border-zinc-300/50 dark:border-[#323B4F]"
+            className="px-1.5 py-0.5 rounded bg-[#1E1E1B] font-mono text-[11px] text-[#EDECE8] border border-[#2E2E2A]"
           >
             {codeMatch[2]}
           </code>
@@ -168,7 +168,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       blocks.push(
         <h1
           key={`h1-${lineIdx}`}
-          className="text-base font-bold text-zinc-900 dark:text-[#F4F4F6] mt-4 mb-2 pb-1 border-b border-zinc-200 dark:border-[#252B3B] first:mt-0 font-sans tracking-tight"
+          className="text-base font-bold text-[#EDECE8] mt-4 mb-2 pb-1 border-b border-[#242422] first:mt-0 font-sans tracking-tight"
         >
           {renderInlineFormatting(h1Match[1])}
         </h1>
@@ -181,7 +181,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       blocks.push(
         <h2
           key={`h2-${lineIdx}`}
-          className="text-sm font-bold text-zinc-900 dark:text-[#F4F4F6] mt-3.5 mb-1.5 first:mt-0 font-sans tracking-tight"
+          className="text-sm font-bold text-[#EDECE8] mt-3.5 mb-1.5 first:mt-0 font-sans tracking-tight"
         >
           {renderInlineFormatting(h2Match[1])}
         </h2>
@@ -194,7 +194,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       blocks.push(
         <h3
           key={`h3-${lineIdx}`}
-          className="text-xs font-bold text-zinc-800 dark:text-zinc-200 mt-3 mb-1 first:mt-0 font-sans uppercase tracking-wider"
+          className="text-xs font-bold text-[#EDECE8] mt-3 mb-1 first:mt-0 font-sans uppercase tracking-wider"
         >
           {renderInlineFormatting(h3Match[1])}
         </h3>
@@ -207,7 +207,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       blocks.push(
         <h4
           key={`h4-${lineIdx}`}
-          className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 mt-2 mb-0.5 first:mt-0 font-sans"
+          className="text-xs font-semibold text-[#EDECE8] mt-2 mb-0.5 first:mt-0 font-sans"
         >
           {renderInlineFormatting(h4Match[1])}
         </h4>
@@ -222,7 +222,7 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
       blocks.push(
         <blockquote
           key={`quote-${lineIdx}`}
-          className="my-2 pl-3 py-1 border-l-2 border-indigo-500 bg-indigo-50/40 dark:bg-indigo-950/20 text-zinc-700 dark:text-zinc-300 rounded-r text-xs italic"
+          className="my-2 pl-3 py-1 border-l-2 border-[#4EAA79] bg-[#1A1A17] text-[#EDECE8] rounded-r text-xs italic"
         >
           {renderInlineFormatting(quoteText)}
         </blockquote>
@@ -240,10 +240,10 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
         listItems.push(
           <li
             key={`li-${lineIdx}`}
-            className="flex items-start gap-2 my-1 leading-relaxed text-zinc-700 dark:text-zinc-300"
+            className="flex items-start gap-2 my-1 leading-relaxed text-[#EDECE8]"
             style={{ marginLeft: `${indentLevel * 14}px` }}
           >
-            <span className="text-indigo-600 dark:text-indigo-400 font-bold select-none shrink-0 mt-0.5">•</span>
+            <span className="text-[#4EAA79] font-bold select-none shrink-0 mt-0.5">•</span>
             <div className="flex-1">{renderInlineFormatting(itemMatch[2])}</div>
           </li>
         )
@@ -266,9 +266,9 @@ export default function MarkdownRenderer({ content, className = '' }: MarkdownRe
         numItems.push(
           <li
             key={`oli-${lineIdx}`}
-            className="flex items-start gap-2 my-1 leading-relaxed text-zinc-700 dark:text-zinc-300"
+            className="flex items-start gap-2 my-1 leading-relaxed text-[#EDECE8]"
           >
-            <span className="text-indigo-600 dark:text-indigo-400 font-mono font-semibold select-none shrink-0 text-[11px] min-w-[18px]">
+            <span className="text-[#E67E22] font-mono font-semibold select-none shrink-0 text-[11px] min-w-[18px]">
               {num}.
             </span>
             <div className="flex-1">{renderInlineFormatting(itemMatch[3])}</div>

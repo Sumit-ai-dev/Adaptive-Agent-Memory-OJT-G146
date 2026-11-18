@@ -730,6 +730,85 @@ async def list_sessions(
         return []
 
 
+@router.delete(
+    "/sessions/{session_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete a conversation session and all its executions",
+)
+async def delete_session(
+    session_id: str,
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
+) -> Dict[str, Any]:
+    """Deletes all executions associated with a session ID from cache and SQLite."""
+    global _execution_history
+    _execution_history = [
+        item for item in _execution_history
+        if getattr(item, "session_id", None) != session_id
+    ]
+
+    try:
+        await shared_store.delete_conversation(session_id)
+    except Exception as exc:
+        logger.warning(f"Could not delete session from shared_store: {exc}")
+
+    db_path = _sqlite_db_path()
+    if db_path:
+        try:
+            conn = sqlite3.connect(db_path)
+            conn.execute("DELETE FROM task_executions WHERE session_id = ?", (session_id,))
+            conn.commit()
+            conn.close()
+        except Exception as exc:
+            logger.warning(f"Could not delete session executions from SQLite: {exc}")
+
+    return {"status": "deleted", "sessionId": session_id}
+
+
+@router.patch(
+    "/sessions/{session_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Rename a conversation session",
+)
+async def rename_session(
+    session_id: str,
+    body: Dict[str, Any],
+    auth: Optional[AuthContext] = Depends(get_optional_auth_context),
+) -> Dict[str, Any]:
+    """Updates the title of a conversation session."""
+    new_title = (body.get("title") or "").strip()
+    if not new_title:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Title cannot be empty.",
+        )
+
+    try:
+        await shared_store.update_conversation(session_id, title=new_title)
+    except Exception as exc:
+        logger.warning(f"Could not update session title in shared_store: {exc}")
+
+    db_path = _sqlite_db_path()
+    if db_path:
+        try:
+            conn = sqlite3.connect(db_path)
+            # Update the task_input of the earliest execution in this session
+            earliest = conn.execute(
+                "SELECT id FROM task_executions WHERE session_id = ? ORDER BY created_at ASC LIMIT 1",
+                (session_id,),
+            ).fetchone()
+            if earliest:
+                conn.execute(
+                    "UPDATE task_executions SET task_input = ? WHERE id = ?",
+                    (new_title, earliest[0]),
+                )
+                conn.commit()
+            conn.close()
+        except Exception as exc:
+            logger.warning(f"Could not update session title in SQLite: {exc}")
+
+    return {"status": "updated", "sessionId": session_id, "title": new_title}
+
+
 @router.get(
     "/executions/{execution_id}",
     response_model=TaskExecution,

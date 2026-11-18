@@ -2,57 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ─── AEMA Design System Tokens ─────────────────────────────────────────── */
+/* ─── AEMA Editorial Design System Tokens (Spring Winter Obsidian Palette) ── */
 :root {
-  --color-canvas: #FBFBFA;
+  --color-canvas: #FAFAF7;
   --color-surface: #FFFFFF;
-  --color-surface-elevated: #F4F4F0;
-  --color-border: #E6E6E1;
-  --color-border-subtle: #EDEDE8;
-  --color-text-primary: #18181B;
-  --color-text-secondary: #52525B;
-  --color-text-muted: #71717A;
-  --color-brand: #4338CA;
-  --color-brand-tint: #EEF2FF;
-  --color-brand-border: #C7D2FE;
+  --color-surface-subtle: #F7F6F2;
+  --color-border: #EAE8E3;
+  --color-border-subtle: #E2E0D8;
+  --color-text-primary: #141413;
+  --color-text-secondary: #6B6A65;
+  --color-text-muted: #7E7D77;
   
-  --color-success: #059669;
-  --color-success-tint: #ECFDF5;
-  --color-success-border: #A7F3D0;
+  --color-brand: #141413;
+  --color-brand-tint: #F2EFE9;
+  --color-brand-border: #DCD8CF;
   
-  --color-warning: #D97706;
-  --color-warning-tint: #FFFBEB;
-  --color-warning-border: #FDE68A;
+  --color-accent-amber: #E67E22;
+  --color-accent-emerald: #4EAA79;
+  --color-accent-crimson: #D9534F;
   
-  --color-danger: #DC2626;
-  --color-danger-tint: #FEF2F2;
-  --color-danger-border: #FECACA;
+  --studio-bg: #141412;
+  --studio-surface: #161614;
+  --studio-elevated: #1E1E1B;
+  --studio-border: #242422;
+  --studio-text: #EDECE8;
+  --studio-muted: #7E7D77;
 }
 
 .dark {
-  --color-canvas: #0C0E14;
-  --color-surface: #131722;
-  --color-surface-elevated: #1A1F2C;
-  --color-border: #252B3B;
-  --color-border-subtle: #1E2330;
-  --color-text-primary: #F4F4F6;
-  --color-text-secondary: #94A3B8;
-  --color-text-muted: #64748B;
-  --color-brand: #6366F1;
-  --color-brand-tint: rgba(99, 102, 241, 0.12);
-  --color-brand-border: rgba(99, 102, 241, 0.28);
+  --color-canvas: #141412;
+  --color-surface: #161614;
+  --color-surface-subtle: #1A1A17;
+  --color-surface-elevated: #1E1E1B;
+  --color-border: #242422;
+  --color-border-subtle: #2A2A26;
+  --color-text-primary: #EDECE8;
+  --color-text-secondary: #9E9D96;
+  --color-text-muted: #7E7D77;
   
-  --color-success: #10B981;
-  --color-success-tint: rgba(16, 185, 129, 0.12);
-  --color-success-border: rgba(16, 185, 129, 0.28);
+  --color-brand: #EDECE8;
+  --color-brand-tint: #1E1E1B;
+  --color-brand-border: #33332E;
   
-  --color-warning: #F59E0B;
-  --color-warning-tint: rgba(245, 158, 11, 0.12);
-  --color-warning-border: rgba(245, 158, 11, 0.28);
+  --color-accent-amber: #E67E22;
+  --color-accent-emerald: #4EAA79;
+  --color-accent-crimson: #D9534F;
   
-  --color-danger: #F43F5E;
-  --color-danger-tint: rgba(244, 63, 94, 0.12);
-  --color-danger-border: rgba(244, 63, 94, 0.28);
+  --studio-bg: #141412;
+  --studio-surface: #161614;
+  --studio-elevated: #1E1E1B;
+  --studio-border: #242422;
+  --studio-text: #EDECE8;
+  --studio-muted: #7E7D77;
 }
 
 * {
@@ -63,6 +64,7 @@
 
 html {
   scroll-behavior: smooth;
+  background-color: var(--color-canvas);
 }
 
 body {
@@ -71,85 +73,52 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--color-canvas);
   color: var(--color-text-primary);
-  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* ── Typography Utilities ───────────────────────────────────────────────── */
+::selection {
+  background-color: #EAE8E3;
+  color: #141413;
+}
+
+.dark ::selection {
+  background-color: #2E2E2A;
+  color: #FFFFFF;
+}
+
+/* ── Editorial Serif Headline ───────────────────────────────────────────── */
+.font-serif-headline {
+  font-family: 'Newsreader', Georgia, serif;
+}
+
+/* ── Monospace Utilities ────────────────────────────────────────────────── */
 .font-mono {
-  font-family: 'JetBrains Mono', 'Fira Code', Menlo, Monaco, Consolas, monospace;
+  font-family: 'Geist Mono', 'JetBrains Mono', Menlo, Monaco, Consolas, monospace;
 }
 
-/* ── Subtle Elevation & Card Surfaces ───────────────────────────────────── */
-.surface-card {
-  background-color: var(--color-surface);
+/* ── Clean Hairline Borders ─────────────────────────────────────────────── */
+.hairline-border {
   border: 1px solid var(--color-border);
-  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04);
 }
 
-.surface-card-hover {
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.surface-card-hover:hover {
-  border-color: var(--color-brand);
-  box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.06);
+.studio-border {
+  border: 1px solid var(--studio-border);
 }
 
-/* ── Restrained Badges ─────────────────────────────────────────────────── */
-.badge-active {
-  background-color: var(--color-success-tint);
-  border: 1px solid var(--color-success-border);
-  color: var(--color-success);
-}
-
-.badge-provisional {
-  background-color: var(--color-warning-tint);
-  border: 1px solid var(--color-warning-border);
-  color: var(--color-warning);
-}
-
-.badge-quarantined {
-  background-color: var(--color-danger-tint);
-  border: 1px solid var(--color-danger-border);
-  color: var(--color-danger);
-}
-
-.badge-neutral {
-  background-color: var(--color-surface-elevated);
-  border: 1px solid var(--color-border);
-  color: var(--color-text-secondary);
-}
-
-/* ── Motion & Animation ─────────────────────────────────────────────────── */
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes pulseGently {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-
-.anim-fade-in {
-  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-}
-
-.anim-pulse-subtle {
-  animation: pulseGently 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
-}
-
-/* ── Custom Scrollbars ─────────────────────────────────────────────────── */
+/* ── Custom Scrollbars ──────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
+
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border);
-  border-radius: 3px;
+  background: #3A3A36;
+  border-radius: 4px;
 }
+
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-text-muted);
+  background: #4A4A46;
 }

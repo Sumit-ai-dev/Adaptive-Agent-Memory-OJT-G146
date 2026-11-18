@@ -13,8 +13,8 @@ export default function ContextInspector({ execution }: ContextInspectorProps) {
 
   if (!execution) {
     return (
-      <div className="rounded-2xl border p-6 text-center bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] text-zinc-400">
-        <Code size={24} className="mx-auto mb-2 opacity-50" />
+      <div className="rounded-lg border border-[#242422] p-6 text-center bg-[#161614] text-[#7E7D77]">
+        <Code size={20} className="mx-auto mb-2 opacity-50" />
         <span className="text-xs font-mono">No execution selected. Run a task or select a trace.</span>
       </div>
     )
@@ -42,39 +42,39 @@ ${execution.taskInput}`
   }
 
   return (
-    <div className="rounded-2xl border bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] overflow-hidden">
+    <div className="rounded-lg border border-[#242422] bg-[#161614] text-[#EDECE8] overflow-hidden">
       {/* Header and Tabs */}
-      <div className="px-5 py-3 border-b border-[#E6E6E1] dark:border-[#252B3B] flex items-center justify-between">
-        <div className="flex items-center gap-2">
+      <div className="px-3 py-2 border-b border-[#242422] flex items-center justify-between bg-[#1A1A17]">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={() => setActiveTab('output')}
-            className={`px-3 py-1 rounded-md text-xs font-medium font-mono transition-colors ${
+            className={`px-2.5 py-1 rounded text-xs font-medium font-mono transition-colors cursor-pointer ${
               activeTab === 'output'
-                ? 'bg-zinc-100 dark:bg-[#1A1F2C] text-[#18181B] dark:text-[#F4F4F6]'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+                ? 'bg-[#22221E] text-white border border-[#2E2E2A]'
+                : 'text-[#7E7D77] hover:text-[#EDECE8]'
             }`}
           >
-            Final Output
+            Output
           </button>
           <button
             onClick={() => setActiveTab('prompt')}
-            className={`px-3 py-1 rounded-md text-xs font-medium font-mono transition-colors ${
+            className={`px-2.5 py-1 rounded text-xs font-medium font-mono transition-colors cursor-pointer ${
               activeTab === 'prompt'
-                ? 'bg-zinc-100 dark:bg-[#1A1F2C] text-[#18181B] dark:text-[#F4F4F6]'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+                ? 'bg-[#22221E] text-white border border-[#2E2E2A]'
+                : 'text-[#7E7D77] hover:text-[#EDECE8]'
             }`}
           >
-            Context Augmentation
+            Context
           </button>
           <button
             onClick={() => setActiveTab('raw')}
-            className={`px-3 py-1 rounded-md text-xs font-medium font-mono transition-colors ${
+            className={`px-2.5 py-1 rounded text-xs font-medium font-mono transition-colors cursor-pointer ${
               activeTab === 'raw'
-                ? 'bg-zinc-100 dark:bg-[#1A1F2C] text-[#18181B] dark:text-[#F4F4F6]'
-                : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300'
+                ? 'bg-[#22221E] text-white border border-[#2E2E2A]'
+                : 'text-[#7E7D77] hover:text-[#EDECE8]'
             }`}
           >
-            Raw JSON Trace
+            Raw JSON
           </button>
         </div>
 
@@ -88,24 +88,24 @@ ${execution.taskInput}`
                 : JSON.stringify(execution, null, 2)
             )
           }
-          className="flex items-center gap-1 text-[11px] font-mono text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 transition-colors"
+          className="flex items-center gap-1 text-[11px] font-mono text-[#7E7D77] hover:text-[#EDECE8] transition-colors cursor-pointer"
         >
-          {copied ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
+          {copied ? <Check size={12} className="text-[#4EAA79]" /> : <Copy size={12} />}
           <span>{copied ? 'Copied' : 'Copy'}</span>
         </button>
       </div>
 
       {/* Body Area */}
-      <div className="p-4 text-xs font-mono overflow-x-auto max-h-[380px] leading-relaxed">
+      <div className="p-3 text-xs font-mono overflow-x-auto max-h-[380px] leading-relaxed">
         {activeTab === 'output' && (
-          <div className="space-y-3">
-            <div className="p-3.5 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-800 dark:text-zinc-200">
+          <div className="space-y-2.5">
+            <div className="p-3 rounded-lg bg-[#141412] border border-[#242422] text-[#EDECE8]">
               <MarkdownRenderer content={execution.finalOutput || 'No output generated.'} />
             </div>
 
             {execution.reflectionLesson && (
-              <div className="p-3 rounded-lg bg-indigo-50/50 dark:bg-indigo-950/20 border border-indigo-200 dark:border-indigo-900/40 text-indigo-950 dark:text-indigo-200">
-                <span className="font-semibold block mb-1">Post-Execution Reflection:</span>
+              <div className="p-3 rounded-lg bg-[#1E1E1B] border border-[#2E2E2A] text-[#EDECE8]">
+                <span className="font-semibold block mb-1 text-[#4EAA79]">Post-Execution Reflection:</span>
                 {execution.reflectionLesson}
               </div>
             )}
@@ -113,13 +113,13 @@ ${execution.taskInput}`
         )}
 
         {activeTab === 'prompt' && (
-          <pre className="p-3 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">
+          <pre className="p-3 rounded-lg bg-[#141412] border border-[#242422] text-[#EDECE8] whitespace-pre-wrap">
             {promptPreview}
           </pre>
         )}
 
         {activeTab === 'raw' && (
-          <pre className="p-3 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-800 dark:text-zinc-200 whitespace-pre-wrap">
+          <pre className="p-3 rounded-lg bg-[#141412] border border-[#242422] text-[#EDECE8] whitespace-pre-wrap">
             {JSON.stringify(execution, null, 2)}
           </pre>
         )}

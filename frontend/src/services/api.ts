@@ -131,6 +131,108 @@ export const INITIAL_EXPERIENCES: Experience[] = [
   },
 ]
 
+export const INITIAL_DEMO_EXECUTIONS: TaskExecution[] = [
+  {
+    id: 'exec-demo-001',
+    sessionId: 'sess_default_01',
+    taskInput: 'Implement recursive JSON key extraction with fallback error boundaries',
+    taskDomain: 'coding',
+    memoryEnabled: true,
+    status: 'completed',
+    outcomeScore: 0.95,
+    outcomeQuality: 'positive',
+    tokensUsed: 312,
+    latencyMs: 245,
+    createdAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+    retrievedExperiences: [
+      {
+        experience: INITIAL_EXPERIENCES[4],
+        similarityScore: 0.92,
+        empiricalTrust: 0.96,
+        combinedRankScore: 0.932,
+      },
+    ],
+    finalAnswer: 'Implemented recursive extraction using surrogateescape error handler with zero serialization exceptions.',
+    reflectionLesson: 'Applied verified strategy: safe fallback boundary prevented recursion depth errors.',
+    trustUpdates: [
+      {
+        experienceId: 'exp-005',
+        oldScore: 0.94,
+        newScore: 0.96,
+        delta: 0.02,
+        isQuarantined: false,
+        formulaApplied: 'S_{t+1} = 0.85 · 0.94 + 0.15 = 0.96',
+      },
+    ],
+  },
+  {
+    id: 'exec-demo-002',
+    sessionId: 'sess_default_01',
+    taskInput: 'Synthesize multi-hop contradiction across contradictory clinical preprint claims',
+    taskDomain: 'research',
+    memoryEnabled: true,
+    status: 'completed',
+    outcomeScore: 0.91,
+    outcomeQuality: 'positive',
+    tokensUsed: 420,
+    latencyMs: 310,
+    createdAt: new Date(Date.now() - 1000 * 60 * 45).toISOString(),
+    retrievedExperiences: [
+      {
+        experience: INITIAL_EXPERIENCES[1],
+        similarityScore: 0.89,
+        empiricalTrust: 0.91,
+        combinedRankScore: 0.896,
+      },
+    ],
+    finalAnswer: 'Identified methodological divergence in sample sizes across 2 DOI publications; isolated false consensus.',
+    reflectionLesson: 'Cross-referencing verified DOI sources successfully resolved contradictory claims.',
+    trustUpdates: [
+      {
+        experienceId: 'exp-002',
+        oldScore: 0.88,
+        newScore: 0.91,
+        delta: 0.03,
+        isQuarantined: false,
+        formulaApplied: 'S_{t+1} = 0.85 · 0.88 + 0.15 = 0.91',
+      },
+    ],
+  },
+  {
+    id: 'exec-demo-003',
+    sessionId: 'sess_default_01',
+    taskInput: 'Execute concurrent SQLite write buffer without WAL mode (Negative Trap Test)',
+    taskDomain: 'coding',
+    memoryEnabled: true,
+    status: 'failed',
+    outcomeScore: 0.22,
+    outcomeQuality: 'negative',
+    tokensUsed: 195,
+    latencyMs: 180,
+    createdAt: new Date(Date.now() - 1000 * 60 * 120).toISOString(),
+    retrievedExperiences: [
+      {
+        experience: INITIAL_EXPERIENCES[5],
+        similarityScore: 0.94,
+        empiricalTrust: 0.31,
+        combinedRankScore: 0.751,
+      },
+    ],
+    finalAnswer: 'Execution aborted: Database locked exception under multi-threaded writes.',
+    reflectionLesson: 'Theorem 1 bound triggered: consecutive failures reached k*=3, strategy permanently quarantined.',
+    trustUpdates: [
+      {
+        experienceId: 'exp-006',
+        oldScore: 0.44,
+        newScore: 0.31,
+        delta: -0.13,
+        isQuarantined: true,
+        formulaApplied: 'S_{t+1} = 0.70 · 0.44 = 0.31 < θ (Quarantined)',
+      },
+    ],
+  },
+]
+
 let localExperiences: Experience[] = [...INITIAL_EXPERIENCES]
 
 // ─── Experience Retrieval Service ───────────────────────────────────────────
@@ -771,6 +873,32 @@ export async function fetchSessions(limit = 50): Promise<SessionSummary[]> {
     console.warn('Could not fetch sessions from backend:', err)
   }
   return []
+}
+
+export async function deleteSession(sessionId: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/agent/sessions/${sessionId}`, {
+      method: 'DELETE',
+    })
+    if (res.ok) return true
+  } catch (err) {
+    console.warn('Could not delete session on backend:', err)
+  }
+  return false
+}
+
+export async function renameSession(sessionId: string, newTitle: string): Promise<boolean> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/api/agent/sessions/${sessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: newTitle }),
+    })
+    if (res.ok) return true
+  } catch (err) {
+    console.warn('Could not rename session on backend:', err)
+  }
+  return false
 }
 
 // ─── Metric Aggregator (Real Backend Telemetry) ─────────────────────────────

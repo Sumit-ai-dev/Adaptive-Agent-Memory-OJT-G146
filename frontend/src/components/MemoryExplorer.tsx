@@ -109,12 +109,12 @@ export default function MemoryExplorer({
     <div className="space-y-5">
       {/* Demo Sandbox Alert Banner */}
       {isDemo && (
-        <div className="p-3.5 rounded-xl border bg-indigo-50/70 border-indigo-200 dark:bg-indigo-950/30 dark:border-indigo-900/50 text-indigo-950 dark:text-indigo-200 text-xs flex items-center justify-between">
+        <div className="p-3 rounded-lg border bg-[#1A1A17] border-[#242422] text-[#EDECE8] text-xs flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="font-mono font-semibold px-2 py-0.5 rounded bg-indigo-100 dark:bg-indigo-900 text-indigo-800 dark:text-indigo-300 text-[10px]">
+            <span className="font-mono font-semibold px-2 py-0.5 rounded bg-[#1E1E1B] border border-[#3E3E34] text-[#E67E22] text-[10px]">
               DEMO SANDBOX
             </span>
-            <span>Displaying pre-seeded benchmark memories. Additions and updates in this mode run in-memory.</span>
+            <span className="text-[#9E9D96]">Displaying pre-seeded benchmark memories. Additions and updates in this mode run in-memory.</span>
           </div>
         </div>
       )}
@@ -123,15 +123,14 @@ export default function MemoryExplorer({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
         {/* Search Input Form */}
         <form onSubmit={handleSearchSubmit} className="relative flex-1">
-          <Search size={15} className="absolute left-3.5 top-3 text-zinc-400" />
+          <Search size={14} className="absolute left-3.5 top-2.5 text-[#7E7D77]" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search triggers, verified strategies, or hazards (press Enter to query backend)..."
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border transition-colors outline-none
-              bg-white border-[#E6E6E1] text-[#18181B] focus:border-indigo-600
-              dark:bg-[#131722] dark:border-[#252B3B] dark:text-[#F4F4F6] dark:focus:border-indigo-400"
+            className="w-full pl-9 pr-4 py-2 text-xs font-mono rounded-lg border transition-colors outline-none
+              bg-[#141412] border-[#2E2E2A] text-[#EDECE8] placeholder-[#5A5955] focus:border-[#4EAA79]"
           />
         </form>
 
@@ -140,18 +139,17 @@ export default function MemoryExplorer({
           {onRefresh && (
             <button
               onClick={() => onRefresh(selectedDomain, search, statusFilter)}
-              className="p-2 rounded-xl border transition-colors text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200
-                bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] cursor-pointer"
+              className="p-2 rounded-lg border transition-colors text-[#7E7D77] hover:text-[#EDECE8] hover:bg-[#1E1E1B]
+                bg-[#141412] border-[#2E2E2A] cursor-pointer"
               title="Refresh experience index from backend"
             >
-              <RefreshCw size={15} />
+              <RefreshCw size={14} />
             </button>
           )}
 
           <button
             onClick={() => setIsAddOpen(true)}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-white transition-all
-              bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 shadow-sm cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-mono font-semibold text-[#141412] bg-[#EDECE8] hover:bg-white transition-colors shadow-sm cursor-pointer"
           >
             <Plus size={14} />
             <span>Record Experience</span>
@@ -167,10 +165,10 @@ export default function MemoryExplorer({
             <button
               key={dom}
               onClick={() => handleDomainChange(dom)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-mono capitalize transition-all cursor-pointer ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-mono capitalize transition-all cursor-pointer ${
                 selectedDomain === dom
-                  ? 'bg-indigo-600 text-white font-medium shadow-sm'
-                  : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-[#1A1F2C]'
+                  ? 'bg-[#22221E] text-white font-medium border border-[#2E2E2A]'
+                  : 'text-[#7E7D77] hover:text-[#EDECE8] hover:bg-[#1E1E1B]'
               }`}
             >
               {dom}
@@ -184,8 +182,8 @@ export default function MemoryExplorer({
             onClick={() => handleStatusChange('all')}
             className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
               statusFilter === 'all'
-                ? 'border-zinc-700 bg-zinc-200/70 text-zinc-900 dark:border-zinc-400 dark:bg-zinc-800 dark:text-zinc-100 font-semibold'
-                : 'border-transparent text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200'
+                ? 'border-[#2E2E2A] bg-[#22221E] text-[#EDECE8] font-semibold'
+                : 'border-transparent text-[#7E7D77] hover:text-[#EDECE8]'
             }`}
           >
             All ({counts.all})
@@ -194,8 +192,8 @@ export default function MemoryExplorer({
             onClick={() => handleStatusChange('active')}
             className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
               statusFilter === 'active'
-                ? 'border-emerald-600 bg-emerald-50 text-emerald-800 dark:border-emerald-500 dark:bg-emerald-950/40 dark:text-emerald-300 font-semibold'
-                : 'border-transparent text-zinc-400 hover:text-emerald-600'
+                ? 'border-[#2E4234] bg-[#1E2E24] text-[#4EAA79] font-semibold'
+                : 'border-transparent text-[#7E7D77] hover:text-[#4EAA79]'
             }`}
           >
             Active ({counts.active})
@@ -204,37 +202,37 @@ export default function MemoryExplorer({
             onClick={() => handleStatusChange('candidate')}
             className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
               statusFilter === 'candidate'
-                ? 'border-amber-600 bg-amber-50 text-amber-800 dark:border-amber-500 dark:bg-amber-950/40 dark:text-amber-300 font-semibold'
-                : 'border-transparent text-zinc-400 hover:text-amber-600'
+                ? 'border-[#3E3E34] bg-[#1E1E1B] text-[#E67E22] font-semibold'
+                : 'border-transparent text-[#7E7D77] hover:text-[#E67E22]'
             }`}
           >
-            Candidate/Provisional ({counts.candidate})
+            Candidate ({counts.candidate})
           </button>
           <button
             onClick={() => handleStatusChange('deprecated')}
             className={`px-2.5 py-1 rounded-md border transition-all cursor-pointer ${
               statusFilter === 'deprecated'
-                ? 'border-rose-600 bg-rose-50 text-rose-800 dark:border-rose-500 dark:bg-rose-950/40 dark:text-rose-300 font-semibold'
-                : 'border-transparent text-zinc-400 hover:text-rose-600'
+                ? 'border-[#4E2A2A] bg-[#2E1E1E] text-[#D9534F] font-semibold'
+                : 'border-transparent text-[#7E7D77] hover:text-[#D9534F]'
             }`}
           >
-            Deprecated/Quarantined ({counts.deprecated})
+            Quarantined ({counts.deprecated})
           </button>
         </div>
       </div>
 
       {/* Grid of Experiences */}
       {filtered.length === 0 ? (
-        <div className="rounded-xl border p-12 text-center bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
-          <Database size={32} className="mx-auto text-zinc-300 dark:text-zinc-600 mb-3" />
-          <h3 className="text-sm font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+        <div className="rounded-lg border p-12 text-center bg-[#161614] border-[#242422]">
+          <Database size={28} className="mx-auto text-[#7E7D77] mb-3 opacity-50" />
+          <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-[#EDECE8]">
             {experiences.length === 0
               ? isDemo
                 ? 'No experiences in demo sandbox'
                 : 'No persistent experiences recorded yet'
               : 'No matching experiences found'}
           </h3>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-sm mx-auto">
+          <p className="text-xs text-[#7E7D77] font-mono mt-1 max-w-sm mx-auto">
             {experiences.length === 0
               ? isDemo
                 ? 'The demo sandbox environment has no loaded memories.'
@@ -244,7 +242,7 @@ export default function MemoryExplorer({
           {experiences.length === 0 && (
             <button
               onClick={() => setIsAddOpen(true)}
-              className="mt-4 px-3.5 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors cursor-pointer"
+              className="mt-4 px-3.5 py-2 rounded-lg text-xs font-mono font-semibold text-[#141412] bg-[#EDECE8] hover:bg-white transition-colors cursor-pointer"
             >
               Record First Experience
             </button>
@@ -266,70 +264,69 @@ export default function MemoryExplorer({
       {/* Experience Inspection Modal */}
       {selectedExp && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm anim-fade-in">
-          <div className="w-full max-w-xl rounded-2xl border p-6 shadow-2xl relative
-            bg-white border-[#E6E6E1] text-[#18181B]
-            dark:bg-[#131722] dark:border-[#252B3B] dark:text-[#F4F4F6]"
+          <div className="w-full max-w-xl rounded-lg border p-6 shadow-2xl relative
+            bg-[#161614] border-[#242422] text-[#EDECE8]"
           >
             <button
               onClick={() => setSelectedExp(null)}
-              className="absolute top-5 right-5 p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+              className="absolute top-5 right-5 p-1 rounded-lg text-[#7E7D77] hover:text-white"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
 
             <div className="flex items-center gap-2 mb-4">
-              <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-zinc-100 text-zinc-700 dark:bg-[#1A1F2C] dark:text-zinc-300 border border-[#E6E6E1] dark:border-[#252B3B]">
+              <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded bg-[#1A1A17] text-[#EDECE8] border border-[#2E2E2A]">
                 {selectedExp.id}
               </span>
-              <span className="font-mono text-xs uppercase text-zinc-400">
+              <span className="font-mono text-xs uppercase text-[#7E7D77]">
                 {selectedExp.taskDomain}
               </span>
             </div>
 
-            <h3 className="text-base font-semibold mb-3">
+            <h3 className="text-sm font-semibold mb-3 text-[#EDECE8]">
               Experiential Trace Details
             </h3>
 
-            <div className="space-y-3 mb-5 text-xs">
+            <div className="space-y-3 mb-5 text-xs font-mono">
               <div>
-                <span className="font-mono font-medium text-zinc-400 block mb-1">TRIGGER CONDITION</span>
-                <p className="p-2.5 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B]">
+                <span className="font-mono text-[10px] text-[#7E7D77] block mb-1">TRIGGER CONDITION</span>
+                <p className="p-2.5 rounded-lg bg-[#141412] border border-[#242422] text-[#EDECE8]">
                   {selectedExp.triggerCondition}
                 </p>
               </div>
 
               <div>
-                <span className="font-mono font-medium text-emerald-600 dark:text-emerald-400 block mb-1">AFFIRMATIVE STRATEGY LESSON</span>
-                <p className="p-2.5 rounded-lg bg-emerald-50/50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50 text-emerald-950 dark:text-emerald-200">
+                <span className="font-mono text-[10px] text-[#4EAA79] block mb-1">AFFIRMATIVE STRATEGY LESSON</span>
+                <p className="p-2.5 rounded-lg bg-[#141E18] border border-[#203D2A] text-[#EDECE8]">
                   {selectedExp.strategyLesson}
                 </p>
               </div>
 
               {selectedExp.pitfallWarning && (
                 <div>
-                  <span className="font-mono font-medium text-rose-600 dark:text-rose-400 block mb-1">HAZARD PITFALL (NEGATIVE TRANSFER PREVENTATIVE)</span>
-                  <p className="p-2.5 rounded-lg bg-rose-50/50 border border-rose-200 dark:bg-rose-950/20 dark:border-rose-900/50 text-rose-950 dark:text-rose-200">
+                  <span className="font-mono text-[10px] text-[#D9534F] block mb-1">HAZARD PITFALL (NEGATIVE TRANSFER PREVENTATIVE)</span>
+                  <p className="p-2.5 rounded-lg bg-[#221616] border border-[#3E2020] text-[#EDECE8]">
                     {selectedExp.pitfallWarning}
                   </p>
                 </div>
               )}
 
               <div className="grid grid-cols-3 gap-3 pt-2">
-                <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B]">
-                  <div className="font-mono text-[11px] text-zinc-400">TRUST (St)</div>
-                  <div className="text-base font-mono font-semibold text-indigo-600 dark:text-indigo-400">
+                <div className="p-2.5 rounded-lg bg-[#141412] border border-[#242422]">
+                  <div className="font-mono text-[10px] text-[#7E7D77]">TRUST (St)</div>
+                  <div className="text-sm font-mono font-semibold text-[#4EAA79]">
                     {(selectedExp.trustScore * 100).toFixed(1)}%
                   </div>
                 </div>
-                <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B]">
-                  <div className="font-mono text-[11px] text-zinc-400">USES / WINS</div>
-                  <div className="text-base font-mono font-semibold">
+                <div className="p-2.5 rounded-lg bg-[#141412] border border-[#242422]">
+                  <div className="font-mono text-[10px] text-[#7E7D77]">USES / WINS</div>
+                  <div className="text-sm font-mono font-semibold text-[#EDECE8]">
                     {selectedExp.usesCount} / {selectedExp.successesCount}
                   </div>
                 </div>
-                <div className="p-2.5 rounded-lg bg-zinc-50 dark:bg-[#1A1F2C] border border-[#E6E6E1] dark:border-[#252B3B]">
-                  <div className="font-mono text-[11px] text-zinc-400">QUARANTINE k</div>
-                  <div className="text-base font-mono font-semibold text-rose-600 dark:text-rose-400">
+                <div className="p-2.5 rounded-lg bg-[#141412] border border-[#242422]">
+                  <div className="font-mono text-[10px] text-[#7E7D77]">QUARANTINE k</div>
+                  <div className="text-sm font-mono font-semibold text-[#D9534F]">
                     {selectedExp.consecutiveFailures} / 3
                   </div>
                 </div>
@@ -350,14 +347,14 @@ export default function MemoryExplorer({
                       setSelectedExp(null)
                     }
                   }}
-                  className="px-3 py-1.5 rounded-xl text-xs font-mono font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg text-xs font-mono font-medium text-[#D9534F] hover:bg-[#2E1E1E] border border-[#4E2A2A] transition-colors cursor-pointer"
                 >
                   Quarantine / Delete
                 </button>
               )}
               <button
                 onClick={() => setSelectedExp(null)}
-                className="px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-100 hover:bg-zinc-200 dark:bg-[#1A1F2C] dark:hover:bg-[#252B3B] text-zinc-800 dark:text-zinc-200 transition-colors ml-auto cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg text-xs font-mono font-semibold bg-[#1E1E1B] hover:bg-[#252522] border border-[#2E2E2A] text-[#EDECE8] transition-colors ml-auto cursor-pointer"
               >
                 Close Inspector
               </button>
@@ -369,34 +366,33 @@ export default function MemoryExplorer({
       {/* Record Experience Modal */}
       {isAddOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm anim-fade-in">
-          <div className="w-full max-w-lg rounded-2xl border p-6 shadow-2xl relative
-            bg-white border-[#E6E6E1] text-[#18181B]
-            dark:bg-[#131722] dark:border-[#252B3B] dark:text-[#F4F4F6]"
+          <div className="w-full max-w-lg rounded-lg border p-6 shadow-2xl relative
+            bg-[#161614] border-[#242422] text-[#EDECE8]"
           >
             <button
               onClick={() => setIsAddOpen(false)}
-              className="absolute top-5 right-5 p-1 rounded-lg text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200"
+              className="absolute top-5 right-5 p-1 rounded-lg text-[#7E7D77] hover:text-white"
             >
-              <X size={18} />
+              <X size={16} />
             </button>
 
-            <h3 className="text-base font-semibold mb-1">
+            <h3 className="text-sm font-semibold mb-1 text-[#EDECE8]">
               Record Operational Experience
             </h3>
-            <p className="text-xs text-zinc-500 mb-4">
+            <p className="text-xs text-[#7E7D77] mb-4 font-mono">
               Add a verified operational trajectory with both affirmative lessons and pitfall warnings.
             </p>
 
-            <form onSubmit={handleCreateExperience} className="space-y-3 text-xs">
+            <form onSubmit={handleCreateExperience} className="space-y-3 text-xs font-mono">
               <div>
-                <label className="block font-medium mb-1 text-zinc-700 dark:text-zinc-300">
+                <label className="block font-medium mb-1 text-[#9E9D96]">
                   Task Domain
                 </label>
                 <select
                   value={newDomain}
                   onChange={(e) => setNewDomain(e.target.value as TaskDomain)}
-                  className="w-full p-2 rounded-xl border outline-none
-                    bg-white border-[#E6E6E1] dark:bg-[#1A1F2C] dark:border-[#252B3B]"
+                  className="w-full p-2 rounded-lg border outline-none
+                    bg-[#141412] border-[#2E2E2A] text-[#EDECE8]"
                 >
                   <option value="research">Research</option>
                   <option value="coding">Coding</option>
@@ -407,7 +403,7 @@ export default function MemoryExplorer({
               </div>
 
               <div>
-                <label className="block font-medium mb-1 text-zinc-700 dark:text-zinc-300">
+                <label className="block font-medium mb-1 text-[#9E9D96]">
                   Trigger Condition (When to apply)
                 </label>
                 <textarea
@@ -416,13 +412,13 @@ export default function MemoryExplorer({
                   value={newTrigger}
                   onChange={(e) => setNewTrigger(e.target.value)}
                   placeholder="e.g. Asynchronous token refresh race conditions under concurrent 401s..."
-                  className="w-full p-2 rounded-xl border outline-none
-                    bg-white border-[#E6E6E1] dark:bg-[#1A1F2C] dark:border-[#252B3B]"
+                  className="w-full p-2 rounded-lg border outline-none
+                    bg-[#141412] border-[#2E2E2A] text-[#EDECE8] placeholder-[#5A5955]"
                 />
               </div>
 
               <div>
-                <label className="block font-medium mb-1 text-emerald-700 dark:text-emerald-400">
+                <label className="block font-medium mb-1 text-[#4EAA79]">
                   Affirmative Strategy Lesson (What works)
                 </label>
                 <textarea
@@ -431,13 +427,13 @@ export default function MemoryExplorer({
                   value={newStrategy}
                   onChange={(e) => setNewStrategy(e.target.value)}
                   placeholder="e.g. Memoize the in-flight refresh promise so subsequent requests await the same token..."
-                  className="w-full p-2 rounded-xl border outline-none
-                    bg-white border-[#E6E6E1] dark:bg-[#1A1F2C] dark:border-[#252B3B]"
+                  className="w-full p-2 rounded-lg border outline-none
+                    bg-[#141412] border-[#2E2E2A] text-[#EDECE8] placeholder-[#5A5955]"
                 />
               </div>
 
               <div>
-                <label className="block font-medium mb-1 text-rose-700 dark:text-rose-400">
+                <label className="block font-medium mb-1 text-[#D9534F]">
                   Hazard Pitfall Warning (What causes negative transfer)
                 </label>
                 <textarea
@@ -445,8 +441,8 @@ export default function MemoryExplorer({
                   value={newPitfall}
                   onChange={(e) => setNewPitfall(e.target.value)}
                   placeholder="e.g. Do not fire parallel refresh calls or overwrite local storage on unresolved promises..."
-                  className="w-full p-2 rounded-xl border outline-none
-                    bg-white border-[#E6E6E1] dark:bg-[#1A1F2C] dark:border-[#252B3B]"
+                  className="w-full p-2 rounded-lg border outline-none
+                    bg-[#141412] border-[#2E2E2A] text-[#EDECE8] placeholder-[#5A5955]"
                 />
               </div>
 
@@ -454,13 +450,13 @@ export default function MemoryExplorer({
                 <button
                   type="button"
                   onClick={() => setIsAddOpen(false)}
-                  className="px-3 py-2 rounded-xl text-zinc-600 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-white"
+                  className="px-3 py-1.5 rounded-lg text-xs font-mono text-[#7E7D77] hover:text-[#EDECE8] cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl font-semibold text-white bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-600 dark:hover:bg-indigo-500 shadow-sm"
+                  className="px-4 py-1.5 rounded-lg text-xs font-mono font-semibold text-[#141412] bg-[#EDECE8] hover:bg-white transition-colors cursor-pointer"
                 >
                   Save Experience
                 </button>
