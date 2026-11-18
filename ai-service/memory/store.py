@@ -404,9 +404,6 @@ class SQLiteMemoryStore(BaseMemoryStore):
                     created_at TEXT NOT NULL DEFAULT (datetime('now'))
                 )
             """)
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_user ON task_executions(user_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_session ON task_executions(session_id)")
-            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_created ON task_executions(created_at DESC)")
 
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS conversations (
@@ -453,6 +450,10 @@ class SQLiteMemoryStore(BaseMemoryStore):
                     cursor.execute("ALTER TABLE task_executions ADD COLUMN user_id TEXT")
                 except Exception:
                     pass
+
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_user ON task_executions(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_session ON task_executions(session_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_created ON task_executions(created_at DESC)")
 
             conn.commit()
             if self.auto_seed:

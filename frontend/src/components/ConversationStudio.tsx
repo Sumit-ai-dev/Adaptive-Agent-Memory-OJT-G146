@@ -509,7 +509,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
       {/* ─── 2. MAIN CONVERSATIONAL WORKSPACE ─────────────────────────────── */}
       <div className="flex-1 flex flex-col min-w-0 bg-[#141412] relative overflow-hidden">
         {/* Top Control Bar (Clean Two-Tier Structure: Session Status + Dedicated Tooling Strip) */}
-        <div className="border-b border-[#242422] bg-[#161614] shrink-0">
+        <div className="border-b border-[#242422] bg-[#161614] shrink-0 relative z-30">
           {/* Tier 1: Session Identity & Inspector Toggle */}
           <div className="h-11 px-4 flex items-center justify-between border-b border-[#20201D] gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -539,11 +539,11 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
           </div>
 
           {/* Tier 2: Clean Engine Selection & Guardrail Toggles */}
-          <div className="h-10 px-4 flex items-center justify-between text-xs font-mono bg-[#141412] gap-3 overflow-x-auto">
+          <div className="h-10 px-4 flex items-center justify-between text-xs font-mono bg-[#141412] gap-3 relative z-30 overflow-visible">
             {/* Left: Engine & Domain Configuration */}
             <div className="flex items-center gap-2 shrink-0">
               {/* Model Selector with Logo */}
-              <div className="relative" ref={modelDropdownRef}>
+              <div className="relative z-40" ref={modelDropdownRef}>
                 <button
                   type="button"
                   onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
@@ -561,7 +561,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                 </button>
 
                 {isModelDropdownOpen && (
-                  <div className="absolute left-0 mt-1 w-56 rounded border border-[#2E2E2A] bg-[#1A1A17] shadow-xl py-1 z-50 font-mono text-xs">
+                  <div className="absolute left-0 top-full mt-1.5 w-60 rounded-lg border border-[#2E2E2A] bg-[#1A1A17] shadow-2xl py-1.5 z-50 font-mono text-xs">
                     {MODEL_OPTIONS.map((opt) => (
                       <button
                         key={opt.id}
@@ -703,7 +703,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                     {!isUser && currentModel.logo && (
                       <img src={currentModel.logo} alt="" className="w-3 h-3 object-contain rounded shrink-0" />
                     )}
-                    <span>{isUser ? 'User' : `AEMA &bull; ${currentModel.name}`}</span>
+                    <span>{isUser ? 'User' : `AEMA • ${currentModel.name}`}</span>
                   </div>
 
                   <div
@@ -732,11 +732,11 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                       >
                         Inspect Trace #{exec.id.replace('exec_', '')} &rarr;
                       </button>
-                      <span>&bull;</span>
+                      <span>•</span>
                       <span>Outcome: {exec.outcomeScore && exec.outcomeScore >= 0.7 ? 'SUCCESS' : 'FAILURE'}</span>
                       {exec.retrievedExperiences && exec.retrievedExperiences.length > 0 && (
                         <>
-                          <span>&bull;</span>
+                          <span>•</span>
                           <span>{exec.retrievedExperiences.length} memories used</span>
                         </>
                       )}
