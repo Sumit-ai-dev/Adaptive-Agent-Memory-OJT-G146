@@ -136,13 +136,15 @@ class UniversalLLMClient:
             return None, model, provider
 
         if AsyncOpenAI is not None:
-            timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
+            timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 90.0))
+            if provider == ModelProvider.OLLAMA:
+                timeout_sec = max(timeout_sec, 120.0)
             client = AsyncOpenAI(
                 api_key=api_key,
                 base_url=base_url,
                 timeout=timeout_sec,
                 max_retries=1,
-                http_client=httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)),
+                http_client=httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=10.0)),
             )
             return client, model, provider
 
@@ -250,12 +252,15 @@ class UniversalLLMClient:
                     if env_key and env_key.strip() and env_key.strip() != (cfg.api_key or "").strip():
                         try:
                             logger.info(f"Custom BYOK key failed for {provider.value}; retrying with backend environment key...")
+                            timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 90.0))
+                            if provider == ModelProvider.OLLAMA:
+                                timeout_sec = max(timeout_sec, 120.0)
                             env_client = AsyncOpenAI(
                                 api_key=env_key.strip(),
                                 base_url=cfg.base_url or ProviderConfig.default_for(provider).base_url,
-                                timeout=float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0)),
+                                timeout=timeout_sec,
                                 max_retries=1,
-                                http_client=httpx.AsyncClient(timeout=httpx.Timeout(float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0)), connect=5.0)),
+                                http_client=httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=10.0)),
                             )
                             response = await env_client.chat.completions.create(**kwargs)
                             choice = response.choices[0]

@@ -1,0 +1,737 @@
+{
+  "metadata": {
+    "name": "ToolBench Adversarial Subset",
+    "basis": "Qin et al., ICLR 2024 | arXiv:2307.16789",
+    "failure_types": {
+      "deprecated_parameter": 10,
+      "multi_step_dependency": 10,
+      "hallucination_bait": 10
+    },
+    "total_tasks": 30,
+    "note": "Task patterns derived from ToolBench paper Section 4.2 failure taxonomy.",
+    "citation": "Qin, Y., et al. (2024). ToolLLM: Facilitating Large Language Models to Master 16000+ Real-world APIs. ICLR 2024."
+  },
+  "tasks": [
+    {
+      "id": "tb_dep_001",
+      "query": "Search for the latest news about AI safety from the past week.",
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the web",
+          "params": {
+            "query": "str",
+            "days": "int"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'recency=7' (old param) instead of 'days=7' (new param)",
+      "correct_call": {
+        "tool": "web_search",
+        "params": {
+          "query": "AI safety news",
+          "days": 7
+        }
+      },
+      "wrong_call": {
+        "tool": "web_search",
+        "params": {
+          "query": "AI safety news",
+          "recency": 7
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword argument 'recency'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_002",
+      "query": "Get the current weather for Mumbai, India in Celsius.",
+      "tools": [
+        {
+          "name": "get_weather",
+          "description": "Get weather data",
+          "params": {
+            "city": "str",
+            "units": "str"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'format=metric' (old param) instead of 'units=metric' (new param)",
+      "correct_call": {
+        "tool": "get_weather",
+        "params": {
+          "city": "Mumbai",
+          "units": "metric"
+        }
+      },
+      "wrong_call": {
+        "tool": "get_weather",
+        "params": {
+          "city": "Mumbai",
+          "format": "metric"
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword argument 'format'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_003",
+      "query": "Find stock price history for NVIDIA over the last 30 days.",
+      "tools": [
+        {
+          "name": "stock_history",
+          "description": "Get stock price history",
+          "params": {
+            "symbol": "str",
+            "period_days": "int"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'range=30d' (old param) instead of 'period_days=30'",
+      "correct_call": {
+        "tool": "stock_history",
+        "params": {
+          "symbol": "NVDA",
+          "period_days": 30
+        }
+      },
+      "wrong_call": {
+        "tool": "stock_history",
+        "params": {
+          "symbol": "NVDA",
+          "range": "30d"
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword argument 'range'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_004",
+      "query": "Translate 'Hello World' from English to Japanese.",
+      "tools": [
+        {
+          "name": "translate",
+          "description": "Translate text",
+          "params": {
+            "text": "str",
+            "source_lang": "str",
+            "target_lang": "str"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'from=en' / 'to=ja' (old param) instead of 'source_lang' / 'target_lang'",
+      "correct_call": {
+        "tool": "translate",
+        "params": {
+          "text": "Hello World",
+          "source_lang": "en",
+          "target_lang": "ja"
+        }
+      },
+      "wrong_call": {
+        "tool": "translate",
+        "params": {
+          "text": "Hello World",
+          "from": "en",
+          "to": "ja"
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword arguments 'from', 'to'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_005",
+      "query": "Get trending repositories on GitHub in Python from this week.",
+      "tools": [
+        {
+          "name": "github_trending",
+          "description": "Get trending GitHub repos",
+          "params": {
+            "language": "str",
+            "since": "str"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'lang=python' (old param) instead of 'language=python'",
+      "correct_call": {
+        "tool": "github_trending",
+        "params": {
+          "language": "python",
+          "since": "weekly"
+        }
+      },
+      "wrong_call": {
+        "tool": "github_trending",
+        "params": {
+          "lang": "python",
+          "since": "weekly"
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword argument 'lang'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_006",
+      "query": "Get the exchange rate from USD to EUR.",
+      "tools": [
+        {
+          "name": "forex_rate",
+          "description": "Get currency exchange rate",
+          "params": {
+            "base": "str",
+            "quote": "str"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'currency_from' / 'currency_to' (old params)",
+      "correct_call": {
+        "tool": "forex_rate",
+        "params": {
+          "base": "USD",
+          "quote": "EUR"
+        }
+      },
+      "wrong_call": {
+        "tool": "forex_rate",
+        "params": {
+          "currency_from": "USD",
+          "currency_to": "EUR"
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword arguments",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_007",
+      "query": "Search for academic papers about reinforcement learning from human feedback.",
+      "tools": [
+        {
+          "name": "semantic_scholar",
+          "description": "Search academic papers",
+          "params": {
+            "query": "str",
+            "fields": "list",
+            "limit": "int"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'n=10' (old param) instead of 'limit=10'",
+      "correct_call": {
+        "tool": "semantic_scholar",
+        "params": {
+          "query": "RLHF",
+          "fields": [
+            "title",
+            "abstract"
+          ],
+          "limit": 10
+        }
+      },
+      "wrong_call": {
+        "tool": "semantic_scholar",
+        "params": {
+          "query": "RLHF",
+          "fields": [
+            "title",
+            "abstract"
+          ],
+          "n": 10
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword argument 'n'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_008",
+      "query": "Get current time in Tokyo.",
+      "tools": [
+        {
+          "name": "world_time",
+          "description": "Get current time for a timezone",
+          "params": {
+            "timezone": "str"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'city=Tokyo' (old param) instead of 'timezone=Asia/Tokyo'",
+      "correct_call": {
+        "tool": "world_time",
+        "params": {
+          "timezone": "Asia/Tokyo"
+        }
+      },
+      "wrong_call": {
+        "tool": "world_time",
+        "params": {
+          "city": "Tokyo"
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword argument 'city'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_009",
+      "query": "Find restaurants near IIT Bombay that serve vegetarian food.",
+      "tools": [
+        {
+          "name": "places_search",
+          "description": "Search nearby places",
+          "params": {
+            "location": "str",
+            "type": "str",
+            "dietary": "str",
+            "radius_km": "float"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'lat_lng' (old param) instead of 'location' string",
+      "correct_call": {
+        "tool": "places_search",
+        "params": {
+          "location": "IIT Bombay",
+          "type": "restaurant",
+          "dietary": "vegetarian",
+          "radius_km": 2.0
+        }
+      },
+      "wrong_call": {
+        "tool": "places_search",
+        "params": {
+          "lat_lng": "19.1334,72.9133",
+          "type": "restaurant",
+          "dietary": "vegetarian"
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword argument 'lat_lng'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_010",
+      "query": "Check if example.com is currently accessible.",
+      "tools": [
+        {
+          "name": "uptime_checker",
+          "description": "Check website uptime",
+          "params": {
+            "url": "str"
+          }
+        }
+      ],
+      "trap_type": "deprecated_param",
+      "trap_description": "Agent may use 'domain' (old param) instead of 'url'",
+      "correct_call": {
+        "tool": "uptime_checker",
+        "params": {
+          "url": "https://example.com"
+        }
+      },
+      "wrong_call": {
+        "tool": "uptime_checker",
+        "params": {
+          "domain": "example.com"
+        }
+      },
+      "expected_error": "TypeError: unexpected keyword argument 'domain'",
+      "category": "deprecated_parameter",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_011",
+      "query": "Find the Wikipedia article about transformer architecture, then extract the year it was introduced, then search for papers published that year about attention mechanisms.",
+      "steps": [
+        {
+          "tool": "wikipedia_search",
+          "params": {
+            "query": "Transformer architecture AI"
+          }
+        },
+        {
+          "tool": "extract_year",
+          "params": {
+            "text": "{{step_1_output}}"
+          }
+        },
+        {
+          "tool": "semantic_scholar",
+          "params": {
+            "query": "attention mechanism",
+            "year": "{{step_2_output}}",
+            "limit": 5
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Step 3 fails if Step 2 output is not passed correctly (agent often uses raw text instead of extracted year)",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_012",
+      "query": "Get the CEO of OpenAI, then search LinkedIn for their educational background, then summarize their credentials.",
+      "steps": [
+        {
+          "tool": "web_search",
+          "params": {
+            "query": "OpenAI CEO name 2024"
+          }
+        },
+        {
+          "tool": "linkedin_search",
+          "params": {
+            "name": "{{step_1_output}}"
+          }
+        },
+        {
+          "tool": "summarize",
+          "params": {
+            "text": "{{step_2_output}}"
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Step 2 fails if agent passes full sentence from Step 1 instead of just the extracted name",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_013",
+      "query": "Find the current price of Bitcoin, convert it to Indian Rupees, then calculate how many Bitcoins you can buy with 100,000 INR.",
+      "steps": [
+        {
+          "tool": "crypto_price",
+          "params": {
+            "symbol": "BTC",
+            "currency": "USD"
+          }
+        },
+        {
+          "tool": "forex_rate",
+          "params": {
+            "base": "USD",
+            "quote": "INR"
+          }
+        },
+        {
+          "tool": "calculate",
+          "params": {
+            "expression": "100000 / ({{step_1_output}} * {{step_2_output}})"
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Step 3 fails if Step 1 or Step 2 numeric values are not properly extracted from response text",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_014",
+      "query": "Check the latest commit on the LangChain GitHub repo, find who made it, then look up their GitHub profile.",
+      "steps": [
+        {
+          "tool": "github_commits",
+          "params": {
+            "repo": "langchain-ai/langchain",
+            "limit": 1
+          }
+        },
+        {
+          "tool": "github_user",
+          "params": {
+            "username": "{{step_1_output.author}}"
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Step 2 fails if agent passes full commit JSON instead of extracting just the author username",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_015",
+      "query": "Search for the population of Paris, then find what percentage that is of France's total population.",
+      "steps": [
+        {
+          "tool": "web_search",
+          "params": {
+            "query": "population of Paris 2024"
+          }
+        },
+        {
+          "tool": "web_search",
+          "params": {
+            "query": "population of France 2024"
+          }
+        },
+        {
+          "tool": "calculate",
+          "params": {
+            "expression": "({{step_1_output}} / {{step_2_output}}) * 100"
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Step 3 fails if Steps 1 & 2 return text paragraphs and agent doesn't extract numeric values",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_016",
+      "query": "Find the most cited AI paper on Semantic Scholar from 2023, get its PDF link, then summarize the abstract.",
+      "steps": [
+        {
+          "tool": "semantic_scholar",
+          "params": {
+            "query": "AI 2023",
+            "fields": [
+              "title",
+              "citationCount",
+              "openAccessPdf"
+            ],
+            "limit": 5
+          }
+        },
+        {
+          "tool": "pdf_reader",
+          "params": {
+            "url": "{{step_1_output.top_paper.pdf_url}}"
+          }
+        },
+        {
+          "tool": "summarize",
+          "params": {
+            "text": "{{step_2_output.abstract}}"
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Agent must sort Step 1 results by citation count, extract PDF URL correctly, then Step 3 needs clean text",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_017",
+      "query": "Get the weather in London and New York, then tell me which city is warmer and by how many degrees.",
+      "steps": [
+        {
+          "tool": "get_weather",
+          "params": {
+            "city": "London",
+            "units": "metric"
+          }
+        },
+        {
+          "tool": "get_weather",
+          "params": {
+            "city": "New York",
+            "units": "metric"
+          }
+        },
+        {
+          "tool": "calculate",
+          "params": {
+            "expression": "abs({{step_1_output.temp}} - {{step_2_output.temp}})"
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Step 3 fails if temperature values are not extracted from weather response objects",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_018",
+      "query": "Search for Python tutorials on YouTube, pick the most viewed one, then get its comments.",
+      "steps": [
+        {
+          "tool": "youtube_search",
+          "params": {
+            "query": "Python tutorial for beginners",
+            "limit": 10
+          }
+        },
+        {
+          "tool": "youtube_comments",
+          "params": {
+            "video_id": "{{step_1_output.top_video.id}}",
+            "limit": 20
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Agent must sort Step 1 by view count, extract video ID (not URL), pass to Step 2",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_019",
+      "query": "Find which country won the most gold medals in the 2024 Paris Olympics, then get that country's current GDP.",
+      "steps": [
+        {
+          "tool": "web_search",
+          "params": {
+            "query": "2024 Paris Olympics most gold medals country"
+          }
+        },
+        {
+          "tool": "world_bank_api",
+          "params": {
+            "country_code": "{{step_1_output.country_code}}",
+            "indicator": "NY.GDP.MKTP.CD"
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Step 2 needs ISO 3-letter country code, but Step 1 returns full country name",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_dep_020",
+      "query": "Get the latest Arxiv paper on agent memory, extract the author list, then search Google Scholar for citations of each author.",
+      "steps": [
+        {
+          "tool": "arxiv_search",
+          "params": {
+            "query": "agent memory persistent experience",
+            "limit": 1,
+            "sort_by": "submittedDate"
+          }
+        },
+        {
+          "tool": "extract_authors",
+          "params": {
+            "paper": "{{step_1_output}}"
+          }
+        },
+        {
+          "tool": "scholar_citations",
+          "params": {
+            "author_name": "{{step_2_output[0]}}"
+          }
+        }
+      ],
+      "trap_type": "dependency_chain",
+      "trap_description": "Agent must correctly index into Step 2's list and handle potential empty author list",
+      "category": "multi_step_dependency",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_001",
+      "query": "What is the current version of Python?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Agent may hallucinate a version number instead of calling a real tool to check",
+      "correct_approach": "Call web_search or pypi_api to get the real current version",
+      "hallucination_risk": "Agent states '3.11' or '3.12' from training data without verifying",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_002",
+      "query": "What is the current price of Tesla stock (TSLA)?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Agent may state a price from training data instead of calling the stock_price API",
+      "correct_approach": "Must call stock_price tool with symbol='TSLA'",
+      "hallucination_risk": "States a stale price number confidently",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_003",
+      "query": "Who is the current Prime Minister of the United Kingdom?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Leadership changes frequently; agent may state outdated PM from training data",
+      "correct_approach": "Must call web_search for current PM verification",
+      "hallucination_risk": "States wrong/outdated name confidently",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_004",
+      "query": "What is the latest GPT model released by OpenAI?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "New models released after training cutoff; agent may state outdated model",
+      "correct_approach": "Must call web_search or openai_api to check current model list",
+      "hallucination_risk": "States 'GPT-4' or 'GPT-4o' without checking for newer releases",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_005",
+      "query": "How many total GitHub stars does the LangChain repository have right now?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Live metric that changes daily; agent must call GitHub API",
+      "correct_approach": "Must call github_repo_info with repo='langchain-ai/langchain'",
+      "hallucination_risk": "States a number from training data confidently",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_006",
+      "query": "What is today's date and day of the week?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Agent cannot know current date from weights; must call datetime tool",
+      "correct_approach": "Must call get_current_datetime tool",
+      "hallucination_risk": "Invents a date or gives training cutoff date",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_007",
+      "query": "What is the current inflation rate in India?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Economic indicator changes monthly; agent must call economic API",
+      "correct_approach": "Must call world_bank_api or rbi_data_api",
+      "hallucination_risk": "States stale percentage from training data",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_008",
+      "query": "Is the official Python package 'requests' still being actively maintained?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Package status can change; agent must call PyPI API",
+      "correct_approach": "Must call pypi_package_info with package_name='requests'",
+      "hallucination_risk": "Confidently asserts maintenance status without checking",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_009",
+      "query": "What is the current world record for the 100m sprint?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Records can be broken; agent must verify via web search",
+      "correct_approach": "Must call web_search for current world record",
+      "hallucination_risk": "States Usain Bolt's 2009 record without checking for updates",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    },
+    {
+      "id": "tb_hal_010",
+      "query": "What is the market cap of Apple Inc. right now?",
+      "trap_type": "hallucination_bait",
+      "trap_description": "Live financial data; agent must call financial API",
+      "correct_approach": "Must call stock_market_cap with symbol='AAPL'",
+      "hallucination_risk": "States a trillion-dollar figure from stale training data",
+      "category": "hallucination_bait",
+      "source": "toolbench_curated_adversarial"
+    }
+  ]
+}
