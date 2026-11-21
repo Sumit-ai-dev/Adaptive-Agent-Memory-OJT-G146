@@ -86,6 +86,8 @@ export interface TaskExecution {
     formulaApplied: string
   }[]
   tokensUsed: number
+  promptTokens?: number
+  completionTokens?: number
   latencyMs: number
   outcomeQuality?: 'positive' | 'negative' | 'neutral'
   outcomeScore?: number

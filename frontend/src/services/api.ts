@@ -436,6 +436,7 @@ export interface ExecuteTaskParams {
   sessionId?: string
   messages?: ChatMessage[]
   simulateFailure?: boolean
+  maxTokens?: number
   isExplicitDemo?: boolean
   useStreaming?: boolean
   onToken?: (token: string) => void
@@ -452,6 +453,7 @@ export async function executeAgentTask({
   sessionId,
   messages,
   simulateFailure = false,
+  maxTokens,
   isExplicitDemo = false,
   useStreaming = true,
   onToken,
@@ -474,6 +476,7 @@ export async function executeAgentTask({
     apiKey: apiKey || undefined,
     sessionId: sessionId || undefined,
     messages: messages && messages.length > 0 ? messages : undefined,
+    maxTokens: maxTokens || 800,
   }
 
   // ── Explicit Demo Sandbox Isolation ─────────────────────────────────────────
