@@ -103,6 +103,8 @@ async def execute_node(
     system_prompt_parts = [
         "You are an elite, proactive autonomous language agent with persistent experiential memory.",
         "Solve the user's task rigorously, providing accurate, verifiable, and structured answers.",
+        "Provide direct, concise, and to-the-point answers. Focus strictly on resolving the user's inquiry efficiently without redundant repetitions, unnecessary preamble, or sprawling multi-table essays.",
+        "For coding tasks, provide the clean, functional code implementation with concise explanation. Avoid generating lengthy auxiliary demonstration tables or unnecessary recaps.",
     ]
 
     # Heuristic prompt injection detection on task input (OWASP LLM01)
@@ -239,6 +241,7 @@ async def execute_node(
     # S8: single shared resolver, so every call site in the graph dispatches with
     # the run's declared provider/model/temperature.
     provider_config, requested_temperature = resolve_provider_config(state)
+    requested_max_tokens = state.get("max_tokens") or (provider_config.max_tokens if provider_config else None)
 
     # Call Universal LLM Gateway with error-safe handling. Passing `temperature` explicitly overrides the
     # config default; passing None leaves the config/provider default in force.
@@ -252,7 +255,10 @@ async def execute_node(
         if token_queue is not None:
             accumulated_chunks: List[str] = []
             async for chunk in llm_gateway.generate_stream(
-                messages, config=provider_config, temperature=requested_temperature,
+                messages,
+                config=provider_config,
+                temperature=requested_temperature,
+                max_tokens=requested_max_tokens,
             ):
                 accumulated_chunks.append(chunk)
                 await token_queue.put(("token", {"chunk": chunk}))
@@ -260,7 +266,10 @@ async def execute_node(
             tokens = count_tokens(final_answer) + prompt_tokens
         else:
             final_answer, tokens = await llm_gateway.generate(
-                messages, config=provider_config, temperature=requested_temperature,
+                messages,
+                config=provider_config,
+                temperature=requested_temperature,
+                max_tokens=requested_max_tokens,
             )
     except Exception as e:
         logger.error(f"Universal LLM gateway call failed in execute_node: {e}", exc_info=True)
