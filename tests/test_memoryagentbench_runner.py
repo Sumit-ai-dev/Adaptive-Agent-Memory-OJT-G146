@@ -327,3 +327,100 @@ async def test_accurate_retrieval_document_chunking():
 
     assert len(retrieved) >= 1
     assert "France" in retrieved[0].experience.strategy_lesson
+
+
+# ============================================================================
+# 9. OLLAMA DIRECT INTEGRATION & HARDWARE RECOMMENDATION TESTS
+# ============================================================================
+
+def test_ollama_direct_call_success_parsing(monkeypatch):
+    """Test that native Ollama REST parsing extracts genuine tokens and duration without heuristics."""
+    import io
+    import json
+    import urllib.request
+    from benchmarks.memoryagentbench_runner import MemoryAgentBenchSession
+
+    fake_response_data = {
+        "model": "llama3.1:8b",
+        "message": {"role": "assistant", "content": "The answer is <answer>Paris</answer>."},
+        "prompt_eval_count": 52,
+        "eval_count": 14,
+        "total_duration": 1500000000,
+        "eval_duration": 1200000000,
+        "prompt_eval_duration": 300000000,
+    }
+
+    class MockHTTPResponse:
+        status = 200
+        def read(self):
+            return json.dumps(fake_response_data).encode("utf-8")
+        def __enter__(self):
+            return self
+        def __exit__(self, *args):
+            pass
+
+    monkeypatch.setattr(urllib.request, "urlopen", lambda req, timeout: MockHTTPResponse())
+
+    session = MemoryAgentBenchSession(
+        scenario_id="ollama_test",
+        condition_name="vanilla",
+        provider="ollama",
+        model="llama3.1:8b",
+        seed=42,
+    )
+
+    messages = [{"role": "user", "content": "What is the capital of France?"}]
+    content, meta = session._call_ollama_sync(messages)
+
+    assert "Paris" in content
+    assert meta["prompt_tokens"] == 52
+    assert meta["completion_tokens"] == 14
+    assert meta["tokens_used"] == 66
+    assert meta["token_count_estimated"] is False
+    assert meta["ollama_total_duration_ms"] == 1500.0
+
+
+def test_ollama_direct_call_unreachable_error(monkeypatch):
+    """Test that unreachable Ollama raises a clear descriptive RuntimeError instead of falling back to mock."""
+    import urllib.error
+    import urllib.request
+    from benchmarks.memoryagentbench_runner import MemoryAgentBenchSession
+
+    def mock_urlopen_fail(req, timeout):
+        raise urllib.error.URLError("Connection refused")
+
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen_fail)
+
+    session = MemoryAgentBenchSession(
+        scenario_id="ollama_test_fail",
+        condition_name="vanilla",
+        provider="ollama",
+        model="llama3.1:8b",
+    )
+
+    with pytest.raises(RuntimeError, match="Ollama server is not responding"):
+        session._call_ollama_sync([{"role": "user", "content": "Hi"}])
+
+
+def test_check_ollama_hardware_recommendations():
+    """Verify hardware-based tier sizing and model recommendations."""
+    from benchmarks.check_ollama import recommend_model
+
+    # 1. High-tier dedicated GPU (e.g. RTX 4090 / 3090, 24 GB VRAM)
+    hw_high = {"vram_total_mb": 24576.0, "ram_gb": 64.0, "is_apple_silicon": False}
+    rec_high = recommend_model(hw_high, installed_models=[])
+    assert rec_high["recommended_model"] == "llama3.1:8b"
+    assert "High-tier" in rec_high["tier"]
+
+    # 2. Mid-tier dedicated GPU (e.g. RTX 4060 / 3070, 8 GB VRAM)
+    hw_mid = {"vram_total_mb": 8192.0, "ram_gb": 32.0, "is_apple_silicon": False}
+    rec_mid = recommend_model(hw_mid, installed_models=[{"name": "llama3.1:8b"}])
+    assert rec_mid["recommended_model"] == "llama3.1:8b"
+    assert rec_mid["is_installed"] is True
+
+    # 3. Entry-tier / CPU only (e.g. 4 GB VRAM or integrated GPU)
+    hw_low = {"vram_total_mb": 4096.0, "ram_gb": 16.0, "is_apple_silicon": False}
+    rec_low = recommend_model(hw_low, installed_models=[{"name": "llama3.2:3b"}])
+    assert rec_low["recommended_model"] == "llama3.2:3b"
+    assert rec_low["is_installed"] is True
+

@@ -428,9 +428,20 @@ class MemoryAgentBenchSession:
 
         # 5. Telemetry Assembly
         prompt_text = system_msg + "\n" + user_msg
-        prompt_tokens = token_meta.get("prompt_tokens") or estimate_tokens_fallback(prompt_text)
-        completion_tokens = token_meta.get("completion_tokens") or estimate_tokens_fallback(raw_output)
-        tokens_used = token_meta.get("tokens_used") or (prompt_tokens + completion_tokens)
+        prompt_tokens = token_meta.get("prompt_tokens")
+        completion_tokens = token_meta.get("completion_tokens")
+        token_count_estimated = token_meta.get("token_count_estimated", False)
+
+        if prompt_tokens is None:
+            prompt_tokens = estimate_tokens_fallback(prompt_text)
+            token_count_estimated = True
+        if completion_tokens is None:
+            completion_tokens = estimate_tokens_fallback(raw_output)
+            token_count_estimated = True
+
+        tokens_used = token_meta.get("tokens_used")
+        if tokens_used is None:
+            tokens_used = prompt_tokens + completion_tokens
 
         record = TrialTelemetryRecord(
             benchmark="MemoryAgentBench",
@@ -444,7 +455,7 @@ class MemoryAgentBenchSession:
             tokens_used=tokens_used,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
-            token_count_estimated=token_meta.get("token_count_estimated", False),
+            token_count_estimated=token_count_estimated,
             latency_ms=latency_ms,
             iterations=1,
             error_recurred=eval_outcome.metrics.get("aema_diagnostics", {}).get("is_obsolete_fact_intrusion", False),
@@ -461,6 +472,77 @@ class MemoryAgentBenchSession:
         )
 
         return record
+
+    def _call_ollama_sync(
+        self,
+        messages: List[Dict[str, str]],
+    ) -> Tuple[str, Dict[str, Any]]:
+        """
+        Synchronous native HTTP request to Ollama /api/chat.
+        Returns authentic model output and exact hardware-measured token metrics.
+        """
+        import json
+        import urllib.error
+        import urllib.request
+
+        base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434").rstrip("/").removesuffix("/v1")
+        url = f"{base_url}/api/chat"
+        model_name = self.model or "llama3.2:3b"
+
+        payload = {
+            "model": model_name,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": 0.0,
+                "num_predict": 256,
+            },
+        }
+        if self.seed is not None:
+            payload["options"]["seed"] = int(self.seed)
+
+        data_bytes = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            url,
+            data=data_bytes,
+            headers={"Content-Type": "application/json", "User-Agent": "AEMA-Bench/1.0"},
+            method="POST",
+        )
+        timeout = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "180.0"))
+        try:
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(f"Ollama returned HTTP status {resp.status}")
+                res_data = json.loads(resp.read().decode("utf-8"))
+        except urllib.error.URLError as e:
+            raise RuntimeError(
+                f"Ollama server is not responding at {base_url}. "
+                f"Please ensure Ollama is running ('ollama serve'). Details: {e.reason}"
+            ) from e
+        except Exception as e:
+            raise RuntimeError(f"Ollama inference failed on model '{model_name}': {e}") from e
+
+        content = res_data.get("message", {}).get("content", "")
+        prompt_eval_count = res_data.get("prompt_eval_count", 0)
+        eval_count = res_data.get("eval_count", 0)
+        tokens_used = prompt_eval_count + eval_count
+
+        return content, {
+            "prompt_tokens": prompt_eval_count,
+            "completion_tokens": eval_count,
+            "tokens_used": tokens_used if tokens_used > 0 else len(content.split()) * 2,
+            "token_count_estimated": False if tokens_used > 0 else True,
+            "ollama_total_duration_ms": (res_data.get("total_duration", 0) or 0) / 1_000_000.0,
+            "ollama_eval_duration_ms": (res_data.get("eval_duration", 0) or 0) / 1_000_000.0,
+            "ollama_prompt_eval_duration_ms": (res_data.get("prompt_eval_duration", 0) or 0) / 1_000_000.0,
+        }
+
+    async def _call_ollama_direct(
+        self,
+        messages: List[Dict[str, str]],
+    ) -> Tuple[str, Dict[str, Any]]:
+        """Asynchronously dispatch native Ollama call without blocking the event loop."""
+        return await asyncio.to_thread(self._call_ollama_sync, messages)
 
     async def _generate_response(
         self,
@@ -489,11 +571,15 @@ class MemoryAgentBenchSession:
                 "token_count_estimated": True,
             }
 
-        # Genuine LLM Generation
+        # Native Direct Ollama Integration (Zero third-party wrapper dependencies)
+        if prov_name == "ollama":
+            return await self._call_ollama_direct(messages)
+
+        # Genuine Hosted LLM Generation
         prov_enum = ModelProvider(prov_name)
         env_var_name = f"{prov_enum.value.upper()}_API_KEY"
         api_key = os.getenv(env_var_name)
-        if not api_key and prov_enum != ModelProvider.OLLAMA:
+        if not api_key:
             raise RuntimeError(f"Missing API key: Environment variable {env_var_name} is required for provider '{prov_name}'")
 
         cfg = ProviderConfig(
@@ -514,8 +600,8 @@ class MemoryAgentBenchSession:
         )
 
         return resp_text, {
-            "prompt_tokens": max(1, int(tokens * 0.70)),
-            "completion_tokens": max(1, int(tokens * 0.30)),
+            "prompt_tokens": None,
+            "completion_tokens": None,
             "tokens_used": tokens,
             "token_count_estimated": False,
         }
