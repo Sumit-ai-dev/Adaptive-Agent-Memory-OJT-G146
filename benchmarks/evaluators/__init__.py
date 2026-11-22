@@ -8,11 +8,13 @@ with zero awareness of agent condition (vanilla, naive_rag, adaptive) or trial c
 
 from benchmarks.evaluators.base import BaseBenchmarkEvaluator, EvaluationOutcome
 from benchmarks.evaluators.hotpotqa_evaluator import HotpotQAEvaluator
+from benchmarks.evaluators.python_api_evaluator import PythonAPIEvolutionEvaluator
 from benchmarks.evaluators.toolbench_evaluator import ToolBenchEvaluator
 
 __all__ = [
     "BaseBenchmarkEvaluator",
     "EvaluationOutcome",
     "HotpotQAEvaluator",
+    "PythonAPIEvolutionEvaluator",
     "ToolBenchEvaluator",
 ]
