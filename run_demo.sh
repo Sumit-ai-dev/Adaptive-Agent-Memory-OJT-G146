@@ -38,7 +38,7 @@ fi
 # 2. Check Frontend Node Modules
 if [ ! -d "$REPO_ROOT/frontend/node_modules" ]; then
     echo -e "${YELLOW}[INFO] Installing frontend dependencies...${NC}"
-    (cd "$REPO_ROOT/frontend" && npm install)
+    (cd "$REPO_ROOT/frontend" && (npm ci 2>/dev/null || npm install))
 fi
 
 # 3. Check port availability safely without terminating unrelated processes
