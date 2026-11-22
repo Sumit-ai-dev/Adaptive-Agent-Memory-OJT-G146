@@ -9,6 +9,7 @@ Verifies:
 5. All 5 memory baseline modes are supported.
 """
 
+import importlib.util
 import json
 import pytest
 
@@ -22,6 +23,20 @@ from benchmarks.python_api_runner import (
     MANIFEST_PATH,
 )
 from models.domain import MemoryMode
+
+
+def _has_module(name: str) -> bool:
+    return importlib.util.find_spec(name) is not None
+
+
+has_pandas = pytest.mark.skipif(
+    not _has_module("pandas"),
+    reason="pandas is not installed in the test execution environment",
+)
+has_sqlalchemy = pytest.mark.skipif(
+    not _has_module("sqlalchemy"),
+    reason="sqlalchemy is not installed in the test execution environment",
+)
 
 
 class TestPythonAPIEvolutionManifest:
@@ -79,6 +94,7 @@ class TestPythonAPIEvaluator:
         raw = "def bar(): return 100"
         assert extract_python_code(raw) == "def bar(): return 100"
 
+    @has_pandas
     def test_pandas_append_modern_passes(self, pandas_append_task):
         """Modern pd.concat implementation passes real pytest test suite."""
         evaluator = PythonAPIEvolutionEvaluator()
@@ -89,6 +105,7 @@ class TestPythonAPIEvaluator:
         assert outcome.score == 1.0
         assert outcome.metrics["returncode"] == 0
 
+    @has_pandas
     def test_pandas_append_outdated_fails_with_attribute_error(self, pandas_append_task):
         """Outdated df.append implementation fails real pytest with AttributeError."""
         evaluator = PythonAPIEvolutionEvaluator()
@@ -101,6 +118,7 @@ class TestPythonAPIEvaluator:
         assert outcome.metrics["detected_exception"] == "AttributeError"
         assert "has no attribute 'append'" in outcome.details["stdout"]
 
+    @has_pandas
     def test_pandas_iteritems_outdated_fails(self, pandas_iteritems_task):
         """Outdated Series.iteritems implementation fails on Pandas 2.x."""
         evaluator = PythonAPIEvolutionEvaluator()
@@ -112,6 +130,7 @@ class TestPythonAPIEvaluator:
         assert outcome.metrics["detected_exception"] == "AttributeError"
         assert "has no attribute 'iteritems'" in outcome.details["stdout"]
 
+    @has_sqlalchemy
     def test_sqlalchemy_modern_passes(self, sqlalchemy_task):
         """Modern SQLAlchemy 2.0 connection execution passes."""
         evaluator = PythonAPIEvolutionEvaluator()
@@ -121,6 +140,7 @@ class TestPythonAPIEvaluator:
         assert outcome.passed is True
         assert outcome.score == 1.0
 
+    @has_sqlalchemy
     def test_sqlalchemy_outdated_fails(self, sqlalchemy_task):
         """Legacy Engine.execute fails on SQLAlchemy 2.0 with AttributeError."""
         evaluator = PythonAPIEvolutionEvaluator()
@@ -132,12 +152,16 @@ class TestPythonAPIEvaluator:
         assert outcome.metrics["detected_exception"] == "AttributeError"
         assert "has no attribute 'execute'" in outcome.details["stdout"]
 
-    def test_syntax_error_fails_cleanly(self, pandas_append_task):
+    def test_syntax_error_fails_cleanly(self):
         """Syntax errors fail cleanly without unhandled crashes."""
         evaluator = PythonAPIEvolutionEvaluator()
-        broken_code = "def merge_sensor_readings(df, list): return df +++ invalid syntax"
+        task = {
+            "id": "test_pure_python_syntax",
+            "test_suite": "import solution\ndef test_noop(): assert solution.broken_fn()\n",
+        }
+        broken_code = "def broken_fn(): return 1 +++ syntax error"
 
-        outcome = evaluator.evaluate(pandas_append_task, broken_code)
+        outcome = evaluator.evaluate(task, broken_code)
         assert outcome.passed is False
         assert outcome.score == 0.0
         assert outcome.metrics["detected_exception"] == "SyntaxError"
