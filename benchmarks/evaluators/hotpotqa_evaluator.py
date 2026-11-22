@@ -82,6 +82,47 @@ def compute_f1(prediction: str, ground_truth: str) -> Tuple[float, float, float]
     return f1, precision, recall
 
 
+def compute_supporting_facts_f1(
+    agent_output: str,
+    ground_truth_sp: Any,
+) -> Tuple[float, float, float]:
+    """
+    Compute supporting facts precision, recall, and F1.
+    ground_truth_sp can be a dict {'titles': [...], 'sent_ids': [...]}
+    or a list of [title, sent_id].
+    """
+    if not ground_truth_sp:
+        return 1.0, 1.0, 1.0
+
+    gt_titles: Set[str] = set()
+    if isinstance(ground_truth_sp, dict):
+        gt_titles = {normalize_answer(t) for t in ground_truth_sp.get("titles", [])}
+    elif isinstance(ground_truth_sp, list):
+        for item in ground_truth_sp:
+            if isinstance(item, (list, tuple)) and len(item) > 0:
+                gt_titles.add(normalize_answer(str(item[0])))
+            elif isinstance(item, str):
+                gt_titles.add(normalize_answer(item))
+
+    if not gt_titles:
+        return 1.0, 1.0, 1.0
+
+    # Search for cited titles in the agent's text or tool outputs
+    norm_text = normalize_answer(agent_output)
+    predicted_titles = set()
+    for title in gt_titles:
+        if re.search(r"(^|\s)" + re.escape(title) + r"($|\s)", norm_text):
+            predicted_titles.add(title)
+
+    if not predicted_titles:
+        return 0.0, 0.0, 0.0
+
+    precision = len(predicted_titles) / max(len(predicted_titles), 1)
+    recall = len(predicted_titles) / max(len(gt_titles), 1)
+    f1 = (2 * precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
+    return f1, precision, recall
+
+
 def extract_candidate_answer(agent_output: str) -> str:
     """
     Extract answer from common agent output patterns if structured tags exist,
@@ -145,28 +186,38 @@ class HotpotQAEvaluator(BaseBenchmarkEvaluator):
 
         # Also evaluate against full output if candidate was extracted
         full_f1, full_prec, full_rec = compute_f1(agent_output, ground_truth)
+        full_em = compute_exact_match(agent_output, ground_truth)
         best_f1 = max(f1, full_f1)
-        best_em = max(em, subspan_em)
+        best_em = max(em, full_em)
+
+        # Supporting facts evaluation (Official HotpotQA joint metric)
+        ground_truth_sp = task.get("supporting_facts")
+        sp_f1, sp_prec, sp_rec = compute_supporting_facts_f1(agent_output, ground_truth_sp)
+        joint_em = best_em * (1.0 if sp_f1 >= 0.99 else 0.0)
+        joint_f1 = round(best_f1 * sp_f1, 4)
 
         metrics = {
-            "exact_match": em,
-            "subspan_exact_match": subspan_em,
-            "f1": f1,
-            "precision": prec,
-            "recall": rec,
-            "full_f1": full_f1,
-            "best_f1": best_f1,
+            "exact_match": best_em,
+            "f1": best_f1,
+            "precision": max(prec, full_prec),
+            "recall": max(rec, full_rec),
+            "sp_f1": sp_f1,
+            "sp_precision": sp_prec,
+            "sp_recall": sp_rec,
+            "joint_em": joint_em,
+            "joint_f1": joint_f1,
             "f1_threshold": self.f1_threshold,
         }
 
-        # Determine pass/fail
+        # Determine pass/fail strictly:
+        # A response passes ONLY if Exact Match == 1.0 OR Answer Token F1 >= threshold.
+        # Arbitrary substring matches without token precision penalties are strictly forbidden.
         if self.require_exact_match:
-            passed = bool(em == 1.0)
-            score = 1.0 if em == 1.0 else 0.0
+            passed = bool(best_em == 1.0)
+            score = 1.0 if best_em == 1.0 else 0.0
         else:
-            # Passed if exact match OR subspan exact match with high recall OR F1 >= threshold
-            passed = bool(em == 1.0 or (subspan_em == 1.0 and rec >= 0.99) or best_f1 >= self.f1_threshold)
-            score = 1.0 if (em == 1.0 or (subspan_em == 1.0 and rec >= 0.99)) else round(best_f1, 4)
+            passed = bool(best_em == 1.0 or best_f1 >= self.f1_threshold)
+            score = 1.0 if best_em == 1.0 else round(best_f1, 4)
 
         reason = None
         if not passed:
@@ -182,5 +233,6 @@ class HotpotQAEvaluator(BaseBenchmarkEvaluator):
             details={
                 "candidate": candidate,
                 "ground_truth": ground_truth,
+                "supporting_facts": ground_truth_sp,
             },
         )

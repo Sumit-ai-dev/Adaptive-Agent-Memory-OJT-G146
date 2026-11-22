@@ -55,6 +55,9 @@ class TrialTelemetryRecord:
     error_recurred: bool
     quarantine_triggered: bool
     quarantine_blocked_poison: bool
+    model: Optional[str] = None
+    provider: Optional[str] = None
+    seed: Optional[int] = None
     failure_reason: Optional[str] = None
     evaluator_metrics: Dict[str, Any] = field(default_factory=dict)
     tool_calls: List[Dict[str, Any]] = field(default_factory=list)

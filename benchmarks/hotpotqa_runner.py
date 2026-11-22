@@ -52,6 +52,9 @@ async def run_hotpotqa_trial(
     memory_store: SQLiteMemoryStore,
     evaluator: Optional[HotpotQAEvaluator] = None,
     previous_trial_failed: bool = False,
+    seed: Optional[int] = 42,
+    model: Optional[str] = None,
+    provider: Optional[str] = None,
 ) -> TrialTelemetryRecord:
     evaluator = evaluator or HotpotQAEvaluator()
     task_id = str(task.get("id", task.get("_id", "hp_unknown")))
@@ -62,7 +65,8 @@ async def run_hotpotqa_trial(
     # NEVER include ground truth or validation references here.
     prompt = (
         f"Answer the following multi-hop research question accurately and concisely.\n"
-        f"Question: {question}"
+        f"Question: {question}\n"
+        f"Provide your concise final answer enclosed in <answer>...</answer> tags."
     )
 
     req = TaskExecuteRequest(
@@ -70,6 +74,9 @@ async def run_hotpotqa_trial(
         task_domain=TaskDomain.RESEARCH,
         memory_enabled=(mode != MemoryMode.OFF),
         memory_mode=mode,
+        model=model,
+        provider=provider,
+        seed=seed,
     )
 
     # Monotonic high-resolution wall-clock timing
@@ -129,6 +136,9 @@ async def run_hotpotqa_trial(
         error_recurred=error_recurred,
         quarantine_triggered=quarantine_triggered,
         quarantine_blocked_poison=quarantine_blocked_poison,
+        model=model or getattr(result, "model", None) or "default",
+        provider=provider or getattr(result, "provider", None) or "default",
+        seed=seed,
         failure_reason=eval_outcome.failure_reason,
         evaluator_metrics=eval_outcome.metrics,
         tool_calls=result.tool_calls or [],

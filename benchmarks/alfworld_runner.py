@@ -12,9 +12,40 @@ In compliance with the Scientific Integrity Mandate:
 """
 
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("benchmarks.alfworld")
+
+ALFWORLD_DATA_DIR = Path(__file__).parent / "data" / "alfworld" / "json_2.1.1" / "valid_seen"
+
+
+def load_alfworld_tasks(limit: int = 10) -> List[Dict[str, Any]]:
+    """Loads offline trajectory metadata for ALFWorld tasks if available."""
+    if not ALFWORLD_DATA_DIR.exists():
+        alt_path = Path(__file__).parent / "data" / "alfworld"
+        paths = list(alt_path.rglob("traj_data.json")) if alt_path.exists() else []
+    else:
+        paths = list(ALFWORLD_DATA_DIR.rglob("traj_data.json"))
+
+    tasks: List[Dict[str, Any]] = []
+    for p in paths[:limit]:
+        try:
+            import json
+            with open(p, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            desc = d.get("turk_annotations", {}).get("anns", [{}])[0].get("task_desc", "")
+            if not desc and "pddl_params" in d:
+                desc = f"{d.get('task_type')}: {d.get('pddl_params', {}).get('object_target', '')}"
+            tasks.append({
+                "id": d.get("task_id", p.parent.name),
+                "task_type": d.get("task_type", "general"),
+                "goal": desc,
+                "plan": [step.get("discrete_action", {}).get("action", "") for step in d.get("plan", {}).get("high_pddl", [])],
+            })
+        except Exception as e:
+            logger.warning(f"Failed to load ALFWorld task at {p}: {e}")
+    return tasks
 
 
 def is_alfworld_available() -> bool:

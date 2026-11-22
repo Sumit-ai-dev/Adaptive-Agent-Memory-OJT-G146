@@ -104,16 +104,52 @@ class TestHotpotQAEvaluator:
             "answer": "Paris",
         }
 
-        # Accurate answer
-        outcome_pass = evaluator.evaluate(task, "The capital of France is Paris.")
+        # Accurate tagged answer
+        outcome_pass = evaluator.evaluate(task, "The capital of France is <answer>Paris</answer>.")
         assert outcome_pass.passed is True
-        assert outcome_pass.score >= 0.80
+        assert outcome_pass.score == 1.0
+
+        # Accurate answer with prefix
+        outcome_prefix = evaluator.evaluate(task, "Final Answer: Paris.")
+        assert outcome_prefix.passed is True
+        assert outcome_prefix.score == 1.0
 
         # Incorrect answer
-        outcome_fail = evaluator.evaluate(task, "The capital of France is Berlin.")
+        outcome_fail = evaluator.evaluate(task, "<answer>Berlin</answer>")
         assert outcome_fail.passed is False
         assert outcome_fail.score == 0.0
         assert outcome_fail.failure_reason is not None
+
+    def test_distractor_negation_fails(self):
+        """Adversarial distractor that mentions the ground truth inside a negation MUST FAIL."""
+        evaluator = HotpotQAEvaluator(f1_threshold=0.80)
+        task = {
+            "id": "hp_001",
+            "question": "What is the capital of France?",
+            "answer": "Paris",
+        }
+        # Distractor explicitly negates Paris and claims Lyon is capital
+        distractor = "No, France does not have its capital in Paris, it is definitely Lyon."
+        outcome = evaluator.evaluate(task, distractor)
+        assert outcome.passed is False, "Distractor with negated ground truth must NOT pass!"
+        assert outcome.score < 0.30
+
+    def test_supporting_facts_evaluation(self):
+        """Evaluates supporting fact precision, recall, and joint F1."""
+        evaluator = HotpotQAEvaluator()
+        task_sp = {
+            "id": "hp_002",
+            "question": "Are 111 Murray Street and 220 Central Park South both in Manhattan?",
+            "answer": "yes",
+            "supporting_facts": {"titles": ["111 Murray Street", "220 Central Park South"], "sent_ids": [0, 1]},
+        }
+        # Answer with cited supporting facts
+        output = "<answer>yes</answer> Evidence found in 111 Murray Street and 220 Central Park South."
+        outcome = evaluator.evaluate(task_sp, output)
+        assert outcome.passed is True
+        assert outcome.metrics["sp_f1"] == 1.0
+        assert outcome.metrics["joint_em"] == 1.0
+        assert outcome.metrics["joint_f1"] == 1.0
 
 
 class TestToolBenchEvaluator:
@@ -228,6 +264,9 @@ class TestPromptAndTelemetryIntegrity:
             error_recurred=False,
             quarantine_triggered=False,
             quarantine_blocked_poison=False,
+            model="openai/gpt-4o-mini",
+            provider="openai",
+            seed=42,
         )
         data = json.loads(rec.to_json())
         assert data["benchmark"] == "hotpotqa"
@@ -235,3 +274,6 @@ class TestPromptAndTelemetryIntegrity:
         assert data["token_count_estimated"] is False
         assert data["latency_ms"] == 452.3
         assert data["score"] == 0.95
+        assert data["model"] == "openai/gpt-4o-mini"
+        assert data["provider"] == "openai"
+        assert data["seed"] == 42
