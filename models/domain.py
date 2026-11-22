@@ -29,10 +29,11 @@ class ExperienceStatus(str, Enum):
 
 class MemoryMode(str, Enum):
     """Memory operational modes for benchmark ablation."""
-    OFF = "off"              # Condition A: Baseline / Vanilla ReAct (no memory)
-    NAIVE = "naive"          # Condition B: Naive Vector RAG (pure cosine, no trust)
-    SYMMETRIC = "symmetric"  # Condition C: Symmetric Reflexion (alpha = beta = 0.80)
-    ADAPTIVE = "adaptive"    # Condition D: Asymmetric EMA + Quarantine Cutoff (OURS)
+    OFF = "off"              # Condition 1: Baseline / Vanilla ReAct (no memory)
+    NAIVE = "naive"          # Condition 2: Naive Vector RAG (pure cosine, no trust)
+    RECENCY = "recency"      # Condition 3: Recency-Based Memory (similarity + recency decay)
+    SYMMETRIC = "symmetric"  # Condition 4: Reliability-Aware without Quarantine (alpha = beta = 0.80)
+    ADAPTIVE = "adaptive"    # Condition 5: Asymmetric EMA + Quarantine Cutoff (OURS)
 
 
 class ExecutionStatus(str, Enum):

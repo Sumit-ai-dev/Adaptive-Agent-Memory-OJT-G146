@@ -105,6 +105,23 @@ class MemoryRetriever:
                 else:
                     gate_reasons[exp.id] = f"similarity below naive cutoff ({sim:.3f})"
 
+            # Condition: Recency-Based Memory (similarity + recency decay, no trust filtering)
+            elif mode == MemoryMode.RECENCY:
+                from datetime import datetime, timezone
+                import math
+                now_ts = datetime.now(timezone.utc).timestamp()
+                exp_ts = exp.created_at.timestamp() if hasattr(exp, "created_at") and hasattr(exp.created_at, "timestamp") else now_ts
+                age_seconds = max(0.0, now_ts - exp_ts)
+                recency_score = math.exp(-age_seconds / 86400.0)
+                composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * recency_score)
+                results.append(
+                    RetrievedMemory(
+                        experience=exp,
+                        similarity=sim,
+                        composite_score=round(composite, 4),
+                    )
+                )
+
             # Condition C: Symmetric Reflexion
             elif mode == MemoryMode.SYMMETRIC:
                 composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * trust)
