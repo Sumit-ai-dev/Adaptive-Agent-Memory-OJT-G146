@@ -57,8 +57,8 @@ scripts/verify_paper_compliance.py
 *.db
 *.sqlite
 *.sqlite3
-data/
-!data/.gitkeep
+/data/*
+!/data/.gitkeep
 
 # Experiment run output (manifests, exposure logs, paired results)
 runs/
@@ -67,7 +67,12 @@ manifests/
 benchmarks/results/
 
 # Large downloaded benchmark corpora (ALFWorld / HotpotQA / ToolBench, ~2.2 GB)
-benchmarks/data/
+benchmarks/data/*
+!benchmarks/data/python_api_evolution/
+!benchmarks/data/memoryagentbench/
+!benchmarks/data/memoryagentbench/**
+benchmarks/data/memoryagentbench/upstream_parquets/
+*.parquet
 
 # Harvested literature PDFs and derived artifacts
 research_papers/
