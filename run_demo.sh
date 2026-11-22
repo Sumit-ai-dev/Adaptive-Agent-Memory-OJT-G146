@@ -38,7 +38,7 @@ fi
 # 2. Check Frontend Node Modules
 if [ ! -d "$REPO_ROOT/frontend/node_modules" ]; then
     echo -e "${YELLOW}[INFO] Installing frontend dependencies...${NC}"
-    (cd "$REPO_ROOT/frontend" && npm install)
+    (cd "$REPO_ROOT/frontend" && (npm ci 2>/dev/null || npm install))
 fi
 
 # 3. Check port availability safely without terminating unrelated processes
@@ -121,11 +121,20 @@ FRONTEND_PID=$!
 
 echo -e "\n${BOLD}${CYAN}======================================================${NC}"
 echo -e "${BOLD}${GREEN}   AEMA Demo is running!                              ${NC}"
-echo -e "   - Frontend Dashboard: ${CYAN}http://localhost:5173/dashboard?demo=true${NC}"
+echo -e "   - Landing Page:       ${CYAN}http://localhost:5173${NC}"
 echo -e "   - Backend Health:     ${CYAN}http://localhost:8000/api/health${NC}"
 echo -e "   - Interactive Docs:   ${CYAN}http://localhost:8000/docs${NC}"
 echo -e "   - Press ${YELLOW}Ctrl+C${NC} anytime to stop all services"
 echo -e "${BOLD}${CYAN}======================================================${NC}\n"
+
+# 6. Open Browser automatically to Landing Page
+if command -v open >/dev/null 2>&1; then
+    sleep 1.2
+    open "http://localhost:5173" 2>/dev/null || true
+elif command -v xdg-open >/dev/null 2>&1; then
+    sleep 1.2
+    xdg-open "http://localhost:5173" 2>/dev/null || true
+fi
 
 # Wait for background processes to keep script running
 wait

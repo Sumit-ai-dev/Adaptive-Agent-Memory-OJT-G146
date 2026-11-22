@@ -1,0 +1,108 @@
+{
+  "metadata": {
+    "benchmark_name": "AEMA Python API Evolution Benchmark",
+    "version": "1.0.0",
+    "description": "Evaluates autonomous agent resilience to API deprecations and breaking changes. Measures error recurrence, negative transfer, and recovery across sequential trials under real package execution.",
+    "is_swe_bench": false,
+    "benchmark_type": "custom_curated_execution_benchmark",
+    "supported_categories": [
+      "pandas_1_to_2",
+      "pydantic_v1_to_v2",
+      "sqlalchemy_1_to_2",
+      "python_stdlib_signatures",
+      "dependency_migrations"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "api_pandas_01_append_concat",
+      "category": "pandas_1_to_2",
+      "library": "pandas",
+      "old_version": "1.5.3",
+      "new_version": "2.0.0+",
+      "breaking_change": "DataFrame.append() was removed in Pandas 2.0. Must use pd.concat([df1, df2], ignore_index=True).",
+      "runtime_exception": "AttributeError: 'DataFrame' object has no attribute 'append'",
+      "trap_memory": {
+        "strategy": "To combine multiple DataFrames or append a row dictionary, use df.append(row_dict, ignore_index=True).",
+        "pitfall": "Do not use pd.concat as it creates unnecessary list allocations."
+      },
+      "modern_solution": "Use pd.concat([df, pd.DataFrame([new_row])], ignore_index=True) or pd.concat(list_of_dfs).",
+      "problem_description": "Implement a function `merge_sensor_readings(existing_df, new_readings_list)` that takes an existing pandas DataFrame of sensor measurements (with columns 'timestamp', 'sensor_id', 'value') and a list of dictionaries representing new readings, and returns a new DataFrame containing all records with a reset index. Must be compatible with modern pandas 2.x.",
+      "test_suite": "import pytest\nimport pandas as pd\nfrom solution import merge_sensor_readings\n\ndef test_merge_sensor_readings_basic():\n    df1 = pd.DataFrame([{'timestamp': '2026-01-01', 'sensor_id': 's1', 'value': 24.5}])\n    new_rows = [{'timestamp': '2026-01-02', 'sensor_id': 's2', 'value': 26.0}]\n    result = merge_sensor_readings(df1, new_rows)\n    assert isinstance(result, pd.DataFrame)\n    assert len(result) == 2\n    assert list(result['sensor_id']) == ['s1', 's2']\n    assert list(result['value']) == [24.5, 26.0]\n    assert result.index.tolist() == [0, 1]\n\ndef test_merge_empty_existing():\n    df1 = pd.DataFrame(columns=['timestamp', 'sensor_id', 'value'])\n    new_rows = [{'timestamp': '2026-01-01', 'sensor_id': 's1', 'value': 10.0}]\n    result = merge_sensor_readings(df1, new_rows)\n    assert len(result) == 1\n    assert result.iloc[0]['sensor_id'] == 's1'\n\ndef test_merge_empty_new():\n    df1 = pd.DataFrame([{'timestamp': '2026-01-01', 'sensor_id': 's1', 'value': 10.0}])\n    result = merge_sensor_readings(df1, [])\n    assert len(result) == 1\n",
+      "reference_modern_code": "import pandas as pd\n\ndef merge_sensor_readings(existing_df, new_readings_list):\n    if not new_readings_list:\n        return existing_df.copy()\n    new_df = pd.DataFrame(new_readings_list)\n    return pd.concat([existing_df, new_df], ignore_index=True)\n",
+      "outdated_code": "import pandas as pd\n\ndef merge_sensor_readings(existing_df, new_readings_list):\n    res = existing_df.copy()\n    for row in new_readings_list:\n        res = res.append(row, ignore_index=True)\n    return res\n"
+    },
+    {
+      "id": "api_pandas_02_series_iteritems",
+      "category": "pandas_1_to_2",
+      "library": "pandas",
+      "old_version": "1.5.3",
+      "new_version": "2.0.0+",
+      "breaking_change": "Series.iteritems() was removed in Pandas 2.0. Must use Series.items().",
+      "runtime_exception": "AttributeError: 'Series' object has no attribute 'iteritems'",
+      "trap_memory": {
+        "strategy": "To iterate over index-value pairs of a pandas Series, call series.iteritems() in a for loop.",
+        "pitfall": "Do not use .items() as it is deprecated in older python dictionaries."
+      },
+      "modern_solution": "Use series.items() which yields (index, value) tuples.",
+      "problem_description": "Implement a function `find_threshold_breaches(metric_series, threshold)` that accepts a pandas Series indexed by timestamp and a numeric threshold. It must iterate over the series items and return a list of tuples `(timestamp, value)` for all points strictly exceeding the threshold. Must run on Pandas 2.x without calling deprecated or removed methods.",
+      "test_suite": "import pytest\nimport pandas as pd\nfrom solution import find_threshold_breaches\n\ndef test_find_threshold_breaches():\n    s = pd.Series([10.5, 45.2, 12.0, 55.8, 30.1], index=['t1', 't2', 't3', 't4', 't5'])\n    breaches = find_threshold_breaches(s, 30.0)\n    assert breaches == [('t2', 45.2), ('t4', 55.8), ('t5', 30.1)]\n\ndef test_no_breaches():\n    s = pd.Series([1.0, 2.0, 3.0], index=['a', 'b', 'c'])\n    assert find_threshold_breaches(s, 10.0) == []\n",
+      "reference_modern_code": "import pandas as pd\n\ndef find_threshold_breaches(metric_series, threshold):\n    breaches = []\n    for idx, val in metric_series.items():\n        if val >= threshold:\n            breaches.append((idx, val))\n    return breaches\n",
+      "outdated_code": "import pandas as pd\n\ndef find_threshold_breaches(metric_series, threshold):\n    breaches = []\n    for idx, val in metric_series.iteritems():\n        if val >= threshold:\n            breaches.append((idx, val))\n    return breaches\n"
+    },
+    {
+      "id": "api_pydantic_01_dict_to_model_dump",
+      "category": "pydantic_v1_to_v2",
+      "library": "pydantic",
+      "old_version": "1.10.8",
+      "new_version": "2.0.0+",
+      "breaking_change": "BaseModel.dict() is deprecated in Pydantic v2; replaced with BaseModel.model_dump(). Field(regex=...) replaced with Field(pattern=...).",
+      "runtime_exception": "UserWarning: The `dict` method is deprecated; use `model_dump` instead.",
+      "trap_memory": {
+        "strategy": "Serialize Pydantic models by calling user_model.dict(exclude_unset=True). Configure regex validation using Field(regex=r'^[A-Z]{3}$').",
+        "pitfall": "Do not use model_dump or pattern as they are unsupported in standard Pydantic v1."
+      },
+      "modern_solution": "Use model.model_dump(exclude_unset=True) and Field(pattern=r'^[A-Z]{3}$').",
+      "problem_description": "Create a Pydantic model `AirportCodeConfig` with fields: `code` (string, exactly 3 uppercase letters, validated via regex/pattern) and `name` (string, default 'Unknown'). Implement a helper function `serialize_airport_config(config_instance)` that returns a clean Python dictionary using Pydantic v2's modern serialization API (`model_dump`).",
+      "test_suite": "import pytest\nfrom pydantic import ValidationError\nfrom solution import AirportCodeConfig, serialize_airport_config\n\ndef test_valid_airport():\n    cfg = AirportCodeConfig(code='JFK', name='John F. Kennedy')\n    dump = serialize_airport_config(cfg)\n    assert dump == {'code': 'JFK', 'name': 'John F. Kennedy'}\n\ndef test_regex_validation():\n    with pytest.raises(ValidationError):\n        AirportCodeConfig(code='jfk')  # lowercase must fail pattern\n    with pytest.raises(ValidationError):\n        AirportCodeConfig(code='TOOLONG')\n\ndef test_default_name():\n    cfg = AirportCodeConfig(code='LHR')\n    assert cfg.name == 'Unknown'\n    assert serialize_airport_config(cfg)['name'] == 'Unknown'\n",
+      "reference_modern_code": "from pydantic import BaseModel, Field\nfrom typing import Dict, Any\n\nclass AirportCodeConfig(BaseModel):\n    code: str = Field(pattern=r'^[A-Z]{3}$')\n    name: str = 'Unknown'\n\ndef serialize_airport_config(config_instance: AirportCodeConfig) -> Dict[str, Any]:\n    return config_instance.model_dump()\n",
+      "outdated_code": "from pydantic import BaseModel, Field\nfrom typing import Dict, Any\n\nclass AirportCodeConfig(BaseModel):\n    code: str = Field(regex=r'^[A-Z]{3}$')\n    name: str = 'Unknown'\n\ndef serialize_airport_config(config_instance: AirportCodeConfig) -> Dict[str, Any]:\n    return config_instance.dict()\n"
+    },
+    {
+      "id": "api_sqlalchemy_01_engine_execute",
+      "category": "sqlalchemy_1_to_2",
+      "library": "sqlalchemy",
+      "old_version": "1.4.46",
+      "new_version": "2.0.0+",
+      "breaking_change": "Engine.execute() was completely removed in SQLAlchemy 2.0. Must use with engine.connect() as conn: conn.execute(text(...)).",
+      "runtime_exception": "AttributeError: 'Engine' object has no attribute 'execute'",
+      "trap_memory": {
+        "strategy": "Directly execute SQL queries on the engine: result = engine.execute('SELECT count(*) FROM users').",
+        "pitfall": "Do not manage connection context managers with engine.connect() as it adds boilerplate."
+      },
+      "modern_solution": "Use with engine.connect() as conn: result = conn.execute(text(sql)).",
+      "problem_description": "Implement a function `count_records_in_table(engine, table_name)` that takes a SQLAlchemy Engine and table name string, executes a parameterized `SELECT count(*) FROM <table>` query, and returns the integer count. Must strictly support SQLAlchemy 2.0+ without calling removed Engine.execute().",
+      "test_suite": "import pytest\nimport sqlalchemy as sa\nfrom solution import count_records_in_table\n\n@pytest.fixture\ndef memory_db():\n    engine = sa.create_engine('sqlite:///:memory:')\n    with engine.begin() as conn:\n        conn.execute(sa.text('CREATE TABLE items (id INT, name TEXT)'))\n        conn.execute(sa.text(\"INSERT INTO items VALUES (1, 'alpha'), (2, 'beta'), (3, 'gamma')\"))\n    return engine\n\ndef test_count_records(memory_db):\n    count = count_records_in_table(memory_db, 'items')\n    assert count == 3\n\ndef test_empty_table(memory_db):\n    with memory_db.begin() as conn:\n        conn.execute(sa.text('CREATE TABLE empty_tab (id INT)'))\n    count = count_records_in_table(memory_db, 'empty_tab')\n    assert count == 0\n",
+      "reference_modern_code": "import sqlalchemy as sa\n\ndef count_records_in_table(engine, table_name: str) -> int:\n    with engine.connect() as conn:\n        result = conn.execute(sa.text(f'SELECT count(*) FROM {table_name}'))\n        return int(result.scalar() or 0)\n",
+      "outdated_code": "import sqlalchemy as sa\n\ndef count_records_in_table(engine, table_name: str) -> int:\n    result = engine.execute(f'SELECT count(*) FROM {table_name}')\n    return int(result.scalar() or 0)\n"
+    },
+    {
+      "id": "api_inspect_01_getargspec_signature",
+      "category": "python_stdlib_signatures",
+      "library": "inspect",
+      "old_version": "3.10",
+      "new_version": "3.11+",
+      "breaking_change": "inspect.getargspec() was deprecated since Python 3.0 and completely removed in Python 3.11. Must use inspect.signature() or inspect.getfullargspec().",
+      "runtime_exception": "AttributeError: module 'inspect' has no attribute 'getargspec'",
+      "trap_memory": {
+        "strategy": "Inspect function arguments using inspect.getargspec(func).args to obtain parameter names.",
+        "pitfall": "Do not use inspect.signature as it returns complex Parameter objects instead of strings."
+      },
+      "modern_solution": "Use list(inspect.signature(func).parameters.keys()) or inspect.getfullargspec(func).args.",
+      "problem_description": "Implement a utility function `get_function_param_names(callable_obj)` that accepts any Python callable and returns a list of its argument names in order. Must run cleanly on Python 3.11+ without referencing the removed `inspect.getargspec`.",
+      "test_suite": "import pytest\nfrom solution import get_function_param_names\n\ndef sample_fn(a, b, c=10):\n    return a + b + c\n\ndef test_param_names_basic():\n    names = get_function_param_names(sample_fn)\n    assert names == ['a', 'b', 'c']\n\ndef test_lambda():\n    f = lambda x, y: x * y\n    assert get_function_param_names(f) == ['x', 'y']\n\ndef test_no_args():\n    f = lambda: 42\n    assert get_function_param_names(f) == []\n",
+      "reference_modern_code": "import inspect\nfrom typing import List, Callable\n\ndef get_function_param_names(callable_obj: Callable) -> List[str]:\n    sig = inspect.signature(callable_obj)\n    return list(sig.parameters.keys())\n",
+      "outdated_code": "import inspect\nfrom typing import List, Callable\n\ndef get_function_param_names(callable_obj: Callable) -> List[str]:\n    return inspect.getargspec(callable_obj).args\n"
+    }
+  ]
+}

@@ -1,7 +1,7 @@
 # Product Requirements Document (PRD)
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
-**Prepared by:** Kasat Sakshi Dattaprasad & Sumit Das - G146  
+**Prepared by:** Sakshi Kasat & Sumit Das - G146  
 
 ---
 
@@ -25,13 +25,13 @@ Build an adaptive AI agent with persistent experience memory that improves futur
 | Experience lifecycle management | **Must** |
 | Agent task/execution logging | **Must** |
 | Central agent dashboard | **Must** |
-| Memory notebook dashboard | **Should** |
-| Before/after comparison | **Should** |
-| Trust history visualization | **Should** |
-| Support for multiple task domains | **Should** |
-| Optional browser extension access | **Should** |
-| Multi-LLM provider support | **Won't (this phase)** |
-| Generalized SDK/package | **Won't (this phase)** |
+| Memory notebook dashboard | **Must (Implemented)** |
+| Before/after comparison | **Must (Implemented)** |
+| Trust history visualization | **Must (Implemented)** |
+| Support for multiple task domains | **Must (Implemented)** |
+| Optional browser extension access | **Must (Implemented)** |
+| Multi-LLM provider support | **Must (Implemented)** |
+| Generalized SDK/package | **Must (Implemented)** |
 
 ---
 

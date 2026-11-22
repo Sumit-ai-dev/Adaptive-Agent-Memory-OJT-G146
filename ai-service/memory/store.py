@@ -103,6 +103,7 @@ class BaseMemoryStore(ABC):
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Experience]:
         pass
 
@@ -123,6 +124,184 @@ class BaseMemoryStore(ABC):
         """Hard-delete an experience record (for GDPR/PII compliance)."""
         raise NotImplementedError("delete_experience is not implemented on this store.")
 
+    # ─── Execution Trace Persistence ─────────────────────────────────────────
+
+    def _ensure_in_memory_executions(self) -> None:
+        if not hasattr(self, "_executions_cache"):
+            self._executions_cache: Dict[str, Any] = {}
+
+    async def save_execution(self, execution: Any) -> None:
+        """Persist a task execution record to durable storage or fallback cache."""
+        self._ensure_in_memory_executions()
+        self._executions_cache[execution.id] = execution
+
+    async def get_execution(self, execution_id: str) -> Optional[Any]:
+        """Fetch a specific execution trace by ID."""
+        self._ensure_in_memory_executions()
+        return self._executions_cache.get(execution_id)
+
+    async def list_executions(
+        self,
+        domain: Optional[str] = None,
+        memory_mode: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        """List paginated execution records with multi-tenant filtering."""
+        self._ensure_in_memory_executions()
+        items = list(self._executions_cache.values())
+        filtered = []
+        for ex in items:
+            ex_domain = getattr(getattr(ex, "task_domain", None), "value", str(getattr(ex, "task_domain", "")))
+            ex_mode = getattr(getattr(ex, "memory_mode", None), "value", str(getattr(ex, "memory_mode", "")))
+            if domain and domain != "all" and ex_domain != domain:
+                continue
+            if memory_mode and memory_mode != "all" and ex_mode != memory_mode:
+                continue
+            if session_id and getattr(ex, "session_id", None) != session_id:
+                continue
+            if user_id and getattr(ex, "user_id", None) != user_id:
+                continue
+            if unauthenticated_only and (getattr(ex, "user_id", None) is not None and getattr(ex, "user_id", None) != "anonymous"):
+                continue
+            filtered.append(ex)
+        return len(filtered), filtered[offset : offset + limit]
+
+    async def list_sessions(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """List distinct conversational sessions."""
+        self._ensure_in_memory_executions()
+        seen: Dict[str, Dict[str, Any]] = {}
+        for ex in self._executions_cache.values():
+            if user_id and getattr(ex, "user_id", None) != user_id:
+                continue
+            if unauthenticated_only and (getattr(ex, "user_id", None) is not None and getattr(ex, "user_id", None) != "anonymous"):
+                continue
+            sid = getattr(ex, "session_id", None)
+            if sid and sid not in seen:
+                seen[sid] = {
+                    "sessionId": sid,
+                    "title": (getattr(ex, "task_input", "") or "New Conversation")[:60],
+                    "lastActive": str(getattr(ex, "created_at", "")),
+                    "turnCount": 1,
+                }
+            elif sid:
+                seen[sid]["turnCount"] += 1
+        return list(seen.values())[:limit]
+
+    async def clear_executions(self) -> int:
+        """Clear execution trace records."""
+        self._ensure_in_memory_executions()
+        count = len(self._executions_cache)
+        self._executions_cache.clear()
+        return count
+
+    def _ensure_in_memory_conversations(self) -> None:
+        if not hasattr(self, "_conversations_cache"):
+            self._conversations_cache: Dict[str, Any] = {}
+        if not hasattr(self, "_messages_cache"):
+            self._messages_cache: Dict[str, List[Any]] = {}
+
+    async def create_conversation(self, conv: Any) -> Any:
+        self._ensure_in_memory_conversations()
+        if conv.id in self._conversations_cache:
+            raise ValueError(f"Conversation with id '{conv.id}' already exists")
+        self._conversations_cache[conv.id] = conv
+        return conv
+
+    async def get_conversation(self, conv_id: str, user_id: Optional[str] = None) -> Optional[Any]:
+        self._ensure_in_memory_conversations()
+        conv = self._conversations_cache.get(conv_id)
+        if conv and user_id and getattr(conv, "user_id", None) != user_id:
+            return None
+        return conv
+
+    async def list_conversations(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        self._ensure_in_memory_conversations()
+        items = list(self._conversations_cache.values())
+        filtered = []
+        for c in items:
+            c_uid = getattr(c, "user_id", None)
+            if user_id and c_uid != user_id:
+                continue
+            if unauthenticated_only and c_uid is not None and c_uid != "anonymous":
+                continue
+            filtered.append(c)
+        filtered.sort(key=lambda x: (getattr(x, "is_pinned", False), str(getattr(x, "updated_at", ""))), reverse=True)
+        return len(filtered), filtered[offset : offset + limit]
+
+    async def update_conversation(
+        self,
+        conv_id: str,
+        user_id: Optional[str] = None,
+        title: Optional[str] = None,
+        is_pinned: Optional[bool] = None,
+    ) -> Optional[Any]:
+        self._ensure_in_memory_conversations()
+        conv = await self.get_conversation(conv_id, user_id=user_id)
+        if not conv:
+            return None
+        if title is not None:
+            conv.title = title
+        if is_pinned is not None:
+            conv.is_pinned = is_pinned
+        conv.updated_at = datetime.now(timezone.utc)
+        return conv
+
+    async def delete_conversation(self, conv_id: str, user_id: Optional[str] = None) -> bool:
+        self._ensure_in_memory_conversations()
+        conv = await self.get_conversation(conv_id, user_id=user_id)
+        if not conv:
+            return False
+        self._conversations_cache.pop(conv_id, None)
+        self._messages_cache.pop(conv_id, None)
+        return True
+
+    async def add_conversation_message(self, msg: Any) -> Any:
+        self._ensure_in_memory_conversations()
+        cid = getattr(msg, "conversation_id", "")
+        if cid not in self._messages_cache:
+            self._messages_cache[cid] = []
+        self._messages_cache[cid].append(msg)
+        if cid in self._conversations_cache:
+            conv = self._conversations_cache[cid]
+            conv.message_count = len(self._messages_cache[cid])
+            conv.updated_at = datetime.now(timezone.utc)
+        return msg
+
+    async def get_conversation_messages(self, conv_id: str, user_id: Optional[str] = None) -> List[Any]:
+        self._ensure_in_memory_conversations()
+        conv = await self.get_conversation(conv_id, user_id=user_id)
+        if not conv:
+            return []
+        return list(self._messages_cache.get(conv_id, []))
+
+    async def clear_conversations(self, user_id: Optional[str] = None) -> int:
+        self._ensure_in_memory_conversations()
+        if user_id:
+            to_del = [cid for cid, c in self._conversations_cache.items() if getattr(c, "user_id", None) == user_id]
+            for cid in to_del:
+                self._conversations_cache.pop(cid, None)
+                self._messages_cache.pop(cid, None)
+            return len(to_del)
+        count = len(self._conversations_cache)
+        self._conversations_cache.clear()
+        self._messages_cache.clear()
+        return count
+
 
 class SQLiteMemoryStore(BaseMemoryStore):
     """
@@ -139,6 +318,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
     def _get_connection(self) -> sqlite3.Connection:
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def _get_write_connection(self) -> sqlite3.Connection:
@@ -146,6 +326,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout = 30000")
         conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA foreign_keys = ON")
         return conn
 
     def _init_tables(self) -> None:
@@ -205,11 +386,74 @@ class SQLiteMemoryStore(BaseMemoryStore):
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_probation_fp ON probation_task_fingerprints(experience_id, fingerprint)")
             cursor.execute("CREATE INDEX IF NOT EXISTS idx_probation_exec ON probation_task_fingerprints(execution_id)")
 
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS task_executions (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    user_id TEXT,
+                    task_input TEXT NOT NULL,
+                    task_domain TEXT NOT NULL,
+                    memory_mode TEXT NOT NULL,
+                    memory_enabled INTEGER NOT NULL DEFAULT 1,
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    outcome_score REAL,
+                    latency_ms INTEGER DEFAULT 0,
+                    tokens_used INTEGER DEFAULT 0,
+                    new_experience_created INTEGER DEFAULT 0,
+                    payload_json TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    title TEXT NOT NULL DEFAULT 'New Conversation',
+                    is_pinned INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_user ON conversations(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_pinned ON conversations(is_pinned, updated_at DESC)")
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS conversation_messages (
+                    id TEXT PRIMARY KEY,
+                    conversation_id TEXT NOT NULL,
+                    user_id TEXT,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+                )
+            """)
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_msg_conv ON conversation_messages(conversation_id, created_at ASC)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_conv_msg_user ON conversation_messages(user_id)")
+
             # Idempotent migration for existing SQLite databases
             cursor.execute("PRAGMA table_info(experiences)")
             columns = [col[1] for col in cursor.fetchall()]
             if "probation_successes" not in columns:
                 cursor.execute("ALTER TABLE experiences ADD COLUMN probation_successes INTEGER NOT NULL DEFAULT 0")
+
+            cursor.execute("PRAGMA table_info(task_executions)")
+            exec_cols = [c[1] for c in cursor.fetchall()]
+            if "session_id" not in exec_cols:
+                try:
+                    cursor.execute("ALTER TABLE task_executions ADD COLUMN session_id TEXT")
+                except Exception:
+                    pass
+            if "user_id" not in exec_cols:
+                try:
+                    cursor.execute("ALTER TABLE task_executions ADD COLUMN user_id TEXT")
+                except Exception:
+                    pass
+
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_user ON task_executions(user_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_session ON task_executions(session_id)")
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_task_exec_created ON task_executions(created_at DESC)")
 
             conn.commit()
             if self.auto_seed:
@@ -681,6 +925,7 @@ class SQLiteMemoryStore(BaseMemoryStore):
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Experience]:
         query = "SELECT * FROM experiences WHERE 1=1"
         params: List[Any] = []
@@ -694,7 +939,10 @@ class SQLiteMemoryStore(BaseMemoryStore):
             query += " AND trust_score >= ?"
             params.append(min_trust)
         if user_id is not None:
-            query += " AND user_id = ?"
+            if exact_user_match:
+                query += " AND user_id = ?"
+            else:
+                query += " AND (user_id = ? OR user_id IS NULL)"
             params.append(user_id)
         query += " ORDER BY trust_score DESC, updated_at DESC"
 
@@ -793,6 +1041,460 @@ class SQLiteMemoryStore(BaseMemoryStore):
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    async def save_execution(self, execution: Any) -> None:
+        """Persist a TaskExecution record into SQLite and memory cache."""
+        await super().save_execution(execution)
+        try:
+            payload = (
+                execution.model_dump_json(by_alias=True)
+                if hasattr(execution, "model_dump_json")
+                else json.dumps(execution)
+            )
+            created_val = getattr(execution, "created_at", None)
+            created_str = (
+                created_val.isoformat()
+                if hasattr(created_val, "isoformat")
+                else (str(created_val) if created_val else datetime.utcnow().isoformat())
+            )
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT OR REPLACE INTO task_executions (
+                        id, session_id, user_id, task_input, task_domain, memory_mode, memory_enabled,
+                        status, outcome_score, latency_ms, tokens_used,
+                        new_experience_created, payload_json, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        getattr(execution, "id", None) or getattr(execution, "execution_id", ""),
+                        getattr(execution, "session_id", None),
+                        getattr(execution, "user_id", None),
+                        (getattr(execution, "task_input", "") or "")[:500],
+                        getattr(getattr(execution, "task_domain", None), "value", str(getattr(execution, "task_domain", ""))),
+                        getattr(getattr(execution, "memory_mode", None), "value", str(getattr(execution, "memory_mode", ""))),
+                        int(getattr(execution, "memory_enabled", True)),
+                        getattr(getattr(execution, "status", None), "value", str(getattr(execution, "status", "completed"))),
+                        getattr(execution, "outcome_score", None),
+                        getattr(execution, "latency_ms", 0),
+                        getattr(execution, "tokens_used", 0),
+                        int(getattr(execution, "new_experience_created", False)),
+                        payload,
+                        created_str,
+                    ),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning(f"Could not persist execution {getattr(execution, 'id', '')} to SQLite: {exc}")
+            raise
+
+    async def get_execution(self, execution_id: str) -> Optional[Any]:
+        """Fetch a specific execution trace by ID from SQLite."""
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT payload_json FROM task_executions WHERE id = ?", (execution_id,))
+                row = cursor.fetchone()
+                if row:
+                    from models.task import TaskExecution
+                    return TaskExecution.model_validate_json(row[0])
+        except Exception as exc:
+            logger.warning(f"SQLite lookup failed for execution {execution_id}: {exc}")
+        return await super().get_execution(execution_id)
+
+    async def list_executions(
+        self,
+        domain: Optional[str] = None,
+        memory_mode: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                where_clauses: List[str] = []
+                params: List[Any] = []
+                if domain and domain != "all":
+                    where_clauses.append("task_domain = ?")
+                    params.append(domain)
+                if memory_mode and memory_mode != "all":
+                    where_clauses.append("memory_mode = ?")
+                    params.append(memory_mode)
+                if session_id:
+                    where_clauses.append("session_id = ?")
+                    params.append(session_id)
+                if user_id:
+                    where_clauses.append("user_id = ?")
+                    params.append(user_id)
+                elif unauthenticated_only:
+                    where_clauses.append("(user_id IS NULL OR user_id = 'anonymous')")
+
+                base_count = "SELECT COUNT(*) FROM task_executions"
+                base_select = "SELECT payload_json FROM task_executions"
+                if where_clauses:
+                    filter_str = " WHERE " + " AND ".join(where_clauses)
+                    count_sql = base_count + filter_str
+                    select_sql = base_select + filter_str + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+                else:
+                    count_sql = base_count
+                    select_sql = base_select + " ORDER BY created_at DESC LIMIT ? OFFSET ?"
+
+                cursor.execute(count_sql, params)
+                total = cursor.fetchone()[0]
+                cursor.execute(select_sql, params + [limit, offset])
+                rows = cursor.fetchall()
+
+                from models.task import TaskExecution
+                items: List[Any] = []
+                for (payload_json,) in rows:
+                    try:
+                        items.append(TaskExecution.model_validate_json(payload_json))
+                    except Exception as exc:
+                        logger.warning(f"Could not deserialize execution row: {exc}")
+                return total, items
+        except Exception as exc:
+            logger.warning(f"SQLite list_executions failed: {exc}")
+            return await super().list_executions(domain, memory_mode, session_id, user_id, unauthenticated_only, limit, offset)
+
+    async def list_sessions(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                if user_id:
+                    cursor.execute(
+                        """
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND t1.user_id = ?
+                        GROUP BY t1.session_id
+                        ORDER BY last_active DESC
+                        LIMIT ?
+                        """,
+                        (user_id, limit),
+                    )
+                elif unauthenticated_only:
+                    cursor.execute(
+                        """
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND (t1.user_id IS NULL OR t1.user_id = 'anonymous')
+                        GROUP BY t1.session_id
+                        ORDER BY last_active DESC
+                        LIMIT ?
+                        """,
+                        (limit,),
+                    )
+                else:
+                    cursor.execute(
+                        """
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != ''
+                        GROUP BY t1.session_id
+                        ORDER BY last_active DESC
+                        LIMIT ?
+                        """,
+                        (limit,),
+                    )
+                rows = cursor.fetchall()
+                sessions = []
+                for row in rows:
+                    sessions.append({
+                        "sessionId": row[0],
+                        "title": (row[1] or "New Conversation")[:60],
+                        "lastActive": str(row[2]),
+                        "turnCount": row[3],
+                    })
+                return sessions
+        except Exception as exc:
+            logger.warning(f"SQLite list_sessions failed: {exc}")
+            return await super().list_sessions(user_id, unauthenticated_only, limit)
+
+    async def clear_executions(self) -> int:
+        await super().clear_executions()
+        try:
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("SELECT COUNT(*) FROM task_executions")
+                count = cursor.fetchone()[0]
+                cursor.execute("DELETE FROM task_executions")
+                conn.commit()
+                return count
+        except Exception as exc:
+            logger.warning(f"SQLite clear_executions failed: {exc}")
+            return 0
+
+    async def create_conversation(self, conv: Any) -> Any:
+        await super().create_conversation(conv)
+        try:
+            c_at = getattr(conv, "created_at", None)
+            c_str = c_at.isoformat() if hasattr(c_at, "isoformat") else (str(c_at) if c_at else datetime.now(timezone.utc).isoformat())
+            u_at = getattr(conv, "updated_at", None)
+            u_str = u_at.isoformat() if hasattr(u_at, "isoformat") else (str(u_at) if u_at else datetime.now(timezone.utc).isoformat())
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO conversations (
+                        id, user_id, title, is_pinned, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        getattr(conv, "id", ""),
+                        getattr(conv, "user_id", None),
+                        getattr(conv, "title", "New Conversation"),
+                        1 if getattr(conv, "is_pinned", False) else 0,
+                        c_str,
+                        u_str,
+                    ),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning(f"SQLite create_conversation failed: {exc}")
+            raise
+        return conv
+
+    async def get_conversation(self, conv_id: str, user_id: Optional[str] = None) -> Optional[Any]:
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT c.id, c.user_id, c.title, c.is_pinned, c.created_at, c.updated_at,
+                           (SELECT COUNT(*) FROM conversation_messages m WHERE m.conversation_id = c.id) as message_count
+                    FROM conversations c
+                    WHERE c.id = ?
+                    """,
+                    (conv_id,),
+                )
+                row = cursor.fetchone()
+                if not row:
+                    return None
+                conv_uid = row[1]
+                if user_id and conv_uid != user_id:
+                    return None
+                from models.conversation import Conversation
+                return Conversation(
+                    id=row[0],
+                    user_id=row[1],
+                    title=row[2],
+                    is_pinned=bool(row[3]),
+                    created_at=row[4],
+                    updated_at=row[5],
+                    message_count=row[6],
+                )
+        except Exception as exc:
+            logger.warning(f"SQLite get_conversation failed: {exc}")
+            return await super().get_conversation(conv_id, user_id=user_id)
+
+    async def list_conversations(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                where_clauses: List[str] = []
+                params: List[Any] = []
+                if user_id:
+                    where_clauses.append("c.user_id = ?")
+                    params.append(user_id)
+                elif unauthenticated_only:
+                    where_clauses.append("(c.user_id IS NULL OR c.user_id = 'anonymous')")
+
+                where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+                count_sql = f"SELECT COUNT(*) FROM conversations c {where_sql}"
+                cursor.execute(count_sql, params)
+                total = cursor.fetchone()[0]
+
+                select_sql = f"""
+                    SELECT c.id, c.user_id, c.title, c.is_pinned, c.created_at, c.updated_at,
+                           (SELECT COUNT(*) FROM conversation_messages m WHERE m.conversation_id = c.id) as message_count
+                    FROM conversations c
+                    {where_sql}
+                    ORDER BY c.is_pinned DESC, c.updated_at DESC
+                    LIMIT ? OFFSET ?
+                """
+                cursor.execute(select_sql, params + [limit, offset])
+                rows = cursor.fetchall()
+                from models.conversation import Conversation
+                items = [
+                    Conversation(
+                        id=r[0],
+                        user_id=r[1],
+                        title=r[2],
+                        is_pinned=bool(r[3]),
+                        created_at=r[4],
+                        updated_at=r[5],
+                        message_count=r[6],
+                    )
+                    for r in rows
+                ]
+                return total, items
+        except Exception as exc:
+            logger.warning(f"SQLite list_conversations failed: {exc}")
+            return await super().list_conversations(user_id, unauthenticated_only, limit, offset)
+
+    async def update_conversation(
+        self,
+        conv_id: str,
+        user_id: Optional[str] = None,
+        title: Optional[str] = None,
+        is_pinned: Optional[bool] = None,
+    ) -> Optional[Any]:
+        existing = await self.get_conversation(conv_id, user_id=user_id)
+        if not existing:
+            return None
+        await super().update_conversation(conv_id, user_id=user_id, title=title, is_pinned=is_pinned)
+        try:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            new_title = title if title is not None else existing.title
+            new_pinned = 1 if (is_pinned if is_pinned is not None else existing.is_pinned) else 0
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    UPDATE conversations
+                    SET title = ?, is_pinned = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (new_title, new_pinned, now_iso, conv_id),
+                )
+                conn.commit()
+            return await self.get_conversation(conv_id, user_id=user_id)
+        except Exception as exc:
+            logger.warning(f"SQLite update_conversation failed: {exc}")
+            raise
+
+    async def delete_conversation(self, conv_id: str, user_id: Optional[str] = None) -> bool:
+        existing = await self.get_conversation(conv_id, user_id=user_id)
+        if not existing:
+            return False
+        await super().delete_conversation(conv_id, user_id=user_id)
+        try:
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute("DELETE FROM conversation_messages WHERE conversation_id = ?", (conv_id,))
+                cursor.execute("DELETE FROM conversations WHERE id = ?", (conv_id,))
+                conn.commit()
+            return True
+        except Exception as exc:
+            logger.warning(f"SQLite delete_conversation failed: {exc}")
+            raise
+
+    async def add_conversation_message(self, msg: Any) -> Any:
+        await super().add_conversation_message(msg)
+        try:
+            c_at = getattr(msg, "created_at", None)
+            c_str = c_at.isoformat() if hasattr(c_at, "isoformat") else (str(c_at) if c_at else datetime.now(timezone.utc).isoformat())
+            cid = getattr(msg, "conversation_id", "")
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    INSERT INTO conversation_messages (
+                        id, conversation_id, user_id, role, content, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        getattr(msg, "id", ""),
+                        cid,
+                        getattr(msg, "user_id", None),
+                        getattr(msg, "role", "user"),
+                        getattr(msg, "content", ""),
+                        c_str,
+                    ),
+                )
+                cursor.execute(
+                    "UPDATE conversations SET updated_at = ? WHERE id = ?",
+                    (c_str, cid),
+                )
+                conn.commit()
+        except Exception as exc:
+            logger.warning(f"SQLite add_conversation_message failed: {exc}")
+            raise
+        return msg
+
+    async def get_conversation_messages(self, conv_id: str, user_id: Optional[str] = None) -> List[Any]:
+        existing = await self.get_conversation(conv_id, user_id=user_id)
+        if not existing:
+            return []
+        try:
+            with self._get_connection() as conn:
+                cursor = conn.cursor()
+                cursor.execute(
+                    """
+                    SELECT id, conversation_id, user_id, role, content, created_at
+                    FROM conversation_messages
+                    WHERE conversation_id = ?
+                    ORDER BY created_at ASC
+                    """,
+                    (conv_id,),
+                )
+                rows = cursor.fetchall()
+                from models.conversation import ConversationMessage
+                return [
+                    ConversationMessage(
+                        id=r[0],
+                        conversation_id=r[1],
+                        user_id=r[2],
+                        role=r[3],
+                        content=r[4],
+                        created_at=r[5],
+                    )
+                    for r in rows
+                ]
+        except Exception as exc:
+            logger.warning(f"SQLite get_conversation_messages failed: {exc}")
+            return await super().get_conversation_messages(conv_id, user_id=user_id)
+
+    async def clear_conversations(self, user_id: Optional[str] = None) -> int:
+        await super().clear_conversations(user_id=user_id)
+        try:
+            with self._get_write_connection() as conn:
+                cursor = conn.cursor()
+                if user_id:
+                    cursor.execute(
+                        """
+                        DELETE FROM conversation_messages
+                        WHERE user_id = ? OR conversation_id IN (SELECT id FROM conversations WHERE user_id = ?)
+                        """,
+                        (user_id, user_id),
+                    )
+                    cursor.execute("SELECT COUNT(*) FROM conversations WHERE user_id = ?", (user_id,))
+                    count = cursor.fetchone()[0]
+                    cursor.execute("DELETE FROM conversations WHERE user_id = ?", (user_id,))
+                else:
+                    cursor.execute("DELETE FROM conversation_messages")
+                    cursor.execute("SELECT COUNT(*) FROM conversations")
+                    count = cursor.fetchone()[0]
+                    cursor.execute("DELETE FROM conversations")
+                conn.commit()
+                return count
+        except Exception as exc:
+            logger.warning(f"SQLite clear_conversations failed: {exc}")
+            return 0
 
 
 class PostgresMemoryStore(BaseMemoryStore):
@@ -921,6 +1623,54 @@ class PostgresMemoryStore(BaseMemoryStore):
             # Idempotent migration for existing PostgreSQL databases
             await conn.execute("ALTER TABLE experiences ADD COLUMN IF NOT EXISTS probation_successes INTEGER NOT NULL DEFAULT 0;")
 
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS task_executions (
+                    id TEXT PRIMARY KEY,
+                    session_id TEXT,
+                    user_id TEXT,
+                    task_input TEXT NOT NULL,
+                    task_domain TEXT NOT NULL,
+                    memory_mode TEXT NOT NULL,
+                    memory_enabled INTEGER NOT NULL DEFAULT 1,
+                    status TEXT NOT NULL DEFAULT 'completed',
+                    outcome_score DOUBLE PRECISION,
+                    latency_ms INTEGER DEFAULT 0,
+                    tokens_used INTEGER DEFAULT 0,
+                    new_experience_created INTEGER DEFAULT 0,
+                    payload_json TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_task_exec_user ON task_executions(user_id);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_task_exec_session ON task_executions(session_id);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_task_exec_created ON task_executions(created_at DESC);")
+
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS conversations (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT,
+                    title TEXT NOT NULL DEFAULT 'New Conversation',
+                    is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_conv_user ON conversations(user_id);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_conv_pinned ON conversations(is_pinned, updated_at DESC);")
+
+            await conn.execute("""
+                CREATE TABLE IF NOT EXISTS conversation_messages (
+                    id TEXT PRIMARY KEY,
+                    conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+                    user_id TEXT,
+                    role TEXT NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+                );
+            """)
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_conv_msg_conv ON conversation_messages(conversation_id, created_at ASC);")
+            await conn.execute("CREATE INDEX IF NOT EXISTS idx_pg_conv_msg_user ON conversation_messages(user_id);")
+
             try:
                 await conn.execute("""
                     CREATE INDEX IF NOT EXISTS idx_pg_exp_embedding ON experiences
@@ -1046,6 +1796,451 @@ class PostgresMemoryStore(BaseMemoryStore):
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
+
+    async def save_execution(self, execution: Any) -> None:
+        """Persist a TaskExecution record into PostgreSQL."""
+        await super().save_execution(execution)
+        pool = await self._get_pool()
+        try:
+            payload = (
+                execution.model_dump_json(by_alias=True)
+                if hasattr(execution, "model_dump_json")
+                else json.dumps(execution)
+            )
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO task_executions (
+                        id, session_id, user_id, task_input, task_domain, memory_mode, memory_enabled,
+                        status, outcome_score, latency_ms, tokens_used,
+                        new_experience_created, payload_json, created_at
+                    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+                    ON CONFLICT (id) DO UPDATE SET
+                        session_id = EXCLUDED.session_id,
+                        user_id = EXCLUDED.user_id,
+                        task_input = EXCLUDED.task_input,
+                        task_domain = EXCLUDED.task_domain,
+                        memory_mode = EXCLUDED.memory_mode,
+                        memory_enabled = EXCLUDED.memory_enabled,
+                        status = EXCLUDED.status,
+                        outcome_score = EXCLUDED.outcome_score,
+                        latency_ms = EXCLUDED.latency_ms,
+                        tokens_used = EXCLUDED.tokens_used,
+                        new_experience_created = EXCLUDED.new_experience_created,
+                        payload_json = EXCLUDED.payload_json;
+                    """,
+                    getattr(execution, "id", None) or getattr(execution, "execution_id", ""),
+                    getattr(execution, "session_id", None),
+                    getattr(execution, "user_id", None),
+                    (getattr(execution, "task_input", "") or "")[:500],
+                    getattr(getattr(execution, "task_domain", None), "value", str(getattr(execution, "task_domain", ""))),
+                    getattr(getattr(execution, "memory_mode", None), "value", str(getattr(execution, "memory_mode", ""))),
+                    int(getattr(execution, "memory_enabled", True)),
+                    getattr(getattr(execution, "status", None), "value", str(getattr(execution, "status", "completed"))),
+                    getattr(execution, "outcome_score", None),
+                    getattr(execution, "latency_ms", 0),
+                    getattr(execution, "tokens_used", 0),
+                    int(getattr(execution, "new_experience_created", False)),
+                    payload,
+                )
+        except Exception as exc:
+            logger.warning(f"Could not persist execution {getattr(execution, 'id', '')} to PostgreSQL: {exc}")
+            raise
+
+    async def get_execution(self, execution_id: str) -> Optional[Any]:
+        """Fetch a specific execution trace by ID from PostgreSQL."""
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow("SELECT payload_json FROM task_executions WHERE id = $1", execution_id)
+                if row:
+                    from models.task import TaskExecution
+                    return TaskExecution.model_validate_json(row["payload_json"])
+        except Exception as exc:
+            logger.warning(f"PostgreSQL lookup failed for execution {execution_id}: {exc}")
+        return await super().get_execution(execution_id)
+
+    async def list_executions(
+        self,
+        domain: Optional[str] = None,
+        memory_mode: Optional[str] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                where_clauses: List[str] = []
+                params: List[Any] = []
+                idx = 1
+                if domain and domain != "all":
+                    where_clauses.append(f"task_domain = ${idx}")
+                    params.append(domain)
+                    idx += 1
+                if memory_mode and memory_mode != "all":
+                    where_clauses.append(f"memory_mode = ${idx}")
+                    params.append(memory_mode)
+                    idx += 1
+                if session_id:
+                    where_clauses.append(f"session_id = ${idx}")
+                    params.append(session_id)
+                    idx += 1
+                if user_id:
+                    where_clauses.append(f"user_id = ${idx}")
+                    params.append(user_id)
+                    idx += 1
+                elif unauthenticated_only:
+                    where_clauses.append("(user_id IS NULL OR user_id = 'anonymous')")
+
+                base_count = "SELECT COUNT(*) FROM task_executions"
+                base_select = "SELECT payload_json FROM task_executions"
+                if where_clauses:
+                    filter_str = " WHERE " + " AND ".join(where_clauses)
+                    count_sql = base_count + filter_str
+                    select_sql = base_select + filter_str + f" ORDER BY created_at DESC LIMIT ${idx} OFFSET ${idx + 1}"
+                else:
+                    count_sql = base_count
+                    select_sql = base_select + f" ORDER BY created_at DESC LIMIT ${idx} OFFSET ${idx + 1}"
+
+                total = await conn.fetchval(count_sql, *params) or 0
+                rows = await conn.fetch(select_sql, *params, limit, offset)
+
+                from models.task import TaskExecution
+                items: List[Any] = []
+                for r in rows:
+                    try:
+                        items.append(TaskExecution.model_validate_json(r["payload_json"]))
+                    except Exception as exc:
+                        logger.warning(f"Could not deserialize execution row: {exc}")
+                return total, items
+        except Exception as exc:
+            logger.warning(f"PostgreSQL list_executions failed: {exc}")
+            return await super().list_executions(domain, memory_mode, session_id, user_id, unauthenticated_only, limit, offset)
+
+    async def list_sessions(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                if user_id:
+                    rows = await conn.fetch(
+                        """
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND t1.user_id = $1
+                        GROUP BY t1.session_id
+                        ORDER BY last_active DESC
+                        LIMIT $2
+                        """,
+                        user_id,
+                        limit,
+                    )
+                elif unauthenticated_only:
+                    rows = await conn.fetch(
+                        """
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != '' AND (t1.user_id IS NULL OR t1.user_id = 'anonymous')
+                        GROUP BY t1.session_id
+                        ORDER BY last_active DESC
+                        LIMIT $1
+                        """,
+                        limit,
+                    )
+                else:
+                    rows = await conn.fetch(
+                        """
+                        SELECT t1.session_id,
+                               (SELECT t2.task_input FROM task_executions t2 WHERE t2.session_id = t1.session_id ORDER BY t2.created_at ASC LIMIT 1) as title,
+                               MAX(t1.created_at) as last_active,
+                               COUNT(*) as turn_count
+                        FROM task_executions t1
+                        WHERE t1.session_id IS NOT NULL AND t1.session_id != ''
+                        GROUP BY t1.session_id
+                        ORDER BY last_active DESC
+                        LIMIT $1
+                        """,
+                        limit,
+                    )
+                sessions = []
+                for r in rows:
+                    title_val = r["title"] if "title" in r else r.get("task_input", "New Conversation")
+                    sessions.append({
+                        "sessionId": r["session_id"],
+                        "title": (title_val or "New Conversation")[:60],
+                        "lastActive": str(r["last_active"]),
+                        "turnCount": r["turn_count"],
+                    })
+                return sessions
+        except Exception as exc:
+            logger.warning(f"PostgreSQL list_sessions failed: {exc}")
+            return await super().list_sessions(user_id, unauthenticated_only, limit)
+
+    async def clear_executions(self) -> int:
+        await super().clear_executions()
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                val = await conn.fetchval("SELECT COUNT(*) FROM task_executions")
+                await conn.execute("DELETE FROM task_executions")
+                return val or 0
+        except Exception as exc:
+            logger.warning(f"PostgreSQL clear_executions failed: {exc}")
+            return 0
+
+    async def create_conversation(self, conv: Any) -> Any:
+        await super().create_conversation(conv)
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                c_at = getattr(conv, "created_at", None) or datetime.now(timezone.utc)
+                u_at = getattr(conv, "updated_at", None) or datetime.now(timezone.utc)
+                await conn.execute(
+                    """
+                    INSERT INTO conversations (id, user_id, title, is_pinned, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    """,
+                    getattr(conv, "id", ""),
+                    getattr(conv, "user_id", None),
+                    getattr(conv, "title", "New Conversation"),
+                    bool(getattr(conv, "is_pinned", False)),
+                    c_at,
+                    u_at,
+                )
+        except Exception as exc:
+            logger.warning(f"PostgreSQL create_conversation failed: {exc}")
+            raise
+        return conv
+
+    async def get_conversation(self, conv_id: str, user_id: Optional[str] = None) -> Optional[Any]:
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                row = await conn.fetchrow(
+                    """
+                    SELECT c.id, c.user_id, c.title, c.is_pinned, c.created_at, c.updated_at,
+                           (SELECT COUNT(*) FROM conversation_messages m WHERE m.conversation_id = c.id) as message_count
+                    FROM conversations c
+                    WHERE c.id = $1
+                    """,
+                    conv_id,
+                )
+                if not row:
+                    return None
+                conv_uid = row["user_id"]
+                if user_id and conv_uid != user_id:
+                    return None
+                from models.conversation import Conversation
+                return Conversation(
+                    id=row["id"],
+                    user_id=row["user_id"],
+                    title=row["title"],
+                    is_pinned=bool(row["is_pinned"]),
+                    created_at=row["created_at"],
+                    updated_at=row["updated_at"],
+                    message_count=row["message_count"],
+                )
+        except Exception as exc:
+            logger.warning(f"PostgreSQL get_conversation failed: {exc}")
+            return await super().get_conversation(conv_id, user_id=user_id)
+
+    async def list_conversations(
+        self,
+        user_id: Optional[str] = None,
+        unauthenticated_only: bool = False,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> Tuple[int, List[Any]]:
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                where_clauses: List[str] = []
+                params: List[Any] = []
+                idx = 1
+                if user_id:
+                    where_clauses.append(f"c.user_id = ${idx}")
+                    params.append(user_id)
+                    idx += 1
+                elif unauthenticated_only:
+                    where_clauses.append("(c.user_id IS NULL OR c.user_id = 'anonymous')")
+
+                where_sql = (" WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+                count_sql = f"SELECT COUNT(*) FROM conversations c {where_sql}"
+                total = await conn.fetchval(count_sql, *params) or 0
+
+                select_sql = f"""
+                    SELECT c.id, c.user_id, c.title, c.is_pinned, c.created_at, c.updated_at,
+                           (SELECT COUNT(*) FROM conversation_messages m WHERE m.conversation_id = c.id) as message_count
+                    FROM conversations c
+                    {where_sql}
+                    ORDER BY c.is_pinned DESC, c.updated_at DESC
+                    LIMIT ${idx} OFFSET ${idx + 1}
+                """
+                rows = await conn.fetch(select_sql, *params, limit, offset)
+                from models.conversation import Conversation
+                items = [
+                    Conversation(
+                        id=r["id"],
+                        user_id=r["user_id"],
+                        title=r["title"],
+                        is_pinned=bool(r["is_pinned"]),
+                        created_at=r["created_at"],
+                        updated_at=r["updated_at"],
+                        message_count=r["message_count"],
+                    )
+                    for r in rows
+                ]
+                return total, items
+        except Exception as exc:
+            logger.warning(f"PostgreSQL list_conversations failed: {exc}")
+            return await super().list_conversations(user_id, unauthenticated_only, limit, offset)
+
+    async def update_conversation(
+        self,
+        conv_id: str,
+        user_id: Optional[str] = None,
+        title: Optional[str] = None,
+        is_pinned: Optional[bool] = None,
+    ) -> Optional[Any]:
+        existing = await self.get_conversation(conv_id, user_id=user_id)
+        if not existing:
+            return None
+        await super().update_conversation(conv_id, user_id=user_id, title=title, is_pinned=is_pinned)
+        pool = await self._get_pool()
+        try:
+            now_dt = datetime.now(timezone.utc)
+            new_title = title if title is not None else existing.title
+            new_pinned = is_pinned if is_pinned is not None else existing.is_pinned
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    UPDATE conversations
+                    SET title = $1, is_pinned = $2, updated_at = $3
+                    WHERE id = $4
+                    """,
+                    new_title,
+                    new_pinned,
+                    now_dt,
+                    conv_id,
+                )
+            return await self.get_conversation(conv_id, user_id=user_id)
+        except Exception as exc:
+            logger.warning(f"PostgreSQL update_conversation failed: {exc}")
+            raise
+
+    async def delete_conversation(self, conv_id: str, user_id: Optional[str] = None) -> bool:
+        existing = await self.get_conversation(conv_id, user_id=user_id)
+        if not existing:
+            return False
+        await super().delete_conversation(conv_id, user_id=user_id)
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                await conn.execute("DELETE FROM conversation_messages WHERE conversation_id = $1", conv_id)
+                res = await conn.execute("DELETE FROM conversations WHERE id = $1", conv_id)
+                return not res.endswith(" 0")
+        except Exception as exc:
+            logger.warning(f"PostgreSQL delete_conversation failed: {exc}")
+            raise
+
+    async def add_conversation_message(self, msg: Any) -> Any:
+        await super().add_conversation_message(msg)
+        pool = await self._get_pool()
+        try:
+            c_at = getattr(msg, "created_at", None) or datetime.now(timezone.utc)
+            cid = getattr(msg, "conversation_id", "")
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO conversation_messages (id, conversation_id, user_id, role, content, created_at)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    """,
+                    getattr(msg, "id", ""),
+                    cid,
+                    getattr(msg, "user_id", None),
+                    getattr(msg, "role", "user"),
+                    getattr(msg, "content", ""),
+                    c_at,
+                )
+                await conn.execute(
+                    "UPDATE conversations SET updated_at = $1 WHERE id = $2",
+                    c_at,
+                    cid,
+                )
+        except Exception as exc:
+            logger.warning(f"PostgreSQL add_conversation_message failed: {exc}")
+            raise
+        return msg
+
+    async def get_conversation_messages(self, conv_id: str, user_id: Optional[str] = None) -> List[Any]:
+        existing = await self.get_conversation(conv_id, user_id=user_id)
+        if not existing:
+            return []
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                rows = await conn.fetch(
+                    """
+                    SELECT id, conversation_id, user_id, role, content, created_at
+                    FROM conversation_messages
+                    WHERE conversation_id = $1
+                    ORDER BY created_at ASC
+                    """,
+                    conv_id,
+                )
+                from models.conversation import ConversationMessage
+                return [
+                    ConversationMessage(
+                        id=r["id"],
+                        conversation_id=r["conversation_id"],
+                        user_id=r["user_id"],
+                        role=r["role"],
+                        content=r["content"],
+                        created_at=r["created_at"],
+                    )
+                    for r in rows
+                ]
+        except Exception as exc:
+            logger.warning(f"PostgreSQL get_conversation_messages failed: {exc}")
+            return await super().get_conversation_messages(conv_id, user_id=user_id)
+
+    async def clear_conversations(self, user_id: Optional[str] = None) -> int:
+        await super().clear_conversations(user_id=user_id)
+        pool = await self._get_pool()
+        try:
+            async with pool.acquire() as conn:
+                if user_id:
+                    await conn.execute(
+                        """
+                        DELETE FROM conversation_messages
+                        WHERE user_id = $1 OR conversation_id IN (SELECT id FROM conversations WHERE user_id = $1)
+                        """,
+                        user_id,
+                    )
+                    count = await conn.fetchval("SELECT COUNT(*) FROM conversations WHERE user_id = $1", user_id)
+                    await conn.execute("DELETE FROM conversations WHERE user_id = $1", user_id)
+                    return count or 0
+                else:
+                    await conn.execute("DELETE FROM conversation_messages")
+                    count = await conn.fetchval("SELECT COUNT(*) FROM conversations")
+                    await conn.execute("DELETE FROM conversations")
+                    return count or 0
+        except Exception as exc:
+            logger.warning(f"PostgreSQL clear_conversations failed: {exc}")
+            return 0
 
     async def add_experience(self, exp: Experience) -> str:
         if exp.embedding is None:
@@ -1411,6 +2606,7 @@ class PostgresMemoryStore(BaseMemoryStore):
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Experience]:
         pool = await self._get_pool()
         query = "SELECT * FROM experiences WHERE 1=1"
@@ -1430,7 +2626,10 @@ class PostgresMemoryStore(BaseMemoryStore):
             params.append(min_trust)
             param_idx += 1
         if user_id is not None:
-            query += f" AND user_id = ${param_idx}"
+            if exact_user_match:
+                query += f" AND user_id = ${param_idx}"
+            else:
+                query += f" AND (user_id = ${param_idx} OR user_id IS NULL)"
             params.append(user_id)
             param_idx += 1
 
@@ -1468,7 +2667,7 @@ class PostgresMemoryStore(BaseMemoryStore):
                 FROM experiences
                 WHERE status = 'active'
                   AND ($2::text IS NULL OR task_domain = $2)
-                  AND ($4::text IS NULL OR user_id = $4)
+                  AND ($4::text IS NULL OR user_id = $4 OR user_id IS NULL)
                   AND embedding IS NOT NULL
                 ORDER BY similarity DESC
                 LIMIT $3;
@@ -1662,6 +2861,7 @@ class SupabaseMemoryStore(BaseMemoryStore):
         status: Optional[ExperienceStatus] = None,
         min_trust: Optional[float] = None,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Experience]:
         params = ["select=*"]
         if domain:
@@ -1671,7 +2871,10 @@ class SupabaseMemoryStore(BaseMemoryStore):
         if min_trust is not None:
             params.append(f"trust_score=gte.{min_trust}")
         if user_id is not None:
-            params.append(f"user_id=eq.{user_id}")
+            if exact_user_match:
+                params.append(f"user_id=eq.{user_id}")
+            else:
+                params.append(f"or=(user_id.eq.{user_id},user_id.is.null)")
         params.append("order=trust_score.desc,updated_at.desc")
 
         url = f"/rest/v1/experiences?{'&'.join(params)}"
@@ -1703,7 +2906,7 @@ class SupabaseMemoryStore(BaseMemoryStore):
                     results = []
                     for r in rows:
                         exp = self._dict_to_experience(r)
-                        if user_id is not None and exp.user_id != user_id:
+                        if user_id is not None and exp.user_id != user_id and exp.user_id is not None:
                             continue
                         sim = float(r.get("similarity", 0.0))
                         results.append((exp, sim))

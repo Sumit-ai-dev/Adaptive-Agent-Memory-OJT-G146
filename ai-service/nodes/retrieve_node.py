@@ -1,6 +1,6 @@
 """
 LangGraph Node 1: Memory Retrieval Engine (retrieve_node.py)
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 
 Implements composite memory ranking:
     CompositeScore = 0.70 * Similarity + 0.30 * TrustScore
@@ -172,6 +172,7 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
             from models.domain import MemoryMode
             mode = MemoryMode(mode_str)
             custom_store = state.get("memory_store")
+            user_id = state.get("user_id")
             active_retriever = MemoryRetriever(store=custom_store) if custom_store else memory_retriever
             if hasattr(active_retriever, "retrieve_with_diagnostics"):
                 retrieved_models, retrieval_diagnostics = await active_retriever.retrieve_with_diagnostics(
@@ -179,6 +180,7 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
                     domain=domain,
                     mode=mode,
                     top_k=2,
+                    user_id=user_id,
                 )
             else:
                 retrieved_models = await active_retriever.retrieve(
@@ -186,6 +188,7 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
                     domain=domain,
                     mode=mode,
                     top_k=2,
+                    user_id=user_id,
                 )
             for m in retrieved_models:
                 exp_dict = m.experience.model_dump(by_alias=True)

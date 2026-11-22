@@ -35,10 +35,10 @@ The AEMA platform supports an agile deployment continuum spanning local workstat
         | HTTP (JSON / SSE)
         v
 +--------------------------------------------------------------+
-| Frontend Layer (Port 5173)                                   |
-| - React 18 + TypeScript + Vite Single Page Application      |
-| - Tailwind CSS & Three.js 3D Neural Memory Visualizer        |
-| - Mock Fallback Provider for zero-dependency offline mode   |
+| Client & Extension Layer                                     |
+| - React 18 + TypeScript + Vite Dashboard (Port 5173)         |
+| - Chrome Extension Manifest V3 (Context Clipper & Studio)    |
+| - Dual-Transport MCP Server (Port 3001: SSE & Stdio)         |
 +--------------------------------------------------------------+
         |
         | HTTP REST / Bearer JWT (CORS enabled)

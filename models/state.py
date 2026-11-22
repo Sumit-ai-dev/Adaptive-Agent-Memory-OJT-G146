@@ -23,6 +23,7 @@ class AgentState(TypedDict, total=False):
     provider: Optional[str]
     model: Optional[str]
     api_key: Optional[str]
+    token_queue: Optional[Any]     # Real-time SSE token stream queue
     temperature: Optional[float]   # S8: effective sampling temperature
     seed: Optional[int]            # S9: only set for seed-capable providers
     max_tokens: Optional[int]      # S12: None => provider default

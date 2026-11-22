@@ -111,6 +111,36 @@ Executes a task through the 5-node LangGraph orchestration loop (`retrieve_node`
 }
 ```
 
+### POST /agent/execute/stream
+Executes a task through the 5-node LangGraph orchestration loop with real-time Server-Sent Events (SSE) streaming. Emits node lifecycle transitions (`node_complete`), token generation deltas (`token`), and the terminal execution record (`done`).
+
+**Request Body:** Same schema as `POST /agent/execute`. Requires header `Accept: text/event-stream`.
+
+**SSE Stream Response (`text/event-stream`):**
+```http
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Cache-Control: no-cache
+
+event: start
+data: {"execution_id":"exec_8f12a9c4","task_id":"task_3d78e2b1","session_id":"session_8f12a9c4"}
+
+event: node_complete
+data: {"node":"retrieve_node","retrieved_count":1}
+
+event: token
+data: {"chunk":"Direct air capture "}
+
+event: token
+data: {"chunk":"technologies utilize..."}
+
+event: node_complete
+data: {"node":"evaluate_node","outcome":"success","outcome_score":0.88}
+
+event: done
+data: {"result":{"execution_id":"exec_8f12a9c4","final_answer":"Synthesis of empirical literature...","status":"success"}}
+```
+
 ### GET /agent/sessions
 Lists unique recent multi-turn conversation sessions persisted in storage.
 

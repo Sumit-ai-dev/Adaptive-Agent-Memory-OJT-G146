@@ -14,6 +14,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from backend.routes.agent import router as agent_router, shared_store
+from backend.routes.conversations import router as conversations_router
 from backend.routes.memories import router as memories_router
 from backend.routes.telemetry import router as telemetry_router
 from ai_service.config import settings
@@ -74,6 +75,9 @@ app.include_router(agent_router, prefix="/api/v1")
 
 app.include_router(memories_router, prefix="/api")
 app.include_router(memories_router, prefix="/api/v1")
+
+app.include_router(conversations_router, prefix="/api")
+app.include_router(conversations_router, prefix="/api/v1")
 
 app.include_router(telemetry_router, prefix="/api")
 app.include_router(telemetry_router, prefix="/api/v1")

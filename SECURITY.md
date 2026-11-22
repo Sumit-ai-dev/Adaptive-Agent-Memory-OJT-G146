@@ -24,7 +24,7 @@ Please report security issues confidentially using GitHub's Private Vulnerabilit
 ### 2. Alternative Method: Security Contact Email
 If you cannot use GitHub Security Advisories, send an encrypted or direct email to the core maintainers:
 - **Primary Contact**: Sumit Das (`sumitds2005@gmail.com`)
-- **Secondary Contact**: Kasat Sakshi Dattaprasad (`sakshisamu18@gmail.com`)
+- **Secondary Contact**: Sakshi Kasat (`sakshisamu18@gmail.com`)
 - **Subject Line**: `[SECURITY VULNERABILITY] AEMA - <Brief Description>`
 
 > [!IMPORTANT]

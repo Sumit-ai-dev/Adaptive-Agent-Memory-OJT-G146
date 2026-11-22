@@ -1,6 +1,6 @@
 """
 API Integration tests for Memory Subsystem and Telemetry Endpoints.
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Backend Gateway Lead)
+Author: Sakshi Kasat (Memory Intelligence & Backend Gateway Lead)
 """
 
 import os

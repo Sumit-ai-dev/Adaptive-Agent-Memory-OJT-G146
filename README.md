@@ -17,7 +17,7 @@
 
 
 **GenAI OJT Capstone Project: Group G146**  
-**Authors:** Kasat Sakshi Dattaprasad & Sumit Das  
+**Authors:** Sakshi Kasat & Sumit Das  
 
 ---
 
@@ -130,23 +130,31 @@ Persistence Layer ------> Saves to pgvector HNSW index & appends to trust_histor
 - Real-time node coloring by trust state: **Emerald** ($S \ge 0.70$), **Amber** ($0.35 \le S < 0.70$), **Crimson** ($S < 0.35$).
 - Interactive force layout clustering memories by domain (`research`, `coding`, `reasoning`, `general`).
 
-### 2. Multi-Turn Execution Studio & Conversation Drawer
-- Context-aware conversation threads with instant session resume.
+### 2. Conversational Execution Studio & Multi-Chat Drawer
+- Context-aware conversation threads with instant session resume, thread rename, and deletion capabilities.
 - Collapsible sidebar drawer listing past sessions with turn counts and relative timestamps.
-- Zero-leakage session isolation verified by automated integration tests.
+- Live cognitive stepper console displaying real-time 5-node transition events and token streaming.
 
 ### 3. Universal BYOK Model Gateway
-- Ephemeral session-scoped key forwarding via LiteLLM.
+- Ephemeral session-scoped key forwarding via LiteLLM adapter.
 - Multi-provider support: Groq Cloud (Llama-3.3-70B), Google Gemini 2.0 Flash, and local Ollama CPU models.
-- Zero-retention security policy: credentials are never logged or persisted to database tables.
+- Zero-retention security policy: credentials are held strictly in memory and never persisted to disk or database tables.
 
-### 4. Zero-GPU Local Embedding Engine
+### 4. Dual-Transport Model Context Protocol (MCP) Server
+- Production MCP server in `scripts/mcp_server.py` supporting both standard Stdio and HTTP Server-Sent Events (SSE on Port 3001).
+- Exposes 5 standard tools (`query_experience`, `record_experience`, `update_trust`, `get_system_status`, `simulate_execution`) for Claude Desktop, Cursor, and IDE companions.
+
+### 5. Manifest V3 Chrome Extension Companion
+- Dedicated browser companion extension in `extension/` built with Chrome Manifest V3 standards.
+- Background service worker, right-click context menu text clipper for quick lesson capture, and obsidian cognitive studio popup.
+
+### 6. Zero-GPU Local Embedding Engine
 - Local HuggingFace `sentence-transformers/all-MiniLM-L6-v2` generating 384-dimensional embeddings on CPU in $<15\text{ ms}$.
 - Deterministic hash embedder fallback ensuring 100% test passage in lightweight or PyTorch-free environments.
 
-### 5. Dual Persistence Engine
+### 7. Dual Persistence Engine
 - Production: Supabase PostgreSQL 15 with `pgvector` HNSW cosine indexing and RPC stored procedures.
-- Local / Test: SQLite3 with in-memory vector cosine similarity engine.
+- Local / Test: SQLite3 with Write-Ahead Logging (WAL) and in-memory vector cosine similarity engine.
 
 ---
 
@@ -314,6 +322,15 @@ pip install aema
 npm install @sumitaidev/aema
 ```
 
+```typescript
+// TypeScript Real-Time Streaming
+import { AEMAClient } from "@sumitaidev/aema";
+const client = new AEMAClient({ baseUrl: "http://localhost:8000" });
+for await (const chunk of client.executeStream({ task_input: "Analyze query", task_domain: "research" })) {
+  console.log(chunk.type, chunk.data);
+}
+```
+
 ---
 
 ### Method A: One-Command Unified Launcher (Recommended)
@@ -331,10 +348,13 @@ chmod +x run_demo.sh
 ```
 
 Once running:
-- **Frontend Dashboard:** [http://localhost:5173/dashboard?demo=true](http://localhost:5173/dashboard?demo=true)
+- **Landing Page:** [http://localhost:5173](http://localhost:5173)
+- **Conversational Execution Studio:** [http://localhost:5173/studio](http://localhost:5173/studio)
+- **3D Memory Core Dashboard:** [http://localhost:5173/dashboard?demo=true](http://localhost:5173/dashboard?demo=true)
+- **Dual MCP Server:** [http://localhost:3001/sse](http://localhost:3001/sse)
 - **FastAPI Interactive Docs:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **Health Check Endpoint:** [http://localhost:8000/api/health](http://localhost:8000/api/health)
-- **Shutdown:** Press `Ctrl+C` to terminate both services cleanly.
+- **Shutdown:** Press `Ctrl+C` to terminate all services cleanly.
 
 ---
 
@@ -457,10 +477,12 @@ Complete production-grade architectural and engineering documentation is maintai
 | [15-deployment.md](docs/15-deployment.md) | Deployment Architecture | Multi-environment topology, runner script, and zero-GPU strategy. |
 | [16-cost-analysis.md](docs/16-cost-analysis.md) | Cost Analysis | Node token consumption, economic ROI (61.4% savings), and storage. |
 | [17-roadmap.md](docs/17-roadmap.md) | 12-Week Roadmap | Milestone delivery logs, Definition of Done, and risk mitigations. |
-| [18-team-responsibilities.md](docs/18-team-responsibilities.md) | Team Responsibilities | Engineering division between Kasat Sakshi Dattaprasad and Sumit Das. |
+| [18-team-responsibilities.md](docs/18-team-responsibilities.md) | Team Responsibilities | Engineering division between Sakshi Kasat and Sumit Das. |
 | [19-readme.md](docs/19-readme.md) | Documentation Guide | Master catalog and codebase structural roadmap. |
 | [20-adrs.md](docs/20-adrs.md) | Architecture Decision Records | Formal ADRs detailing choices, alternatives, and trade-offs. |
 | [21-traceability.md](docs/21-traceability.md) | Traceability Matrix | End-to-end mapping from business requirements to test cases. |
+| [22-project-score.md](docs/22-project-score.md) | Project Scorecard & Benchmark | Rubric evaluation, 4-condition empirical matrix (91.0% pass rate), and viva defense readiness. |
+| [DOCKER_GUIDE.md](docs/DOCKER_GUIDE.md) | Docker Deployment Guide | Multi-container Docker Compose topologies, configuration, and production deployment. |
 
 ---
 
@@ -468,8 +490,8 @@ Complete production-grade architectural and engineering documentation is maintai
 
 **GenAI / Agentic AI OJT Capstone: Group G146**
 
-- **Kasat Sakshi Dattaprasad** ([@SakshiKasat18](https://github.com/SakshiKasat18)): Memory Intelligence, Asymmetric EMA Trust Engine, Vector Persistence Layer, Full-Stack Gateway Integration, System Governance & Documentation.
-- **Sumit Das** ([@Sumit-ai-dev](https://github.com/Sumit-ai-dev)): Agent Orchestration, Cognitive Loop Execution, Universal BYOK Model Gateway, Deterministic Outcome Evaluator, Benchmark Suite.
+- **Sakshi Kasat** ([@SakshiKasat18](https://github.com/SakshiKasat18)): Memory Intelligence, A-EMA Trust Engine, Backend Gateway & MCP Server, Documentation Architecture.
+- **Sumit Das** ([@Sumit-ai-dev](https://github.com/Sumit-ai-dev)): Agent Cognitive Loop, Universal BYOK Gateway, React 18 & Three.js Studio, Streaming SDKs & Benchmarks.
 
 ---
 

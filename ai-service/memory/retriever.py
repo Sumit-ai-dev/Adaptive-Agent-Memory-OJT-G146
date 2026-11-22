@@ -35,6 +35,7 @@ class MemoryRetriever:
         domain: TaskDomain = TaskDomain.GENERAL,
         mode: MemoryMode = MemoryMode.ADAPTIVE,
         top_k: int = 3,
+        user_id: Optional[str] = None,
     ) -> Tuple[List[RetrievedMemory], Dict[str, Any]]:
         """
         Executes constrained retrieval based on the operational memory mode and returns
@@ -55,8 +56,27 @@ class MemoryRetriever:
         # Embed query text
         query_vec = local_embedder.embed_text(query)
 
-        # Retrieve top candidates by raw cosine similarity
-        raw_matches = await self.store.search_similar(query_vec, domain=domain, top_k=top_k * 3)
+        # Retrieve top candidates by raw cosine similarity while strictly enforcing tenant scoping
+        import inspect
+        store_params = inspect.signature(self.store.search_similar).parameters
+        accepts_user_id = "user_id" in store_params or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in store_params.values()
+        )
+
+        if accepts_user_id:
+            raw_matches = await self.store.search_similar(
+                query_vec, domain=domain, top_k=top_k * 3, user_id=user_id
+            )
+        else:
+            # Legacy store adapter without native user_id parameter in signature.
+            # Perform search and strictly filter in-memory to prevent tenant data leakage.
+            raw_matches = await self.store.search_similar(query_vec, domain=domain, top_k=top_k * 3)
+            if user_id is not None:
+                raw_matches = [
+                    (exp, sim)
+                    for exp, sim in raw_matches
+                    if getattr(exp, "user_id", None) == user_id or getattr(exp, "user_id", None) is None
+                ]
         if not raw_matches:
             return [], diagnostics
 
@@ -87,12 +107,11 @@ class MemoryRetriever:
                 else:
                     gate_reasons[exp.id] = f"similarity below naive cutoff ({sim:.3f})"
 
-            # Condition 3: Recency-Based Retrieval (Heuristic exponential time decay, no trust, no quarantine)
+            # Condition 3: Recency-Based Retrieval (similarity + recency decay, no trust filtering)
             elif mode == MemoryMode.RECENCY:
                 now_utc = datetime.now(timezone.utc)
-                exp_ts = exp.updated_at if exp.updated_at.tzinfo else exp.updated_at.replace(tzinfo=timezone.utc)
+                exp_ts = exp.updated_at if getattr(exp, "updated_at", None) and exp.updated_at.tzinfo else (exp.updated_at.replace(tzinfo=timezone.utc) if getattr(exp, "updated_at", None) else now_utc)
                 age_hours = max(0.0, (now_utc - exp_ts).total_seconds() / 3600.0)
-                # Exponential decay with half-life of 24h (gamma = 0.0288 / hr)
                 decay = math.exp(-0.0288 * age_hours)
                 composite = round(sim * max(0.10, decay), 4)
                 results.append(
@@ -105,6 +124,14 @@ class MemoryRetriever:
 
             # Condition 4: Trust Scoring without Quarantine (Continuous trust, zero quarantine cutoff)
             elif mode in (MemoryMode.TRUST_NO_QUARANTINE, MemoryMode.SYMMETRIC):
+                composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * trust)
+                results.append(
+                    RetrievedMemory(
+                        experience=exp,
+                        similarity=sim,
+                        composite_score=round(composite, 4),
+                    )
+                )
                 composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * trust)
                 results.append(
                     RetrievedMemory(
@@ -170,13 +197,14 @@ class MemoryRetriever:
         domain: TaskDomain = TaskDomain.GENERAL,
         mode: MemoryMode = MemoryMode.ADAPTIVE,
         top_k: int = 3,
+        user_id: Optional[str] = None,
     ) -> List[RetrievedMemory]:
         """
         Executes constrained retrieval based on the operational memory mode.
         Backwards-compatible wrapper returning List[RetrievedMemory].
         """
         results, _ = await self.retrieve_with_diagnostics(
-            query=query, domain=domain, mode=mode, top_k=top_k
+            query=query, domain=domain, mode=mode, top_k=top_k, user_id=user_id
         )
         return results
 

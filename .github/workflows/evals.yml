@@ -46,7 +46,7 @@ jobs:
 
       - name: Install Core Dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip==24.3.1
           # Exclude heavy sentence-transformers / PyTorch dependencies in CI
           grep -v 'sentence-transformers' backend/requirements.txt > /tmp/req_core.txt
           pip install -r /tmp/req_core.txt

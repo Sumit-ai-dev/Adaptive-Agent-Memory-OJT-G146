@@ -79,6 +79,7 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
         # Parse JSON
         parsed = json.loads(raw_json)
         candidate_exp = {
+            "user_id": state.get("user_id"),
             "task_domain": domain,
             "trigger_condition": parsed.get("trigger_condition", f"Tasks similar to: {task_input[:50]}"),
             "strategy_lesson": parsed.get("strategy_lesson", "Follow verified step-by-step reasoning constraints."),
@@ -89,6 +90,7 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
     except Exception:
         has_provider_error = True
         candidate_exp = {
+            "user_id": state.get("user_id"),
             "task_domain": domain,
             "trigger_condition": f"Tasks involving: {task_input[:50]}",
             "strategy_lesson": "Verify domain constraints and validate output syntax against expectations.",

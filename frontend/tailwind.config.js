@@ -9,65 +9,45 @@ export default {
     extend: {
       fontFamily: {
         sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'Consolas', 'monospace'],
+        serif: ['Newsreader', 'Georgia', 'serif'],
+        mono: ['Geist Mono', 'JetBrains Mono', 'Fira Code', 'Menlo', 'Monaco', 'monospace'],
       },
       colors: {
-        // Semantic Token Mapping
+        // Spring Winter Editorial Theme
         canvas: {
-          light: '#FBFBFA',
-          dark: '#0C0E14',
+          DEFAULT: '#FAFAF7',
+          light: '#FAFAF7',
+          dark: '#141412',
         },
-        surface: {
-          light: '#FFFFFF',
-          dark: '#131722',
+        obsidian: {
+          DEFAULT: '#141412',
+          surface: '#161614',
+          elevated: '#1E1E1B',
+          border: '#242422',
+          subtle: '#2A2A26',
+          text: '#EDECE8',
+          muted: '#7E7D77',
         },
-        subtle: {
-          light: '#F4F4F0',
-          dark: '#1A1F2C',
+        linen: {
+          canvas: '#FAFAF7',
+          surface: '#FFFFFF',
+          subtle: '#F7F6F2',
+          border: '#EAE8E3',
+          ink: '#141413',
+          muted: '#6B6A65',
         },
-        border: {
-          light: '#E6E6E1',
-          dark: '#252B3B',
-        },
-        ink: {
-          light: '#18181B',
-          dark: '#F4F4F6',
-        },
-        muted: {
-          light: '#71717A',
-          dark: '#94A3B8',
-        },
-        // Brand & Accents (Restrained Indigo)
         brand: {
-          50: '#EEF2FF',
-          100: '#E0E7FF',
-          200: '#C7D2FE',
-          300: '#A5B4FC',
-          400: '#818CF8',
-          500: '#6366F1',
-          600: '#4F46E5',
-          700: '#4338CA',
-          800: '#3730A3',
-          900: '#312E81',
+          50: '#FBF8F2',
+          100: '#F5EFE1',
+          200: '#EADEC3',
+          500: '#141413',
+          600: '#1F1F1D',
+          700: '#141412',
         },
-        // Semantic States (Emerald, Amber, Crimson)
-        success: {
-          DEFAULT: '#059669',
-          dark: '#10B981',
-          light: '#ECFDF5',
-          border: '#A7F3D0',
-        },
-        warning: {
-          DEFAULT: '#D97706',
-          dark: '#F59E0B',
-          light: '#FFFBEB',
-          border: '#FDE68A',
-        },
-        danger: {
-          DEFAULT: '#DC2626',
-          dark: '#F43F5E',
-          light: '#FEF2F2',
-          border: '#FECACA',
+        accent: {
+          amber: '#E67E22',
+          emerald: '#4EAA79',
+          crimson: '#D9534F',
         },
       },
     },

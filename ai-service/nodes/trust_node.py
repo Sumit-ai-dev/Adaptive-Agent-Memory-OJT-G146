@@ -1,6 +1,6 @@
 """
 LangGraph Node 5: Trust Lifecycle Engine (trust_node.py)
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Trust Lead)
+Author: Sakshi Kasat (Memory Intelligence & Trust Lead)
 
 Implements Asymmetric Exponential Moving Average (A-EMA):
     - Success (R >= 0.80): S_{t+1} = 0.85 * S_t + 0.15 * 1.0 (Steady climb)
@@ -241,6 +241,7 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
         initial_status = ExperienceStatus.ACTIVE if outcome_score >= 0.80 else ExperienceStatus.CANDIDATE
 
         new_exp_obj = Experience(
+            user_id=candidate_exp.get("user_id") or state.get("user_id"),
             task_domain=task_domain_enum,
             trigger_condition=candidate_exp.get("trigger_condition", ""),
             strategy_lesson=candidate_exp.get("strategy_lesson", ""),

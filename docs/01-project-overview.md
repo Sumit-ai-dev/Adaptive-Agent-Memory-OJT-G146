@@ -4,7 +4,7 @@
 - **Track:** Generative AI / Agentic AI
 - **Domain:** General-Purpose Agentic AI / AI Memory Systems
 - **Duration:** 12 weeks
-- **Team:** 2 students (Kasat Sakshi Dattaprasad, Sumit Das - Group G146)
+- **Team:** 2 students (Sakshi Kasat, Sumit Das - Group G146)
 - **Skill level:** Intermediate
 - **Primary users:** Knowledge workers, researchers, AI developers, and evaluators
 - **Constraint:** Fixed/unmodified LLM (no model fine-tuning or retraining; adaptation driven solely by external memory)
@@ -30,11 +30,9 @@ User task submission → experience retrieval & ranking → memory-augmented age
 10. Central agent dashboard for task execution, experience inspection, and trust visualization.
 
 ## Out of Scope for MVP
-- Fine-tuning, retraining, or modifying the underlying LLM.
-- Storing uncurated raw conversation history or chat transcripts as memory.
-- Multi-LLM provider support.
-- Generalized external SDK / distribution package.
-- Complex multi-agent swarms or unnecessary multi-agent architectures.
-- Multi-user production SaaS infrastructure.
-- Broad autonomous browser automation.
-- Specialized coding-agent fine-tuning.
+- Fine-tuning, retraining, or modifying the underlying LLM weights (remains strictly out of scope: all adaptation is external).
+- Storing uncurated raw conversation history or unverified chat transcripts as memory.
+- Heavyweight multi-agent swarms (unnecessary swarm overhead avoided in favor of the focused 5-node cognitive cycle).
+- In-model parameter updates or specialized base-model fine-tuning.
+- Broad unrestricted browser automation (agent utilizes a focused Manifest V3 Chrome Extension companion for text clipping and execution instead of full web scraping bots).
+- Unbounded billing infrastructure (project adheres strictly to zero-cost development and self-hosted deployment).

@@ -10,8 +10,10 @@
 
 - **Client / Access Layer:**
   - **Central Dashboard:** React, Vite, TypeScript, Tailwind CSS, Three.js
-  - **Browser Extension:** TypeScript, Chrome Extension Manifest V3 (planned client companion)
-- **Backend / API Layer:** Python, FastAPI, Pydantic v2, Uvicorn
+  - **Browser Extension:** TypeScript, Chrome Extension Manifest V3 (context menu clipper & popup studio)
+  - **MCP Server Layer:** Dual-Transport Stdio & HTTP SSE Model Context Protocol server (Port 3001) for Cursor and Claude Desktop
+  - **Client SDKs:** Portable TypeScript SDK (`@sumitaidev/aema`) & Python SDK (`aema`) with streaming parity
+- **Backend / API Layer:** Python, FastAPI, Pydantic v2, Uvicorn (REST & SSE streaming)
 - **Agent Orchestration Layer:** LangGraph StateGraph (5-node execution loop: `retrieve_node` → `execute_node` → `evaluate_node` → `reflect_node` → `trust_node`)
 - **Model Gateway & Providers:** LiteLLM gateway abstraction (Groq, local Ollama)
 - **Vector Embeddings:** Local HuggingFace embedding models (`bge-small-en-v1.5` or `all-MiniLM-L6-v2`)
@@ -45,7 +47,7 @@ Dashboard (React + Vite) ────────┐
             ↑                    ↑
             │                    │
   HuggingFace Embeds    Browser Extension (MV3)
-  (bge-small/MiniLM)    (Planned Client)
+  (bge-small/MiniLM)    (Implemented Client)
 ```
 
 ---
@@ -114,7 +116,7 @@ Dashboard (React + Vite) ────────┐
 | **TR-006** | Relevance & Reliability Retrieval | Query engine combining vector similarity with reliability scoring ($0.70 \times \text{Sim} + 0.30 \times \text{Trust}$) to rank candidates. | US-002, US-005 |
 | **TR-007** | Post-Execution Reflection | Reflection node distilling structured operational lessons (`{Trigger, Strategy, Pitfall}`) from multi-step runs. | US-003 |
 | **TR-008** | Outcome Evaluation Module | Heuristic evaluation component assessing task success ($R \in [0, 1]$) and attributing outcomes to reused experiences. | US-004 |
-| **TR-009** | Trust & Reliability Tracker | Dynamic score adjustment algorithm updating experience trust via Exponential Moving Average ($S_{t+1} = 0.8 S_t + 0.2 R$). | US-005 |
+| **TR-009** | Trust & Reliability Tracker | Asymmetric Exponential Moving Average (A-EMA) updating trust on success ($\alpha = 0.85$) and penalizing failure ($\beta = 0.70$) with Theorem 1 quarantine cutoff ($< 0.35$). | US-005 |
 | **TR-010** | Experience Lifecycle Controller | State machine managing status (`CANDIDATE` → `ACTIVE` → `DEPRECATED`) and filtering records below trust threshold ($< 0.35$). | US-006 |
 | **TR-011** | Controlled Evaluation Harness | Automated offline test runner executing identical task suites across Condition A, Condition B, and Condition C. | US-007 |
 | **TR-012** | Node-Level Tracing & Observability | LangSmith tracing and structured logging capturing node transitions, latencies, and state payloads. | US-001, US-008 |
@@ -138,9 +140,9 @@ Dashboard (React + Vite) ────────┐
 
 - **No LLM Fine-Tuning / Retraining:** Model weights remain completely unmodified; all adaptation is external and driven by persistent memory.
 - **No Raw Chat History Dumps:** The experience store retains structured lessons and operational strategies, not unstructured conversational transcripts.
-- **No Heavy Production SDK During OJT:** An external Python SDK is explored as a potential productization direction, but the primary OJT deliverable is the core experience-memory system.
-- **No Multi-Tenant Enterprise Isolation:** System focuses on single-evaluator and research team workflows; complex enterprise multi-tenancy is out of scope.
-- **No Multi-Provider Routing Complexity:** Initial implementation focuses on one primary provider via LiteLLM (Groq / Ollama) rather than dynamic multi-LLM broker routing.
+- **No Heavy Production Overhead:** SDKs for TypeScript and Python are delivered as lightweight, zero-dependency streaming libraries (`packages/aema` and `aema`).
+- **No Complex Multi-Agent Swarm Overhead:** Focus is strictly maintained on single-agent 5-node cognitive cycles rather than arbitrary multi-agent complexity.
+- **No In-Model Parameter Modifications:** The underlying foundation model weights remain completely frozen and unmodified throughout all tasks.
 
 ---
 

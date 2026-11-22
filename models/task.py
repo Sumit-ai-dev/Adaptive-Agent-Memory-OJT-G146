@@ -219,6 +219,11 @@ class TaskExecuteRequest(BaseModel):
         alias="sessionId",
         description="Optional session ID for grouping multi-turn conversation executions",
     )
+    user_id: Optional[str] = Field(
+        default=None,
+        alias="userId",
+        description="Optional user/tenant identifier for multi-tenant memory and trace isolation",
+    )
     messages: Optional[List[ChatMessage]] = Field(
         default=None,
         description="Prior conversation history turns for continuous dialogue context",

@@ -21,6 +21,13 @@ async def execute_task(*args, **kwargs):
     return await graph_mod.execute_task(*args, **kwargs)
 
 
+async def execute_task_stream(*args, **kwargs):
+    """Convenience async generator entrypoint to stream task execution through AEMA's 5-node LangGraph."""
+    graph_mod = import_pkg("ai_service.graph")
+    async for chunk in graph_mod.execute_task_stream(*args, **kwargs):
+        yield chunk
+
+
 def __getattr__(name: str):
     """Lazy-load core Pydantic schemas so `import aema` stays lightweight."""
     if name in ("Experience", "ExperienceMatch", "TrustHistoryRecord"):
@@ -40,6 +47,7 @@ __all__ = [
     "AdaptiveMemory",
     "get_memory_store",
     "execute_task",
+    "execute_task_stream",
     "Experience",
     "ExperienceMatch",
     "TrustHistoryRecord",

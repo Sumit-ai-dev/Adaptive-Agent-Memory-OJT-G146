@@ -4,15 +4,16 @@
 # so CI was never actually green.
 
 # --- API gateway ---
-fastapi>=0.162.5
+fastapi>=0.162.7
 uvicorn>=0.30.0
 pydantic>=2.14.3
-pydantic-settings>=2.5.0          # ai_service/config.py
+pydantic-settings>=2.16.3          # ai_service/config.py
 httpx>=0.28.1
 python-dotenv>=1.2.4
+PyJWT[crypto]>=2.15.1              # backend/security/auth.py (JWT decoding and verification)
 
 # --- Agent orchestration ---
-langgraph>=1.2.21                 # ai_service/graph.py
+langgraph>=1.2.22                 # ai_service/graph.py
 typing-extensions>=4.16.0         # models/state.py
 
 # --- Numerics / trust mathematics ---
@@ -27,15 +28,15 @@ pgvector>=0.3.0                   # ai_service/memory/store.py (pgvector integra
 sentence-transformers>=6.3.0      # ai_service/embedder.py (hash fallback if absent)
 
 # --- Model gateway, Token Budgeting & Observability ---
-openai>=3.50.0                    # ai_service/llm_client.py (AsyncOpenAI)
+openai>=3.51.0                    # ai_service/llm_client.py (AsyncOpenAI)
 tiktoken>=0.14.0                  # ai_service/context/token_budget.py (token counting)
 langfuse>=5.2.0                   # ai_service/observability/tracer.py (distributed tracing)
 
 # --- Test runner ---
-pytest>=8.0.0
+pytest>=9.2.0
 pytest-asyncio>=1.5.0
 
 # --- Agent tools ---
-duckduckgo-search>=8.0.0          # ai_service/tools/search.py
+duckduckgo-search>=8.1.1          # ai_service/tools/search.py
 ddgs>=9.16.1                      # standalone DDGS search tool
 

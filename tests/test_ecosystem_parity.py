@@ -1,6 +1,6 @@
 """
 Cross-Platform Ecosystem & Mathematical Parity Test Suite
-Author: Kasat Sakshi Dattaprasad (Memory Intelligence & Backend Gateway Lead)
+Author: Sakshi Kasat (Memory Intelligence & Backend Gateway Lead)
 
 Asserts strict mathematical and algorithmic invariance across:
 1. Python Backend Trust Engine (ai_service/nodes/trust_node.py)

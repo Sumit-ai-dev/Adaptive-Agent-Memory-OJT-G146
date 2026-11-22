@@ -56,6 +56,7 @@ def main():
     test_id = f"smoke-{uuid4().hex[:8]}"
     tenant_a = f"tenant-a-{uuid4().hex[:6]}"
     tenant_b = f"tenant-b-{uuid4().hex[:6]}"
+    admin_headers = {"Authorization": f"Bearer {ADMIN_KEY}"} if ADMIN_KEY else {}
 
     print(f"Step 2: Storing test memory {test_id} for {tenant_a}...")
     create_payload = {
@@ -68,7 +69,7 @@ def main():
         "confidence": 0.95,
         "trustScore": 0.50,
     }
-    status, body = request_json("POST", "/api/v1/memories", payload=create_payload)
+    status, body = request_json("POST", "/api/v1/memories", payload=create_payload, headers=admin_headers)
     assert status == 201, f"Memory creation failed with status {status}: {body}"
     assert body.get("id") == test_id, f"Created ID mismatch: {body}"
     assert body.get("status") == "candidate", f"Expected candidate lifecycle status: {body}"
@@ -76,7 +77,12 @@ def main():
 
     # 3. Direct CRUD retrieval by ID
     print(f"Step 3: Fetching memory {test_id} directly by ID...")
-    status, fetched = request_json("GET", f"/api/v1/memories/{test_id}")
+    # Verify unauthenticated lookup on a private tenant memory is rejected
+    unauth_status, _ = request_json("GET", f"/api/v1/memories/{test_id}")
+    assert unauth_status in (401, 404), f"Security violation: unauthenticated lookup should return 401/404, got {unauth_status}"
+
+    # Authorized admin retrieval
+    status, fetched = request_json("GET", f"/api/v1/memories/{test_id}", headers=admin_headers)
     assert status == 200, f"Failed to fetch memory by ID: {status} {fetched}"
     assert fetched.get("id") == test_id, f"ID mismatch: {fetched}"
     assert fetched.get("userId") == tenant_a, f"User ID mismatch: {fetched}"
@@ -85,12 +91,17 @@ def main():
 
     # 4. Tenant isolation scoping
     print(f"Step 4: Verifying tenant isolation scoping...")
-    status, list_a = request_json("GET", f"/api/v1/memories?userId={tenant_a}")
+    # Verify unauthenticated cross-tenant query without credentials is rejected
+    unauth_status, _ = request_json("GET", f"/api/v1/memories?userId={tenant_a}")
+    assert unauth_status in (401, 403), f"Security violation: unauthenticated tenant listing should return 401/403, got {unauth_status}"
+
+    # Authorized admin listing
+    status, list_a = request_json("GET", f"/api/v1/memories?userId={tenant_a}", headers=admin_headers)
     assert status == 200, f"Listing for tenant A failed: {status} {list_a}"
     ids_a = [m.get("id") for m in list_a if isinstance(m, dict)]
     assert test_id in ids_a, f"Expected {test_id} in {tenant_a} listings: {ids_a}"
 
-    status, list_b = request_json("GET", f"/api/v1/memories?userId={tenant_b}")
+    status, list_b = request_json("GET", f"/api/v1/memories?userId={tenant_b}", headers=admin_headers)
     assert status == 200, f"Listing for tenant B failed: {status} {list_b}"
     ids_b = [m.get("id") for m in list_b if isinstance(m, dict)]
     assert test_id not in ids_b, f"Tenant isolation violated: {test_id} visible to {tenant_b}!"
@@ -103,7 +114,7 @@ def main():
         "domain": "coding",
         "top_k": 3,
     }
-    status, matches = request_json("POST", "/api/v1/memories/search", payload=search_payload)
+    status, matches = request_json("POST", "/api/v1/memories/search", payload=search_payload, headers=admin_headers)
     assert status == 200, f"Search failed with status {status}: {matches}"
     assert len(matches) > 0, f"Expected non-empty search matches: {matches}"
     match_ids = [m.get("experience", {}).get("id") for m in matches if isinstance(m, dict)]
@@ -116,7 +127,7 @@ def main():
 
     # 6. Observability & system telemetry
     print("Step 6: Verifying telemetry endpoint...")
-    status, telemetry = request_json("GET", "/api/v1/telemetry")
+    status, telemetry = request_json("GET", "/api/v1/telemetry", headers=admin_headers)
     assert status == 200, f"Telemetry failed with status {status}: {telemetry}"
     assert isinstance(telemetry, dict), f"Telemetry response format invalid: {telemetry}"
     print(f"Telemetry verified: {telemetry.get('total_memories', 'ok')} memories reported.")

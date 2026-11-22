@@ -2,59 +2,56 @@
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
 **Group:** G146 (GenAI / Agentic AI OJT Capstone)  
-**Status:** Approved Low-Level Design (Month 2 Specification)  
+**Status:** Approved Low-Level Design (Production Release Specification)  
 
 ---
 
 ## Backend Modules
 
-The backend is built as an asynchronous FastAPI application organized cleanly by concern:
+The system is structured across clean, modular boundaries dividing the API Gateway (`backend/`), the Core AI Service & Cognitive Graph (`ai-service/`), the Dual Streaming SDKs (`packages/aema`, `aema`), and the MCP Server (`scripts/mcp_server.py`):
 
 ```text
-backend/
-├── app/
-│   ├── main.py                     # FastAPI application factory, CORS, exception handlers
-│   ├── core/
-│   │   ├── config.py               # Pydantic Settings (Supabase URLs, LiteLLM keys, environment)
-│   │   ├── security.py             # JWT verification dependency & CORS middleware
-│   │   └── logging.py              # Loguru structured JSON logger with correlation IDs
-│   ├── api/
-│   │   └── v1/
-│   │       ├── router.py           # V1 API router aggregator
-│   │       ├── health.py           # GET /api/v1/health endpoint
-│   │       ├── tasks.py            # POST /api/v1/tasks/run & GET /api/v1/tasks/{id}
-│   │       ├── experiences.py      # GET /api/v1/experiences (search, filter, inspect)
-│   │       ├── trust.py            # GET /api/v1/trust/history & audit endpoints
-│   │       └── models.py           # GET /api/v1/models (list supported BYOK models)
-│   ├── agent/
-│   │   ├── graph.py                # LangGraph StateGraph assembly and compiled workflow
-│   │   ├── state.py                # TypedDict AgentState definition
-│   │   ├── nodes/
-│   │   │   ├── retrieve.py         # retrieve_node (embedding & composite ranking)
-│   │   │   ├── execute.py          # execute_node (prompt augmentation & LiteLLM invocation)
-│   │   │   ├── evaluate.py         # evaluate_node (deterministic heuristic outcome evaluation)
-│   │   │   ├── reflect.py          # reflect_node (structured lesson extraction)
-│   │   │   └── trust.py            # trust_node (EMA score updating & quarantine logic)
-│   │   └── tools/
-│   │       ├── search.py           # DuckDuckGo search wrapper
-│   │       ├── reader.py           # Jina AI Reader URL content extractor
-│   │       └── python_repl.py      # Restricted Python code execution tool
-│   ├── db/
-│   │   ├── session.py              # asyncpg connection pool & Supabase client factory
-│   │   └── repositories/
-│   │       ├── experience_repo.py  # CRUD and match_experiences RPC calls
-│   │       └── task_repo.py        # Task executions & trust history persistence
-│   └── schemas/
-│       ├── task.py                 # TaskRunRequest, TaskRunResponse, TrajectoryStep
-│       ├── experience.py           # ExperienceRead, ExperienceCreate, ReflectionSchema
-│       └── trust.py                # TrustHistoryRead, TrustAdjustmentEvent
-├── tests/
-│   ├── test_health.py              # Unit tests for /health endpoint
-│   ├── test_retrieval.py           # Tests for composite ranking & RPC
-│   ├── test_agent_graph.py         # LangGraph node transition tests
-│   └── test_trust_engine.py        # EMA formula & quarantine verification tests
-├── requirements.txt
-└── Dockerfile
+Adaptive-Agent-Memory-OJT-G146/
+├── backend/
+│   ├── app/
+│   │   └── main.py                 # FastAPI application factory, CORS, exception handlers
+│   ├── routes/
+│   │   ├── agent.py                # POST /api/v1/agent/execute & /execute/stream (SSE)
+│   │   ├── memories.py             # GET /api/v1/memories (search, filter, inspect, delete)
+│   │   ├── conversations.py        # GET/POST/PATCH/DELETE /api/v1/conversations
+│   │   └── telemetry.py            # GET /api/v1/telemetry/stats (health, metrics)
+│   ├── security/
+│   │   └── auth.py                 # Supabase JWT verification & tenant isolation
+│   ├── schema.sql                  # Canonical PostgreSQL schema & indexes
+│   └── tests/                      # API endpoint unit and regression tests
+├── ai-service/
+│   ├── graph.py                    # Compiled 5-node LangGraph cyclical StateGraph
+│   ├── nodes/
+│   │   ├── retrieve_node.py        # Node 1: Embedding generation & composite ranking
+│   │   ├── execute_node.py         # Node 2: Bilateral prompt augmentation & LiteLLM call
+│   │   ├── evaluate_node.py        # Node 3: Deterministic AST & return code heuristics
+│   │   ├── reflect_node.py         # Node 4: Structured {Trigger, Strategy, Pitfall} extraction
+│   │   └── trust_node.py           # Node 5: A-EMA update & Theorem 1 quarantine logic
+│   ├── memory/
+│   │   ├── store.py                # Supabase pgvector RPC & SQLite WAL store
+│   │   ├── retriever.py            # Composite scoring ($0.70 \times \text{Sim} + 0.30 \times \text{Trust}$)
+│   │   └── probation.py            # Probation quota calculation for candidate recovery
+│   ├── trust/
+│   │   ├── aema.py                 # AEMAPolicy implementation behind TrustPolicy interface
+│   │   ├── base.py                 # TrustPolicy abstract base class and PolicyState
+│   │   └── registry.py             # Policy registry for empirical ablation conditions
+│   ├── trust_math.py               # Closed-form A-EMA, Beta-Bernoulli conjugate distributions
+│   ├── embedder.py                 # Local all-MiniLM-L6-v2 with deterministic hash fallback
+│   ├── llm_client.py               # LiteLLM multi-provider gateway (Groq, Gemini, Ollama)
+│   └── security/
+│       ├── code_sandbox.py         # Restricted Python REPL subprocess execution
+│       ├── sanitizer.py            # Prompt injection defense & XML tag escaping
+│       └── rate_limiter.py         # In-memory sliding window rate limiter
+├── scripts/
+│   └── mcp_server.py               # Dual-transport MCP Server (Stdio + Port 3001 SSE)
+├── packages/aema/                  # TypeScript SDK with real-time SSE streaming
+├── aema/                           # Python SDK with real-time SSE streaming
+└── extension/                      # Manifest V3 Chrome Extension companion
 ```
 
 ---
@@ -121,7 +118,8 @@ sequenceDiagram
     participant T as Tools (DDG/Reader)
     participant D as Supabase (pgvector)
 
-    U->>A: POST /api/v1/tasks/run (Bearer JWT, prompt, domain)
+    U->>A: POST /api/v1/agent/execute (Bearer JWT, prompt, domain)
+    Note over U,A: Also supports POST /api/v1/agent/execute/stream for real-time SSE
     A->>A: Verify JWT & Validate Pydantic Schema
     A->>G: Initialize AgentState & Execute Graph
     

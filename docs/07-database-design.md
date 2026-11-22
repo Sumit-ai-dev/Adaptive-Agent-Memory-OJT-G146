@@ -2,7 +2,7 @@
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
 **Group:** G146 (GenAI / Agentic AI OJT Capstone)  
-**Status:** Approved Schema Baseline (Month 2 Specification)  
+**Status:** Approved Schema Baseline (Production Release Specification)  
 
 ---
 
@@ -37,6 +37,7 @@ Maintains an end-to-end execution record of every task dispatched to the LangGra
 | Column | Type | Constraints / Defaults | Description |
 |---|---|---|---|
 | `id` | `uuid` | `primary key default gen_random_uuid()` | Unique execution run identifier (`run_id`) |
+| `session_id` | `text` | `default null` | Grouping session thread identifier for multi-turn studio conversations |
 | `user_id` | `uuid` | `references auth.users(id) on delete cascade` | Executing user |
 | `task_input` | `text` | `not null` | Raw user query or prompt submitted to the agent |
 | `task_domain` | `text` | `not null` | Domain category inferred or provided |
@@ -74,6 +75,19 @@ Tracks exactly which memories were retrieved and injected into the prompt for an
 | `similarity` | `float` | `not null` | Cosine similarity score between task query and memory vector |
 | `retrieval_rank`| `int` | `not null` | 1-based composite ranking position injected into context |
 | `primary key` | `(execution_id, experience_id)` | Composite key | Enforces unique link per task run |
+
+### 5. `conversations` (Conversational Studio Threads)
+Manages multi-turn conversation sessions in the execution studio with continuous dialogue history.
+
+| Column | Type | Constraints / Defaults | Description |
+|---|---|---|---|
+| `id` | `text` | `primary key` | Unique conversation identifier |
+| `title` | `text` | `not null` | Human-readable thread title |
+| `user_id` | `text` | `default null` | Owner user identifier for tenant scoping |
+| `task_domain` | `text` | `not null default 'general'` | Active technical domain for the thread |
+| `model_used` | `text` | `not null default 'llama-3.3-70b-versatile'` | LLM engine selected for the conversation |
+| `created_at` | `timestamptz` | `default now()` | Thread creation timestamp |
+| `updated_at` | `timestamptz` | `default now()` | Last message activity timestamp |
 
 ---
 

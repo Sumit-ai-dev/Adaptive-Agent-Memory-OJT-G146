@@ -29,12 +29,12 @@ class ExperienceStatus(str, Enum):
 
 class MemoryMode(str, Enum):
     """Memory operational modes for benchmark ablation."""
-    OFF = "off"                           # Condition 1: Baseline / Vanilla ReAct (no memory)
-    NAIVE = "naive"                       # Condition 2: Naive Vector RAG (pure cosine, no trust)
-    RECENCY = "recency"                   # Condition 3: Recency-Based Retrieval (time decay heuristic)
+    OFF = "off"                                 # Condition 1: Baseline / Vanilla ReAct (no memory)
+    NAIVE = "naive"                             # Condition 2: Naive Vector RAG (pure cosine, no trust)
+    RECENCY = "recency"                         # Condition 3: Recency-Based Retrieval (time decay heuristic)
     TRUST_NO_QUARANTINE = "trust_no_quarantine" # Condition 4: Trust Scoring without Quarantine Cutoff
-    SYMMETRIC = "symmetric"               # Legacy alias for Condition 4
-    ADAPTIVE = "adaptive"                 # Condition 5: Full AEMA (Bayesian LCB + Theorem 1 Quarantine)
+    SYMMETRIC = "symmetric"                     # Condition 4: Reliability-Aware without Quarantine (alpha = beta = 0.80)
+    ADAPTIVE = "adaptive"                       # Condition 5: Full AEMA (Bayesian LCB + Theorem 1 Quarantine)
 
 
 class ExecutionStatus(str, Enum):

@@ -69,6 +69,29 @@ export interface RetrievalResult {
   isReliable: boolean;
 }
 
+export interface TaskStreamOptions {
+  task: string;
+  domain?: string;
+  userId?: string;
+  sessionId?: string;
+  memoryEnabled?: boolean;
+  provider?: string;
+  apiKey?: string;
+  simulateFailure?: boolean;
+}
+
+export interface TaskStreamChunk {
+  stage?: 'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'idle' | 'complete' | 'error';
+  content?: string;
+  node?: string;
+  delta?: string;
+  isComplete?: boolean;
+  finalAnswer?: string;
+  executionId?: string;
+  latencyMs?: number;
+  raw?: Record<string, unknown>;
+}
+
 export interface AEMAClientConfig {
   baseUrl?: string;
   apiKey?: string;

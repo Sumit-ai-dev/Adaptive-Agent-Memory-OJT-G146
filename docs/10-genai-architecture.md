@@ -2,7 +2,7 @@
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
 **Group:** G146 (GenAI / Agentic AI OJT Capstone)  
-**Status:** Approved Architecture Baseline (Month 2 Specification)  
+**Status:** Approved Architecture Baseline (Production Release Specification)  
 
 ---
 
@@ -161,14 +161,16 @@ The framework evaluates performance across three empirical axes:
    * $R_t = 0.5$: Task completed with recoverable tool errors or partial goal fulfillment.
    * $R_t = 0.0$: Task failed, threw unhandled exceptions, or exceeded maximum iterations.
 
-2. **Exponential Moving Average (EMA) Trust Updating:**
-   For all memories reused during run $t$, the trust score is updated:
-   $$S_{t+1} = \alpha \cdot R_t + (1 - \alpha) \cdot S_t \quad (\text{with baseline } \alpha = 0.15)$$
+2. **Asymmetric Exponential Moving Average (A-EMA) Trust Updating:**
+   For all memories reused during run $t$, the trust score is updated asymmetrically:
+   - On verified success ($R_t \ge 0.70$): $S_{t+1} = (1 - \alpha) S_t + \alpha \cdot 1.0 \quad (\alpha = 0.85)$
+   - On verified failure ($R_t < 0.70$): $S_{t+1} = (1 - \beta) S_t + \beta \cdot 0.0 = (1 - \beta) S_t \quad (\beta = 0.70)$
+   - Governed by Theorem 1: $k^* = \lceil \frac{\ln(\theta / S_0)}{\ln(1 - \beta)} \rceil$ consecutive failures enforce deterministic quarantine ($\theta < 0.35$).
 
-3. **Standard Agentic Benchmarks (Planned Month 3):**
-   * **ALFWorld:** Multi-step embodied decision-making.
-   * **HotpotQA:** Multi-hop question answering and distractor resistance.
-   * **ToolBench:** Real-world tool calling accuracy and error recovery.
+3. **Standard Agentic Benchmarks:**
+   - **ALFWorld:** Multi-step embodied decision-making.
+   - **HotpotQA:** Multi-hop question answering and distractor resistance.
+   - **ToolBench & HumanEval:** Real-world tool calling accuracy, trap avoidance, and error recovery.
 
 ---
 

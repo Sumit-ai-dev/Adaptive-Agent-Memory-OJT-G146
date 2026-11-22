@@ -4,13 +4,15 @@ import {
   Shield,
   Database,
   Activity,
-  CheckCircle2,
-  Clock,
   Menu,
-  ExternalLink,
   PanelLeftClose,
   PanelLeftOpen,
   AlertTriangle,
+  Terminal,
+  LayoutDashboard,
+  ListTree,
+  FlaskConical,
+  Settings,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import Sidebar, { TabType } from '../components/Sidebar'
@@ -32,6 +34,7 @@ import {
   clearExecutionsApi,
   getTelemetryMetrics,
   INITIAL_EXPERIENCES,
+  INITIAL_DEMO_EXECUTIONS,
   ALPHA_SUCCESS,
   BETA_FAILURE,
   QUARANTINE_THRESHOLD,
@@ -39,17 +42,59 @@ import {
 } from '../services/api'
 import type { Experience, TaskExecution, TaskDomain } from '../types'
 
+const TAB_ITEMS: { id: TabType; label: string; icon: any }[] = [
+  { id: 'overview', label: 'Overview', icon: LayoutDashboard },
+  { id: 'studio', label: 'Execution Studio', icon: Terminal },
+  { id: 'memory', label: 'Memory Bank', icon: Database },
+  { id: 'runs', label: 'Runs & Traces', icon: ListTree },
+  { id: 'research', label: 'Research & Proofs', icon: FlaskConical },
+  { id: 'settings', label: 'Settings', icon: Settings },
+]
+
 export default function DashboardPage() {
   const { user, loading } = useAuth()
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const isDemo = searchParams.get('demo') === 'true'
-  const [activeTab, setActiveTab] = useState<TabType>('overview')
-  const [experiences, setExperiences] = useState<Experience[]>([])
+  // Always default to 'overview' tab as requested
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    const requestedTab = searchParams.get('tab') as TabType
+    return requestedTab || 'overview'
+  })
+  // Synchronously seed initial data to eliminate initial empty flash / layout shift
+  const [experiences, setExperiences] = useState<Experience[]>(() => [...INITIAL_EXPERIENCES])
   const [metrics, setMetrics] = useState(getTelemetryMetrics())
-  const [recentExecutions, setRecentExecutions] = useState<TaskExecution[]>([])
-  const [selectedExecution, setSelectedExecution] = useState<TaskExecution | null>(null)
+  const [recentExecutions, setRecentExecutions] = useState<TaskExecution[]>(() => [...INITIAL_DEMO_EXECUTIONS])
+  const [selectedExecution, setSelectedExecution] = useState<TaskExecution | null>(() => INITIAL_DEMO_EXECUTIONS[0] || null)
+  const [runFilter, setRunFilter] = useState<'all' | 'pass' | 'fail'>('all')
+  const [runSearch, setRunSearch] = useState('')
+
+  const handleSelectTab = (tab: TabType) => {
+    setActiveTab(tab)
+    const newParams = new URLSearchParams(searchParams)
+    newParams.set('tab', tab)
+    setSearchParams(newParams, { replace: true })
+  }
+
+  // Synchronize activeTab when URL tab parameter changes
+  useEffect(() => {
+    const requestedTab = searchParams.get('tab') as TabType
+    if (requestedTab && requestedTab !== activeTab) {
+      setActiveTab(requestedTab)
+    }
+  }, [searchParams])
+
+  // Enforce obsidian canvas on dashboard to eliminate overscroll light bounce
+  useEffect(() => {
+    document.documentElement.classList.add('dark')
+    document.documentElement.style.backgroundColor = '#141412'
+    document.body.style.backgroundColor = '#141412'
+    return () => {
+      document.documentElement.style.backgroundColor = ''
+      document.body.style.backgroundColor = ''
+    }
+  }, [])
 
   // Main application sidebar collapse state (persisted across refreshes)
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
@@ -72,8 +117,6 @@ export default function DashboardPage() {
 
   // Execution Studio States
   const [isExecuting, setIsExecuting] = useState(false)
-  const [currentStage, setCurrentStage] = useState<'retrieval' | 'execution' | 'evaluation' | 'reflection' | 'trust_update' | 'idle' | 'complete'>('idle')
-  const [activeExecution, setActiveExecution] = useState<TaskExecution | null>(null)
   const [executionError, setExecutionError] = useState<string | null>(null)
 
   // Auth modal triggered from demo banner
@@ -112,7 +155,6 @@ export default function DashboardPage() {
     simulateFailure?: boolean
   }) => {
     setIsExecuting(true)
-    setCurrentStage('retrieval')
     setExecutionError(null)
 
     try {
@@ -124,22 +166,17 @@ export default function DashboardPage() {
         apiKey: params.apiKey,
         simulateFailure: params.simulateFailure,
         isExplicitDemo: isDemo,
-        onStageChange: (stage) => setCurrentStage(stage),
       })
 
-      setActiveExecution(exec)
       setSelectedExecution(exec)
       setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
-      // Refresh experiences to reflect any real trust update or quarantine
       const updatedExps = await fetchExperiences()
       setExperiences(updatedExps)
       const updatedMetrics = await fetchTelemetry()
       setMetrics(updatedMetrics)
-      setCurrentStage('complete')
     } catch (err: any) {
       console.error('Task execution failed:', err)
       setExecutionError(err?.message || 'Execution failed due to backend error.')
-      setCurrentStage('idle')
     } finally {
       setIsExecuting(false)
     }
@@ -153,10 +190,10 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[#FBFBFA] dark:bg-[#0C0E14]">
+      <div className="min-h-screen flex items-center justify-center bg-[#141412] text-[#EDECE8]">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-8 h-8 rounded-full border-2 border-indigo-600 border-t-transparent animate-spin" />
-          <span className="text-xs font-mono text-zinc-500">Initializing AEMA Console...</span>
+          <div className="w-8 h-8 rounded-full border-2 border-[#EDECE8] border-t-transparent animate-spin" />
+          <span className="text-xs font-mono text-[#7E7D77]">Initializing AEMA Console...</span>
         </div>
       </div>
     )
@@ -165,12 +202,12 @@ export default function DashboardPage() {
   if (!user && !isDemo) return null
 
   return (
-    <div className="min-h-screen flex bg-[#FBFBFA] dark:bg-[#0C0E14] text-[#18181B] dark:text-[#F4F4F6] transition-colors">
-      {/* Desktop Sidebar */}
-      <div className="hidden lg:block shrink-0 transition-all duration-300 ease-in-out">
+    <div className="min-h-screen flex bg-[#141412] text-[#EDECE8] transition-colors selection:bg-[#2E2E2A]">
+      {/* Desktop Sidebar (Pure Obsidian Theme) */}
+      <div className="hidden lg:block shrink-0 transition-all duration-200">
         <Sidebar
           activeTab={activeTab}
-          onSelectTab={setActiveTab}
+          onSelectTab={handleSelectTab}
           isDemo={isDemo}
           onExitDemo={() => {
             if (user) {
@@ -188,12 +225,12 @@ export default function DashboardPage() {
       {/* Mobile Sidebar Overlay */}
       {mobileSidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
-          <div className="relative z-10 w-64">
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setMobileSidebarOpen(false)} />
+          <div className="relative z-10 w-60">
             <Sidebar
               activeTab={activeTab}
               onSelectTab={(tab) => {
-                setActiveTab(tab)
+                handleSelectTab(tab)
                 setMobileSidebarOpen(false)
               }}
               isDemo={isDemo}
@@ -215,107 +252,130 @@ export default function DashboardPage() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto">
-        {/* Top Header Rail */}
-        <header className="h-14 border-b px-6 flex items-center justify-between shrink-0 bg-white/70 dark:bg-[#131722]/70 backdrop-blur-md border-[#E6E6E1] dark:border-[#252B3B]">
-          <div className="flex items-center gap-3">
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto bg-[#141412]">
+        {/* Top Header Rail with Airy Spacing & Clean Breadcrumb */}
+        <header className="h-16 border-b border-[#242422] px-6 sm:px-8 flex items-center justify-between shrink-0 bg-[#161614]">
+          <div className="flex items-center gap-3.5">
             <button
               onClick={() => setMobileSidebarOpen(true)}
-              className="lg:hidden p-1.5 rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+              className="lg:hidden p-2 rounded border border-[#2E2E2A] text-[#7E7D77] hover:text-[#EDECE8]"
             >
               <Menu size={16} />
             </button>
             <button
               onClick={handleToggleSidebar}
-              className="hidden lg:flex p-1.5 rounded-lg border border-[#E6E6E1] dark:border-[#252B3B] text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
+              className="hidden lg:flex p-2 rounded border border-[#2E2E2A] text-[#7E7D77] hover:text-[#EDECE8] hover:bg-[#1E1E1B] transition-colors cursor-pointer"
               title={sidebarCollapsed ? 'Expand main sidebar' : 'Collapse main sidebar'}
               aria-label={sidebarCollapsed ? 'Expand main sidebar' : 'Collapse main sidebar'}
             >
               {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
             </button>
-            <div className="font-semibold text-xs capitalize tracking-wide flex items-center gap-2">
-              <span className="text-zinc-400 font-mono">Workspace /</span>
-              <span>{activeTab === 'runs' ? 'Runs & Traces' : activeTab}</span>
+
+            {/* Clean Breadcrumb with Generous Padding */}
+            <div className="flex items-center gap-2.5 font-mono text-xs">
+              <button
+                onClick={() => handleSelectTab('overview')}
+                className="text-[#7E7D77] hover:text-[#EDECE8] transition-colors cursor-pointer"
+                title="Go to Overview"
+              >
+                Workspace
+              </button>
+              <span className="text-[#5A5955]">/</span>
+              <span className="text-white font-medium text-xs">
+                {TAB_ITEMS.find((t) => t.id === activeTab)?.label || 'Overview'}
+              </span>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             {isDemo && (
-              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300 border border-amber-200 dark:border-amber-800/60 font-medium">
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                Demo Sandbox (Simulated)
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs font-mono px-2.5 py-0.5 rounded border border-[#3E3E34] bg-[#1E1E1B] text-[#E67E22] font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#E67E22]" />
+                Demo Sandbox
               </span>
             )}
-            <span className="font-mono text-xs text-zinc-400">
-              AEMA 0.1.0
+            <span className="font-mono text-xs text-[#7E7D77]">
+              v0.1.1
             </span>
           </div>
         </header>
 
-        {/* Tab Viewport */}
-        <main className="p-6 flex-1 max-w-7xl w-full mx-auto space-y-6">
+        {/* Tab Viewport: Studio is full-bleed workspace directly below header; other tabs use max-w-7xl container */}
+        {activeTab === 'studio' ? (
+          <div className="flex-1 h-[calc(100vh-64px)] w-full overflow-hidden flex flex-col">
+            <ConversationStudio
+              onExecutionComplete={(exec) => {
+                setSelectedExecution(exec)
+                setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
+                fetchExperiences().then(setExperiences)
+                fetchTelemetry().then(setMetrics)
+              }}
+            />
+          </div>
+        ) : (
+          <main className="p-6 flex-1 max-w-7xl w-full mx-auto space-y-6">
           {/* TAB 1: OVERVIEW */}
           {activeTab === 'overview' && (
-            <div className="space-y-6 anim-fade-in">
-              {/* Stat Cards */}
+            <div className="space-y-6">
+              {/* Stat Cards (Obsidian Style) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
-                  <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
+                <div className="rounded-lg border border-[#242422] p-4 bg-[#161614]">
+                  <div className="flex items-center justify-between text-[#7E7D77] text-xs font-mono mb-2">
                     <span>MEAN TRUST SCORE</span>
-                    <Shield size={16} className="text-indigo-600 dark:text-indigo-400" />
+                    <Shield size={15} className="text-[#EDECE8]" />
                   </div>
-                  <div className="text-2xl font-bold font-mono text-[#18181B] dark:text-[#F4F4F6]">
+                  <div className="text-2xl font-bold font-mono text-[#EDECE8]">
                     {experiences.length > 0
                       ? `${((experiences.reduce((acc, e) => acc + (e.trustScore ?? 0), 0) / experiences.length) * 100).toFixed(1)}%`
                       : 'N/A'}
                   </div>
-                  <div className="text-[11px] text-zinc-500 mt-1">
+                  <div className="text-[11px] text-[#7E7D77] mt-1 font-mono">
                     {experiences.length > 0
                       ? `Asymmetric EMA St across ${experiences.length} memories`
                       : 'No memories recorded yet'}
                   </div>
                 </div>
 
-                <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
-                  <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
+                <div className="rounded-lg border border-[#242422] p-4 bg-[#161614]">
+                  <div className="flex items-center justify-between text-[#7E7D77] text-xs font-mono mb-2">
                     <span>ACTIVE EXPERIENCES</span>
-                    <Database size={16} className="text-emerald-600 dark:text-emerald-400" />
+                    <Database size={15} className="text-[#4EAA79]" />
                   </div>
-                  <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                  <div className="text-2xl font-bold font-mono text-[#4EAA79]">
                     {experiences.filter((e) => e.status === 'active').length}
                   </div>
-                  <div className="text-[11px] text-zinc-500 mt-1">
+                  <div className="text-[11px] text-[#7E7D77] mt-1 font-mono">
                     {experiences.filter((e) => e.status === 'quarantined' || (e.trustScore ?? 0) < 0.35).length} quarantined under Theorem 1
                   </div>
                 </div>
 
-                <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
-                  <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
+                <div className="rounded-lg border border-[#242422] p-4 bg-[#161614]">
+                  <div className="flex items-center justify-between text-[#7E7D77] text-xs font-mono mb-2">
                     <span>MEMORY HIT RATE</span>
-                    <Activity size={16} className="text-indigo-600 dark:text-indigo-400" />
+                    <Activity size={15} className="text-[#EDECE8]" />
                   </div>
-                  <div className="text-2xl font-bold font-mono text-[#18181B] dark:text-[#F4F4F6]">
+                  <div className="text-2xl font-bold font-mono text-[#EDECE8]">
                     {metrics.totalTasks > 0 ? `${metrics.memoryHitRate}%` : '0.0%'}
                   </div>
-                  <div className="text-[11px] text-zinc-500 mt-1">
+                  <div className="text-[11px] text-[#7E7D77] mt-1 font-mono">
                     {metrics.totalTasks > 0
                       ? `Live hit rate across ${metrics.totalTasks} recorded runs`
                       : '0 runs recorded yet (execute in Studio)'}
                   </div>
                 </div>
 
-                <div className="rounded-xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
-                  <div className="flex items-center justify-between text-zinc-400 text-xs font-mono mb-2">
+                <div className="rounded-lg border border-[#242422] p-4 bg-[#161614]">
+                  <div className="flex items-center justify-between text-[#7E7D77] text-xs font-mono mb-2">
                     <span>BENCHMARK RESILIENCE</span>
-                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
+                    <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1E1E1B] text-[#4EAA79] border border-[#2E2E2A]">
                       THEOREM 1
                     </span>
                   </div>
-                  <div className="text-2xl font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                  <div className="text-2xl font-bold font-mono text-[#4EAA79]">
                     {metrics.benchmarkNegativeTransferReduction ?? metrics.negativeTransferReduction ?? 100}%
                   </div>
-                  <div className="text-[11px] text-zinc-500 mt-1">
-                    Fixed Benchmark: {metrics.benchmarkSource || 'Phase 8 v2 McNemar test (p=1.192e-7)'}
+                  <div className="text-[11px] text-[#7E7D77] mt-1 font-mono">
+                    Fixed Benchmark: Phase 8 v2 McNemar test (p=1.192e-7)
                   </div>
                 </div>
               </div>
@@ -324,164 +384,110 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 space-y-4">
                   <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-[#18181B] dark:text-[#F4F4F6]">
+                    <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-[#EDECE8]">
                       Quick Execution Launcher
                     </h3>
                     <button
                       onClick={() => setActiveTab('studio')}
-                      className="text-xs font-mono text-indigo-600 dark:text-indigo-400 hover:underline cursor-pointer"
+                      className="text-xs font-mono text-[#EDECE8] hover:underline cursor-pointer"
                     >
-                      Open Full Studio →
+                      Open Full Studio &rarr;
                     </button>
                   </div>
                   {executionError && (
-                    <div className="rounded-xl border border-rose-300 dark:border-rose-900 bg-rose-50 dark:bg-rose-950/40 p-4 text-xs space-y-2">
+                    <div className="rounded border border-[#D9534F] bg-[#221616] p-4 text-xs space-y-2 text-[#D9534F]">
                       <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 font-semibold">
-                          <AlertTriangle size={16} />
-                          <span>AEMA Backend Execution Failed (Integrity Policy: No Mock Fallback)</span>
+                        <div className="flex items-center gap-2 font-semibold">
+                          <AlertTriangle size={15} />
+                          <span>AEMA Backend Execution Notice</span>
                         </div>
                         <button
                           onClick={() => setExecutionError(null)}
-                          className="text-rose-500 hover:text-rose-700 dark:hover:text-rose-300 text-xs font-mono"
+                          className="hover:underline text-xs font-mono"
                         >
                           Dismiss
                         </button>
                       </div>
-                      <p className="text-rose-800 dark:text-rose-300 font-mono text-[11px] break-all">
-                        {executionError}
-                      </p>
-                      <div className="text-[11px] text-rose-600 dark:text-rose-400">
-                        Live execution integrity enforced: Failed backend requests are never silently simulated as successful runs.
-                      </div>
+                      <p className="font-mono text-[11px]">{executionError}</p>
                     </div>
                   )}
-                  <PromptConsole onRunTask={handleRunTask} isRunning={isExecuting} />
-                  {currentStage !== 'idle' && (
-                    <ExecutionStepper currentStage={currentStage} execution={activeExecution} />
-                  )}
+                  <PromptConsole
+                    onRunTask={handleRunTask}
+                    isRunning={isExecuting}
+                  />
                 </div>
 
-                {/* Right: Operational Status & Ecosystem */}
                 <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-[#18181B] dark:text-[#F4F4F6]">
-                    Engine Status
-                  </h3>
-                  <div className="rounded-2xl border p-4 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-3 text-xs">
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-500 font-mono">Persistence:</span>
-                      <span className="font-mono font-semibold">SQLite (Local) / pgvector (Cloud)</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-500 font-mono">Quarantine Bound:</span>
-                      <span className="font-mono text-indigo-600 dark:text-indigo-400 font-semibold">
-                        k* = {CONSECUTIVE_FAILURES_BOUND} failures
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-500 font-mono">Success Momentum (α):</span>
-                      <span className="font-mono font-semibold">{ALPHA_SUCCESS}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-500 font-mono">Failure Penalty (β):</span>
-                      <span className="font-mono font-semibold">{BETA_FAILURE}</span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-500 font-mono">Isolation Cutoff (θ):</span>
-                      <span className="font-mono font-semibold">{QUARANTINE_THRESHOLD}</span>
-                    </div>
-                    <div className="pt-2 border-t border-[#E6E6E1] dark:border-[#252B3B] flex items-center justify-between">
-                      <span className="text-zinc-500 font-mono">PyPI SDK:</span>
-                      <a
-                        href="https://pypi.org/project/aema/"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold font-mono uppercase tracking-wider text-[#EDECE8]">
+                      Recent Executions
+                    </h3>
+                    {recentExecutions.length > 0 && (
+                      <button
+                        onClick={async () => {
+                          await clearExecutionsApi()
+                          setRecentExecutions([])
+                          setSelectedExecution(null)
+                        }}
+                        className="text-[11px] font-mono text-[#7E7D77] hover:text-[#D9534F] transition-colors cursor-pointer"
                       >
-                        <span>aema 0.1.1</span>
-                        <ExternalLink size={11} />
-                      </a>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-zinc-500 font-mono">npm & MCP:</span>
-                      <a
-                        href="https://www.npmjs.com/package/@sumitaidev/aema"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="font-mono text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-1"
-                      >
-                        <span>@sumitaidev/aema 0.1.1</span>
-                        <ExternalLink size={11} />
-                      </a>
-                    </div>
+                        Clear
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="rounded-lg border border-[#242422] bg-[#161614] divide-y divide-[#242422] max-h-[380px] overflow-y-auto">
+                    {recentExecutions.length === 0 ? (
+                      <div className="p-8 text-center text-xs text-[#7E7D77] font-mono">
+                        No recent executions. Run a prompt in the studio to populate history.
+                      </div>
+                    ) : (
+                      recentExecutions.map((run) => (
+                        <div
+                          key={run.id}
+                          onClick={() => {
+                            setSelectedExecution(run)
+                            setActiveTab('runs')
+                          }}
+                          className="p-3 hover:bg-[#1E1E1B] cursor-pointer transition-colors text-xs space-y-1"
+                        >
+                          <div className="flex items-center justify-between font-mono text-[11px]">
+                            <span className="font-medium text-[#EDECE8] truncate max-w-[180px]">
+                              {run.taskInput}
+                            </span>
+                            <span
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                run.outcomeScore && run.outcomeScore >= 0.7
+                                  ? 'bg-[#1E2E24] text-[#4EAA79]'
+                                  : 'bg-[#2E1E1E] text-[#D9534F]'
+                              }`}
+                            >
+                              {run.outcomeScore && run.outcomeScore >= 0.7 ? 'PASS' : 'FAIL'}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] text-[#7E7D77] font-mono">
+                            <span>{run.taskDomain}</span>
+                            <span>{new Date(run.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           )}
 
-          {/* TAB 2: STUDIO */}
-          {activeTab === 'studio' && (
-            <div className="space-y-4 anim-fade-in">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
-                    Execution Studio
-                  </h2>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Conversational agent with multi-turn context and per-turn AEMA 5-node cognitive traces.
-                  </p>
-                </div>
-              </div>
-
-              <ConversationStudio
-                onExecutionComplete={async (exec) => {
-                  setActiveExecution(exec)
-                  setSelectedExecution(exec)
-                  setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
-                  const updatedExps = await fetchExperiences()
-                  setExperiences(updatedExps)
-                  const updatedMetrics = await fetchTelemetry()
-                  setMetrics(updatedMetrics)
-                }}
-              />
-            </div>
-          )}
-
-          {/* TAB 3: MEMORY */}
+          {/* TAB 3: EXPERIENTIAL MEMORY */}
           {activeTab === 'memory' && (
-            <div className="space-y-6 anim-fade-in">
-              <div>
-                <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6] flex items-center gap-2">
-                  <span>Experiential Memory Index</span>
-                  {isDemo && (
-                    <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 font-medium">
-                      Demo Sandbox Mode
-                    </span>
-                  )}
-                </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  7-tuple operational memories containing affirmative lessons and negative transfer pitfall bounds.
-                </p>
-              </div>
-
+            <div className="space-y-4">
               <MemoryExplorer
                 experiences={experiences}
-                isDemo={isDemo}
-                onRefresh={async (domain, search, status) => {
-                  const exps = await fetchExperiences(domain, search, status)
-                  setExperiences(exps.length > 0 ? exps : (isDemo ? INITIAL_EXPERIENCES : []))
-                  const updatedMetrics = await fetchTelemetry()
-                  setMetrics(updatedMetrics)
-                }}
                 onAddExperience={handleAddExperience}
                 onDeleteExperience={async (id) => {
-                  const ok = await deleteExperienceApi(id)
-                  if (ok) {
-                    setExperiences((prev) => prev.filter((e) => e.id !== id))
-                    const updatedMetrics = await fetchTelemetry()
-                    setMetrics(updatedMetrics)
-                  }
+                  await deleteExperienceApi(id)
+                  setExperiences((prev) => prev.filter((e) => e.id !== id))
+                  setMetrics(getTelemetryMetrics())
                 }}
               />
             </div>
@@ -489,110 +495,194 @@ export default function DashboardPage() {
 
           {/* TAB 4: RUNS & TRACES */}
           {activeTab === 'runs' && (
-            <div className="space-y-6 anim-fade-in">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-6">
+              {/* Header with Title and Clear Action */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
-                    Execution Runs & Traces
-                  </h2>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                    Inspect historical agent trajectories, retrieved context augmentations, and trust updates.
+                  <h3 className="font-mono text-xs uppercase tracking-wider text-[#EDECE8] font-bold">
+                    Execution History & Cognitive Traces
+                  </h3>
+                  <p className="text-xs text-[#7E7D77] mt-0.5">
+                    Audit multi-turn agent executions, deterministic assertions, and per-step 5-node cognitive traces.
                   </p>
                 </div>
 
-                {recentExecutions.length > 0 && (
-                  <button
-                    onClick={async () => {
-                      if (!window.confirm('Clear all historical execution runs and traces?')) return
-                      const res = await clearExecutionsApi()
-                      if (res.success) {
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-mono px-2 py-0.5 rounded bg-[#1C1C18] border border-[#2E2E2A] text-[#9E9D96]">
+                    {recentExecutions.length} {recentExecutions.length === 1 ? 'run' : 'runs'} recorded
+                  </span>
+                  {recentExecutions.length > 0 && (
+                    <button
+                      onClick={async () => {
+                        await clearExecutionsApi()
                         setRecentExecutions([])
                         setSelectedExecution(null)
-                        const updatedMetrics = await fetchTelemetry()
-                        setMetrics(updatedMetrics)
-                      } else {
-                        alert(`Authorization Failed: ${res.error || 'Invalid Admin Key'}`)
-                      }
-                    }}
-                    className="self-start sm:self-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono text-zinc-500 hover:text-rose-600 hover:border-rose-300 dark:hover:border-rose-800 border-zinc-200 dark:border-zinc-800 transition-colors cursor-pointer"
-                  >
-                    <span>Clear All History</span>
-                  </button>
-                )}
+                      }}
+                      className="px-2.5 py-1 text-xs font-mono rounded border border-[#3E2424] bg-[#221616] text-[#D9534F] hover:bg-[#2E1E1E] transition-colors cursor-pointer"
+                    >
+                      Clear History
+                    </button>
+                  )}
+                </div>
               </div>
 
-              {recentExecutions.length === 0 ? (
-                <div className="rounded-xl border p-12 text-center bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B]">
-                  <Clock size={32} className="mx-auto text-zinc-300 dark:text-zinc-600 mb-3" />
-                  <h3 className="text-sm font-semibold">No execution runs in this session</h3>
-                  <p className="text-xs text-zinc-500 mt-1 max-w-sm mx-auto">
-                    Execute a prompt in the Studio or Overview launcher to record live execution traces.
-                  </p>
-                  <button
-                    onClick={() => setActiveTab('studio')}
-                    className="mt-4 px-4 py-2 rounded-xl text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 transition-colors"
-                  >
-                    Launch a Task
-                  </button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  {/* Left List of Runs */}
-                  <div className="lg:col-span-1 space-y-2">
-                    {recentExecutions.map((run) => (
-                      <div
-                        key={run.id}
-                        onClick={() => setSelectedExecution(run)}
-                        className={`p-3 rounded-xl border cursor-pointer transition-all ${
-                          selectedExecution?.id === run.id
-                            ? 'border-indigo-600 bg-indigo-50/30 dark:bg-indigo-950/20'
-                            : 'bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] hover:border-zinc-400'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between text-xs mb-1">
-                          <span className="font-mono text-[11px] font-semibold">{run.id}</span>
-                          <span
-                            className={`font-mono text-[10px] font-bold uppercase ${
-                              run.outcomeQuality === 'positive'
-                                ? 'text-emerald-600 dark:text-emerald-400'
-                                : 'text-rose-600 dark:text-rose-400'
-                            }`}
-                          >
-                            {run.outcomeQuality || 'COMPLETED'}
-                          </span>
-                        </div>
-                        <p className="text-xs text-zinc-700 dark:text-zinc-300 line-clamp-1">
-                          {run.taskInput}
-                        </p>
-                        <div className="mt-2 text-[10px] font-mono text-zinc-400 flex items-center justify-between">
-                          <span>{run.taskDomain}</span>
-                          <span>{run.latencyMs}ms · {run.tokensUsed} tokens</span>
-                        </div>
-                      </div>
-                    ))}
+              {/* Run History Master Table / Selector */}
+              <div className="rounded-lg border border-[#242422] bg-[#161614] overflow-hidden">
+                {/* Filter and Search Bar */}
+                <div className="p-3 border-b border-[#242422] bg-[#141412] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-1 font-mono text-xs">
+                    {(['all', 'pass', 'fail'] as const).map((filterType) => {
+                      const count =
+                        filterType === 'all'
+                          ? recentExecutions.length
+                          : filterType === 'pass'
+                          ? recentExecutions.filter((r) => (r.outcomeScore ?? 0) >= 0.7).length
+                          : recentExecutions.filter((r) => (r.outcomeScore ?? 0) < 0.7).length
+                      return (
+                        <button
+                          key={filterType}
+                          type="button"
+                          onClick={() => setRunFilter(filterType)}
+                          className={`px-2.5 py-1 rounded text-xs transition-colors cursor-pointer capitalize ${
+                            runFilter === filterType
+                              ? 'bg-[#22221E] text-white font-medium border border-[#3E3E38]'
+                              : 'text-[#7E7D77] hover:text-[#EDECE8] border border-transparent'
+                          }`}
+                        >
+                          {filterType} ({count})
+                        </button>
+                      )
+                    })}
                   </div>
 
-                  {/* Right Inspector */}
-                  <div className="lg:col-span-2">
-                    <ContextInspector execution={selectedExecution} />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      value={runSearch}
+                      onChange={(e) => setRunSearch(e.target.value)}
+                      placeholder="Search runs by prompt, domain..."
+                      className="w-full sm:w-64 pl-2.5 pr-3 py-1 rounded bg-[#181816] border border-[#262624] text-xs text-[#EDECE8] placeholder-[#7E7D77] focus:outline-none focus:border-[#4EAA79]"
+                    />
                   </div>
+                </div>
+
+                {/* Runs List Table */}
+                <div className="divide-y divide-[#242422] max-h-72 overflow-y-auto">
+                  {recentExecutions
+                    .filter((r) => {
+                      const matchesFilter =
+                        runFilter === 'all' ||
+                        (runFilter === 'pass' && (r.outcomeScore ?? 0) >= 0.7) ||
+                        (runFilter === 'fail' && (r.outcomeScore ?? 0) < 0.7)
+                      const matchesSearch =
+                        !runSearch.trim() ||
+                        r.taskInput.toLowerCase().includes(runSearch.toLowerCase()) ||
+                        r.taskDomain.toLowerCase().includes(runSearch.toLowerCase()) ||
+                        r.id.toLowerCase().includes(runSearch.toLowerCase())
+                      return matchesFilter && matchesSearch
+                    })
+                    .map((run) => {
+                      const isSelected = selectedExecution?.id === run.id
+                      const isPass = (run.outcomeScore ?? 0) >= 0.7
+
+                      return (
+                        <div
+                          key={run.id}
+                          onClick={() => setSelectedExecution(run)}
+                          className={`p-3.5 transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                            isSelected
+                              ? 'bg-[#1C1C18] border-l-2 border-[#4EAA79]'
+                              : 'hover:bg-[#1A1A17]'
+                          }`}
+                        >
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono shrink-0 ${
+                                  isPass
+                                    ? 'bg-[#1E2E24] text-[#4EAA79] border border-[#2E4234]'
+                                    : 'bg-[#2E1E1E] text-[#D9534F] border border-[#4E2A2A]'
+                                }`}
+                              >
+                                {isPass ? 'PASS' : 'FAIL'}
+                              </span>
+                              <span className="font-mono text-[10px] text-[#7E7D77] shrink-0">
+                                #{run.id.slice(0, 8)}
+                              </span>
+                              <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-[#1E1E1B] text-[#9E9D96] border border-[#2A2A26] shrink-0">
+                                {run.taskDomain}
+                              </span>
+                              <span className="text-[#EDECE8] font-medium truncate max-w-lg">
+                                {run.taskInput}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-4 text-[10px] font-mono text-[#7E7D77]">
+                              <span>
+                                {new Date(run.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })} at{' '}
+                                {new Date(run.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                              {run.latencyMs !== undefined && <span>{run.latencyMs}ms</span>}
+                              {run.tokensUsed !== undefined && <span>{run.tokensUsed} tokens</span>}
+                              {run.retrievedExperiences && run.retrievedExperiences.length > 0 && (
+                                <span className="text-[#4EAA79] truncate max-w-xs">
+                                  Strategy: {run.retrievedExperiences[0].experience.strategyLesson}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedExecution(run)
+                              }}
+                              className={`px-2.5 py-1 rounded text-[11px] font-mono transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'bg-[#1E2E24] text-[#4EAA79] border border-[#2E4234] font-semibold'
+                                  : 'bg-[#1E1E1B] text-[#9E9D96] hover:text-white border border-[#2E2E2A]'
+                              }`}
+                            >
+                              {isSelected ? 'Viewing Trace' : 'Inspect Trace'}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                </div>
+              </div>
+
+              {/* Detailed 5-Node Trace for Selected Run */}
+              {selectedExecution ? (
+                <div className="space-y-4 pt-2">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#242422]">
+                    <div className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-[#4EAA79]" />
+                      <span className="text-xs font-mono font-semibold text-[#EDECE8]">
+                        Active Inspection: Run #{selectedExecution.id.slice(0, 8)}
+                      </span>
+                      <span className="text-[11px] text-[#7E7D77] font-mono truncate max-w-md">
+                        &quot;{selectedExecution.taskInput}&quot;
+                      </span>
+                    </div>
+                  </div>
+
+                  <ExecutionStepper currentStage="complete" execution={selectedExecution} />
+                  <ContextInspector execution={selectedExecution} />
+                </div>
+              ) : (
+                <div className="rounded-lg border border-[#242422] bg-[#161614] p-12 text-center text-xs text-[#7E7D77] font-mono">
+                  No execution selected. Click any run above to inspect its 5-node cognitive trace.
                 </div>
               )}
             </div>
           )}
 
-          {/* TAB 5: RESEARCH */}
+          {/* TAB 5: RESEARCH & PROOFS */}
           {activeTab === 'research' && (
-            <div className="space-y-6 anim-fade-in">
-              <div>
-                <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
-                  Research Proofs & Theory Sandbox
-                </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Theorem 1 deterministic quarantine bounds and protocol-frozen confirmatory benchmarks.
-                </p>
-              </div>
-
+            <div className="space-y-6">
               <TheoremSandbox />
               <BenchmarkMatrix />
             </div>
@@ -600,60 +690,41 @@ export default function DashboardPage() {
 
           {/* TAB 6: SETTINGS */}
           {activeTab === 'settings' && (
-            <div className="space-y-6 anim-fade-in">
-              <div>
-                <h2 className="text-base font-semibold text-[#18181B] dark:text-[#F4F4F6]">
-                  System Settings & Deployment
-                </h2>
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                  Inspect persistent storage configurations, backend endpoints, and AEMA hyperparameters.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Supabase Status */}
-                <div className="rounded-2xl border p-5 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-3">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 size={16} className="text-emerald-500" />
-                    <h3 className="text-xs font-mono font-semibold uppercase tracking-wider">
-                      Supabase Cloud Storage
-                    </h3>
-                  </div>
-                  <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1 font-mono">
-                    <div>URL: <code className="text-[#18181B] dark:text-[#F4F4F6]">{import.meta.env.VITE_SUPABASE_URL || 'https://fuwtdoxzfmghdxgferyf.supabase.co'}</code></div>
-                    <div>Auth Provider: Email + Password & Google OAuth</div>
-                    <div>RLS Engine: Enabled</div>
-                  </div>
+            <div className="max-w-2xl rounded-lg border border-[#242422] bg-[#161614] p-6 space-y-4 text-xs">
+              <h3 className="font-mono text-xs uppercase tracking-wider text-[#EDECE8] font-bold">
+                AEMA Engine Settings
+              </h3>
+              <p className="text-[#7E7D77] leading-relaxed">
+                Configure local SQLite vector indexing, pgvector credentials, and asymmetric decay parameters.
+              </p>
+              <div className="space-y-3 font-mono text-xs pt-2">
+                <div className="flex items-center justify-between p-3 rounded bg-[#141412] border border-[#242422]">
+                  <span>Alpha (Success Reward Rate):</span>
+                  <span className="font-bold text-[#4EAA79]">{ALPHA_SUCCESS}</span>
                 </div>
-
-                {/* Local Engine */}
-                <div className="rounded-2xl border p-5 bg-white border-[#E6E6E1] dark:bg-[#131722] dark:border-[#252B3B] space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Database size={16} className="text-indigo-600 dark:text-indigo-400" />
-                    <h3 className="text-xs font-mono font-semibold uppercase tracking-wider">
-                      PostgreSQL / pgvector
-                    </h3>
-                  </div>
-                  <div className="text-xs text-zinc-600 dark:text-zinc-400 space-y-1 font-mono">
-                    <div>Vector Dimension: 384 (all-MiniLM-L6-v2)</div>
-                    <div>Index Algorithm: HNSW (m=16, ef_construction=64)</div>
-                    <div>Distance Metric: Cosine (&lt;=&gt;)</div>
-                  </div>
+                <div className="flex items-center justify-between p-3 rounded bg-[#141412] border border-[#242422]">
+                  <span>Beta (Failure Penalty Rate):</span>
+                  <span className="font-bold text-[#D9534F]">{BETA_FAILURE}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded bg-[#141412] border border-[#242422]">
+                  <span>Quarantine Threshold (Theta):</span>
+                  <span className="font-bold text-[#E67E22]">{QUARANTINE_THRESHOLD}</span>
+                </div>
+                <div className="flex items-center justify-between p-3 rounded bg-[#141412] border border-[#242422]">
+                  <span>Theorem 1 Bound (k* Failures):</span>
+                  <span className="font-bold text-[#EDECE8]">{CONSECUTIVE_FAILURES_BOUND}</span>
                 </div>
               </div>
             </div>
           )}
         </main>
+      )}
       </div>
 
-      {/* Auth Modal for Switching from Demo */}
+      {/* Auth Modal */}
       <AuthModal
         isOpen={isAuthModalOpen}
         onClose={() => setIsAuthModalOpen(false)}
-        onSuccess={() => {
-          setSearchParams({})
-          setIsAuthModalOpen(false)
-        }}
         initialMode="signup"
       />
     </div>

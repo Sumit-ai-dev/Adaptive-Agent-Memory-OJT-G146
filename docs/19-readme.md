@@ -29,7 +29,7 @@ The `docs/` directory contains complete, production-grade technical and architec
 | [15-deployment.md](file:///Users/sakshidattaprasadkasat/Adaptive-Agent-Memory-OJT-G146/docs/15-deployment.md) | Deployment Architecture | Multi-environment topology, unified runner script, and zero-GPU strategy. |
 | [16-cost-analysis.md](file:///Users/sakshidattaprasadkasat/Adaptive-Agent-Memory-OJT-G146/docs/16-cost-analysis.md) | Cost & Resource Analysis | Node token consumption, economic ROI (61.4% savings), and storage sizing. |
 | [17-roadmap.md](file:///Users/sakshidattaprasadkasat/Adaptive-Agent-Memory-OJT-G146/docs/17-roadmap.md) | 12-Week Roadmap | Milestone delivery logs, Definition of Done, and risk mitigations. |
-| [18-team-responsibilities.md](file:///Users/sakshidattaprasadkasat/Adaptive-Agent-Memory-OJT-G146/docs/18-team-responsibilities.md) | Team Responsibilities | Clear governance between Kasat Sakshi Dattaprasad and Sumit Das. |
+| [18-team-responsibilities.md](file:///Users/sakshidattaprasadkasat/Adaptive-Agent-Memory-OJT-G146/docs/18-team-responsibilities.md) | Team Responsibilities | Clear governance between Sakshi Kasat and Sumit Das. |
 | [19-readme.md](file:///Users/sakshidattaprasadkasat/Adaptive-Agent-Memory-OJT-G146/docs/19-readme.md) | Documentation Guide | Master catalog and codebase structural roadmap (this document). |
 | [20-adrs.md](file:///Users/sakshidattaprasadkasat/Adaptive-Agent-Memory-OJT-G146/docs/20-adrs.md) | Architecture Decision Records | Formal ADRs detailing choices, alternatives, rationales, and trade-offs. |
 | [21-traceability.md](file:///Users/sakshidattaprasadkasat/Adaptive-Agent-Memory-OJT-G146/docs/21-traceability.md) | Traceability Matrix | End-to-end mapping from business requirements to code, APIs, and test suites. |
@@ -73,9 +73,18 @@ Adaptive-Agent-Memory-OJT-G146/
 │   ├── package.json               # Node dependencies & Vite build scripts
 │   └── vite.config.ts             # Vite bundler configuration
 │
-├── packages/aema/                 # Portable AEMA TypeScript SDK
-│   ├── src/                       # Client library implementation
+├── packages/aema/                 # Portable AEMA TypeScript SDK & Dual-Transport MCP
+│   ├── src/                       # Client library & Stdio/SSE MCP server
 │   └── package.json               # Standalone npm package definitions
+│
+├── aema/                          # Drop-in Python SDK with SSE streaming parity
+│   ├── memory.py                  # AdaptiveMemory with aexecute_stream & Theorem 1
+│   └── __init__.py                # Package exports & lazy schema loaders
+│
+├── extension/                     # Chrome Extension (Manifest V3)
+│   ├── manifest.json              # MV3 permissions, activeTab, contextMenus
+│   ├── background.js              # Service worker & text selection clipper
+│   └── popup.html / popup.js      # Obsidian studio & real-time 5-node stepper
 │
 ├── tests/                         # Full Pytest Automated Verification Suite
 │   ├── test_agent_graph.py        # End-to-end cognitive loop validation

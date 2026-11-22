@@ -12,7 +12,7 @@
  * - xAI Grok-2, Grok-3 (Function Calling)
  * - Google Gemini 1.5, 2.0 (Function Declarations)
  * 
- * Authors: Sumit Das, Sakshi Dattaprasad Kasat
+ * Authors: Sumit Das, Sakshi Kasat
  * License: MIT
  */
 

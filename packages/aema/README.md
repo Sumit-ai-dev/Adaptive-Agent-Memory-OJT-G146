@@ -261,11 +261,11 @@ If you use AEMA in your research or production agents, please cite our conferenc
 ```bibtex
 @inproceedings{das2026aema,
   title={Mitigating Negative Transfer in Autonomous Language Agents via Reliability-Aware Experiential Memory},
-  author={Das, Sumit and Kasat, Sakshi Dattaprasad},
+  author={Das, Sumit and Kasat, Sakshi},
   booktitle={IEEE Conference Proceedings},
   year={2026}
 }
 ```
 
 ## ⚖️ License
-MIT License © 2026 Sumit Das and Kasat Sakshi Dattaprasad.
+MIT License © 2026 Sumit Das and Sakshi Kasat.

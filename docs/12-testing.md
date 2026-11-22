@@ -2,7 +2,7 @@
 
 **Project:** Adaptive AI Agent with Persistent Experience Memory  
 **Group:** G146 (GenAI / Agentic AI OJT Capstone)  
-**Status:** Approved Testing Specification (Month 2 Specification)  
+**Status:** Approved Testing Specification (Production Release Specification)  
 
 ---
 
@@ -12,7 +12,8 @@ The testing strategy validates the entire stack from low-level mathematical form
 
 1. **Unit Testing:**
    * Validates standalone modules in isolation using `pytest`.
-   * Verifies Pydantic v2 data schemas, EMA trust formula updates, vector cosine math, and API response serializers.
+   * Verifies Pydantic v2 data schemas, A-EMA trust dynamics, Theorem 1 quarantine horizons, and API response serializers.
+   * Full TypeScript SDK suite (`npm test`) asserting integer quarantine boundaries, Wilson intervals, WAL logging, and dedup.
 2. **Integration Testing:**
    * Tests interactions with Supabase PostgreSQL and `pgvector`.
    * Verifies database migrations, Row-Level Security policies, and the `match_experiences` stored procedure.
@@ -39,7 +40,7 @@ The testing strategy validates the entire stack from low-level mathematical form
 | **TEST-004** | Agent Exec | Model triggers valid tool call (DuckDuckGo search) | Agent executes tool, parses text, and completes task successfully | High |
 | **TEST-005** | Circuit Breaker| Model loops without reaching terminal answer | LangGraph terminates at `max_turns = 4`; assigns $R_t = 0.0$ | High |
 | **TEST-006** | Reflection | Trajectory completes with non-trivial tool steps | Reflector emits valid `{Trigger, Strategy, Pitfall}` JSON matching schema | High |
-| **TEST-007** | Trust Update | Reused experience on successful task run ($R_t = 1.0$) | Trust score increases via EMA: $S_{t+1} = 0.15(1.0) + 0.85(S_t)$ | High |
+| **TEST-007** | Trust Update | Reused experience on successful task run ($R_t = 1.0$) | Trust score increases via A-EMA: $S_{t+1} = 0.85(1.0) + 0.15(S_t)$ | High |
 | **TEST-008** | Quarantine | Reused experience drops below threshold ($S < 0.35$) | Experience status updates to `deprecated`; excluded from future retrieval | High |
 | **TEST-009** | Deduplication | New reflection has cosine distance $< 0.10$ from existing | System merges evidence rather than creating duplicate row | Medium |
 | **TEST-010** | Security/BYOK | Invalid or expired JWT token | Request rejected with HTTP 401 Unauthorized | High |
