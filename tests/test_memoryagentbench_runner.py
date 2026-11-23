@@ -424,3 +424,44 @@ def test_check_ollama_hardware_recommendations():
     assert rec_low["recommended_model"] == "llama3.2:3b"
     assert rec_low["is_installed"] is True
 
+
+@pytest.mark.asyncio
+async def test_session_sqlite_cleanup_no_windows_lock():
+    """Verify explicit close() releases all SQLite WAL handles and removes temp directory without locks."""
+    import os
+    from benchmarks.memoryagentbench_runner import MemoryAgentBenchSession
+
+    session = MemoryAgentBenchSession(
+        scenario_id="cleanup_lock_test",
+        condition_name="adaptive",
+        db_path=":memory:",
+    )
+    temp_dir_path = session._temp_dir.name
+    db_file_path = session.db_path
+
+    assert os.path.exists(temp_dir_path)
+    assert os.path.exists(db_file_path)
+
+    # Ingest facts to write to SQLite and trigger WAL mode
+    context = (
+        "Here is a list of facts:\n"
+        "100. rugby union was created in the country of England.\n"
+        "186. rugby union was created in the country of India.\n"
+    )
+    await session.ingest_stream(context, competency="Conflict_Resolution")
+
+    # Perform query
+    task = {
+        "task_id": "test_q1",
+        "question": "Which country was rugby union created in?",
+        "ground_truth_answers": ["India"],
+    }
+    rec = await session.query(task)
+    assert rec is not None
+
+    # Verify session close() cleans up temp directory completely without PermissionError
+    session.close()
+
+    assert session._temp_dir is None
+    assert not os.path.exists(temp_dir_path), f"Temp dir {temp_dir_path} was not cleaned up!"
+

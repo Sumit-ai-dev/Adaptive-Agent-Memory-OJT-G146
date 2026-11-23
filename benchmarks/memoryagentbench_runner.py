@@ -197,7 +197,10 @@ class MemoryAgentBenchSession:
         # Ephemeral isolated database per session
         if db_path == ":memory:":
             import tempfile
-            self._temp_dir = tempfile.TemporaryDirectory()
+            try:
+                self._temp_dir = tempfile.TemporaryDirectory(ignore_cleanup_errors=True)
+            except TypeError:
+                self._temp_dir = tempfile.TemporaryDirectory()
             safe_scenario = re.sub(r"[^a-zA-Z0-9_-]", "_", scenario_id)
             self.db_path = str(Path(self._temp_dir.name) / f"session_{condition_name}_{safe_scenario}_{trial}.db")
         else:
@@ -213,6 +216,54 @@ class MemoryAgentBenchSession:
         self.quarantine_events: List[Dict[str, Any]] = []
         self.ingestion_count = 0
         self.simulated_time = datetime(2026, 1, 1, 0, 0, 0, tzinfo=timezone.utc)
+
+    def close(self) -> None:
+        """
+        Explicitly release SQLite connections, checkpoint WAL, and cleanup temporary directory.
+        Prevents Windows [WinError 32] file locks during TemporaryDirectory cleanup.
+        """
+        import gc
+        import shutil
+        import sqlite3
+
+        # Force checkpoint and truncation on SQLite WAL files if database exists
+        if hasattr(self, "db_path") and self.db_path and self.db_path != ":memory:":
+            if os.path.exists(self.db_path):
+                try:
+                    conn = sqlite3.connect(self.db_path)
+                    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    conn.close()
+                except Exception:
+                    pass
+
+        # Break references to store and retriever to allow garbage collection of connections
+        self.store = None
+        self.retriever = None
+        gc.collect()
+
+        # Safely clean up temporary directory
+        if hasattr(self, "_temp_dir") and self._temp_dir is not None:
+            temp_dir_obj = self._temp_dir
+            temp_path = getattr(temp_dir_obj, "name", None)
+            try:
+                temp_dir_obj.cleanup()
+            except Exception:
+                if temp_path and os.path.exists(temp_path):
+                    shutil.rmtree(temp_path, ignore_errors=True)
+            finally:
+                self._temp_dir = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.close()
+
+    def __del__(self):
+        try:
+            self.close()
+        except Exception:
+            pass
 
     async def ingest_stream(self, context_text: str, competency: str) -> Dict[str, Any]:
         """
@@ -657,14 +708,17 @@ async def run_scenario_evaluation(
         provider=provider,
     )
 
-    # Turn Ingestion Phase
-    await session.ingest_stream(context_text, competency)
+    try:
+        # Turn Ingestion Phase
+        await session.ingest_stream(context_text, competency)
 
-    # Query Probing Phase
-    records: List[TrialTelemetryRecord] = []
-    for task in tasks:
-        rec = await session.query(task, evaluator=evaluator)
-        records.append(rec)
+        # Query Probing Phase
+        records: List[TrialTelemetryRecord] = []
+        for task in tasks:
+            rec = await session.query(task, evaluator=evaluator)
+            records.append(rec)
+    finally:
+        session.close()
 
     # Telemetry Persistence (JSONL)
     output_log_dir = RESULTS_DIR / condition_name

@@ -33,14 +33,43 @@ logger = logging.getLogger(__name__)
 # Directly adopted from HUST-AI-HYZ/MemoryAgentBench/utils/eval_other_utils.py
 # ============================================================================
 
+def extract_xml_answer(text: str) -> Optional[str]:
+    """
+    Extract the content enclosed in <answer>...</answer> tags if present.
+    Supports case-insensitive matching, multiline contents, and unclosed trailing tags.
+    """
+    if not text:
+        return None
+    # 1. Closed tag <answer>...</answer>
+    match = re.search(r"<answer>(.*?)</answer>", text, flags=re.DOTALL | re.IGNORECASE)
+    if match:
+        content = match.group(1).strip()
+        if content:
+            return content
+        return None
+
+    # 2. Unclosed tag (e.g., truncated generation without closing tag)
+    if "</answer>" not in text.lower():
+        unclosed_match = re.search(r"<answer>(.*)$", text, flags=re.DOTALL | re.IGNORECASE)
+        if unclosed_match:
+            content = unclosed_match.group(1).strip()
+            if content:
+                return content
+
+    return None
+
+
 def normalize_answer(answer_text: str) -> str:
     """
     Normalize text for evaluation by removing articles, punctuation, and extra whitespace.
-    Official implementation from MemoryAgentBench / DensePhrases / SQuAD.
+    Official implementation from MemoryAgentBench / DensePhrases / SQuAD,
+    enhanced to strip XML tags before punctuation normalization.
     """
     if not isinstance(answer_text, str):
         answer_text = str(answer_text)
-    text = answer_text.lower()
+    # Strip XML/HTML tags first to prevent tag names (e.g. 'answer') from leaking into word tokens
+    text = re.sub(r"<[^>]+>", " ", answer_text)
+    text = text.lower()
     text = "".join(char for char in text if char not in string.punctuation)
     text = re.sub(r"\b(a|an|the)\b", " ", text)
     return " ".join(text.split())
@@ -91,16 +120,59 @@ def drqa_exact_match_score(prediction: str, ground_truth: str) -> float:
     return float(normalize_answer(prediction) == normalize_answer(ground_truth))
 
 
+OPT_MODIFIERS = r"(?:(a|an|the|actually|really|just|in|at|located in|born in)\s+)?"
+
+PRE_NEGATION_PATTERNS = [
+    re.compile(rf"\b(not|no|never|neither|isnt|wasnt|arent|werent|cannot|wont|instead of|rather than)\s+{OPT_MODIFIERS}$"),
+    re.compile(rf"\b(no longer)\s+{OPT_MODIFIERS}$"),
+    re.compile(rf"\b(previously|formerly|earlier|originally|historically|obsolete|superseded|outdated|prior to|before)\s+{OPT_MODIFIERS}$"),
+    re.compile(rf"\b(although|though|while)\s+(?:previously|formerly|originally)\s+{OPT_MODIFIERS}$"),
+]
+
+POST_NEGATION_PATTERNS = [
+    re.compile(r"^\s*(?:is|was|are|were)?\s*(?:not|no longer|isnt|wasnt|werent|arent|incorrect|false|untrue)\b"),
+    re.compile(r"^\s*(?:is|was|has been)?\s*(?:obsolete|superseded|replaced|deprecated|outdated|invalid)\b"),
+]
+
+
+def is_negated_or_obsolete_match(norm_pred: str, start: int, end: int) -> bool:
+    """
+    Determine whether a matched occurrence of an entity in prediction text is
+    disqualified by negation, historical concession, or obsolescence markers.
+    """
+    pre_window = norm_pred[max(0, start - 60):start]
+    post_window = norm_pred[end:min(len(norm_pred), end + 60)]
+    for pat in PRE_NEGATION_PATTERNS:
+        if pat.search(pre_window):
+            return True
+    for pat in POST_NEGATION_PATTERNS:
+        if pat.search(post_window):
+            return True
+    return False
+
+
 def substring_exact_match_score(prediction: str, ground_truth: str) -> float:
     """
-    Check if normalized ground truth is a substring of the normalized prediction.
-    Official MemoryAgentBench implementation for fact_sh, fact_mh, ruler_qa, etc.
+    Check if normalized ground truth is an affirmative substring of the normalized prediction.
+    Official MemoryAgentBench implementation enhanced with word boundary enforcement
+    and negation/obsolescence disqualification.
     """
     norm_gt = normalize_answer(ground_truth)
     norm_pred = normalize_answer(prediction)
-    if not norm_gt:
+    if not norm_gt or not norm_pred:
         return 0.0
-    return float(norm_gt in norm_pred)
+
+    pattern = re.compile(rf"\b{re.escape(norm_gt)}\b")
+    matches = list(pattern.finditer(norm_pred))
+    if not matches:
+        return 0.0
+
+    # If at least one occurrence is affirmative (not negated or obsolete), it is an exact match
+    for m in matches:
+        if not is_negated_or_obsolete_match(norm_pred, m.start(), m.end()):
+            return 1.0
+
+    return 0.0
 
 
 def drqa_metric_max_over_ground_truths(
@@ -126,10 +198,17 @@ def drqa_metric_max_over_ground_truths(
 def parse_output(output_text: str, answer_prefix: str = "Answer:") -> Optional[str]:
     """
     Parse model output to extract the answer portion.
-    Official implementation from MemoryAgentBench.
+    Official implementation from MemoryAgentBench, enhanced with XML answer tag extraction.
     """
     if not output_text:
         return None
+
+    xml_ans = extract_xml_answer(output_text)
+    if xml_ans:
+        clean_xml = re.sub(
+            f"^{re.escape(answer_prefix)}", "", xml_ans, flags=re.IGNORECASE
+        ).strip()
+        return clean_xml or xml_ans
 
     extraction_patterns = [
         re.compile(f"(?:{answer_prefix})(.*)(?:\n|$)", flags=re.IGNORECASE),
@@ -197,38 +276,56 @@ class MemoryAgentBenchEvaluator(BaseBenchmarkEvaluator):
                 failure_reason="Task contains no valid ground-truth answers",
             )
 
-        # 1. Compute official metrics on raw output
-        raw_em = drqa_metric_max_over_ground_truths(
-            drqa_exact_match_score, agent_output, ground_truth_answers
-        )
-        raw_sem = drqa_metric_max_over_ground_truths(
-            substring_exact_match_score, agent_output, ground_truth_answers
-        )
-        raw_f1 = drqa_metric_max_over_ground_truths(
-            lambda p, gt: f1_score(p, gt)[0], agent_output, ground_truth_answers
-        )
-
-        # 2. Compute official metrics on parsed output (Answer: prefix extraction)
+        # Extract declared XML answer if present
+        xml_answer = extract_xml_answer(agent_output)
         parsed_output = parse_output(agent_output)
-        if parsed_output:
-            parsed_em = drqa_metric_max_over_ground_truths(
-                drqa_exact_match_score, parsed_output, ground_truth_answers
+
+        if xml_answer:
+            # When model explicitly provides an <answer>...</answer> tag as instructed,
+            # evaluate official metrics on the declared answer to prevent scratchpad reasoning
+            # from causing spurious false positives or mask errors.
+            eval_target = parsed_output or xml_answer
+            final_em = drqa_metric_max_over_ground_truths(
+                drqa_exact_match_score, eval_target, ground_truth_answers
             )
-            parsed_sem = drqa_metric_max_over_ground_truths(
-                substring_exact_match_score, parsed_output, ground_truth_answers
+            final_sem = drqa_metric_max_over_ground_truths(
+                substring_exact_match_score, eval_target, ground_truth_answers
             )
-            parsed_f1 = drqa_metric_max_over_ground_truths(
-                lambda p, gt: f1_score(p, gt)[0], parsed_output, ground_truth_answers
+            final_f1 = drqa_metric_max_over_ground_truths(
+                lambda p, gt: f1_score(p, gt)[0], eval_target, ground_truth_answers
+            )
+        else:
+            # 1. Compute official metrics on raw output
+            raw_em = drqa_metric_max_over_ground_truths(
+                drqa_exact_match_score, agent_output, ground_truth_answers
+            )
+            raw_sem = drqa_metric_max_over_ground_truths(
+                substring_exact_match_score, agent_output, ground_truth_answers
+            )
+            raw_f1 = drqa_metric_max_over_ground_truths(
+                lambda p, gt: f1_score(p, gt)[0], agent_output, ground_truth_answers
             )
 
-            # Official post_process rule: take max of original and parsed score
-            final_em = max(raw_em, parsed_em)
-            final_sem = max(raw_sem, parsed_sem)
-            final_f1 = max(raw_f1, parsed_f1)
-        else:
-            final_em = raw_em
-            final_sem = raw_sem
-            final_f1 = raw_f1
+            # 2. Compute official metrics on parsed output (Answer: prefix extraction)
+            if parsed_output:
+                parsed_em = drqa_metric_max_over_ground_truths(
+                    drqa_exact_match_score, parsed_output, ground_truth_answers
+                )
+                parsed_sem = drqa_metric_max_over_ground_truths(
+                    substring_exact_match_score, parsed_output, ground_truth_answers
+                )
+                parsed_f1 = drqa_metric_max_over_ground_truths(
+                    lambda p, gt: f1_score(p, gt)[0], parsed_output, ground_truth_answers
+                )
+
+                # Official post_process rule: take max of original and parsed score
+                final_em = max(raw_em, parsed_em)
+                final_sem = max(raw_sem, parsed_sem)
+                final_f1 = max(raw_f1, parsed_f1)
+            else:
+                final_em = raw_em
+                final_sem = raw_sem
+                final_f1 = raw_f1
 
         # 3. Conflict Resolution Diagnostic Metrics (Separated from Official Metrics)
         # Check if the output recalled superseded/obsolete facts rather than updated facts
@@ -238,16 +335,23 @@ class MemoryAgentBenchEvaluator(BaseBenchmarkEvaluator):
 
         is_obsolete_intrusion = False
         if obsolete_answers:
-            obs_sem = drqa_metric_max_over_ground_truths(
-                substring_exact_match_score, agent_output, obsolete_answers
-            )
-            if parsed_output:
-                obs_sem = max(
-                    obs_sem,
-                    drqa_metric_max_over_ground_truths(
-                        substring_exact_match_score, parsed_output, obsolete_answers
-                    ),
+            if xml_answer:
+                # If XML answer is declared, check obsolete intrusion strictly on declared answer
+                eval_target = parsed_output or xml_answer
+                obs_sem = drqa_metric_max_over_ground_truths(
+                    substring_exact_match_score, eval_target, obsolete_answers
                 )
+            else:
+                obs_sem = drqa_metric_max_over_ground_truths(
+                    substring_exact_match_score, agent_output, obsolete_answers
+                )
+                if parsed_output:
+                    obs_sem = max(
+                        obs_sem,
+                        drqa_metric_max_over_ground_truths(
+                            substring_exact_match_score, parsed_output, obsolete_answers
+                        ),
+                    )
             is_obsolete_intrusion = (obs_sem >= 1.0) and (final_sem < 1.0)
 
         # 4. Quarantine Decision Tracking (if telemetry provided by agent)
