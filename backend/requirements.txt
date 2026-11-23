@@ -6,7 +6,7 @@
 # --- API gateway ---
 fastapi>=0.162.7
 uvicorn>=0.30.0
-pydantic>=2.14.3
+pydantic>=2.14.4
 pydantic-settings>=2.16.3          # ai_service/config.py
 httpx>=0.28.1
 python-dotenv>=1.2.4
