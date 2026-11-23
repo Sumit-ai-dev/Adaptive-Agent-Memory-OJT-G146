@@ -6,8 +6,9 @@ Saves candidate experiences into quarantine status for empirical validation.
 """
 
 import json
+import logging
 import time
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from ai_service.config import settings
 from ai_service.context.token_budget import calculate_token_cost, count_tokens
@@ -15,6 +16,144 @@ from ai_service.llm_client import llm_gateway, resolve_provider_config
 from models.domain import TaskDomain
 from models.experience import ExperienceStatus
 from models.state import AgentState
+
+logger = logging.getLogger(__name__)
+
+
+def normalize_reflection_text(val: Any, fallback: str = "") -> str:
+    """
+    Safely extract and normalize reflection values into clean, meaningful text.
+    Handles strings, dicts, nested dicts, lists, numbers, and nulls.
+    Avoids producing raw Python string representations like "{'key': 'value'}".
+    """
+    if val is None:
+        return fallback
+
+    if isinstance(val, str):
+        cleaned = val.strip()
+        return cleaned if cleaned else fallback
+
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        return str(val)
+
+    if isinstance(val, list):
+        items = [normalize_reflection_text(item, fallback="") for item in val]
+        items = [i for i in items if i]
+        return ". ".join(items) if items else fallback
+
+    if isinstance(val, dict):
+        if not val:
+            return fallback
+
+        # If dict has only 1 key, extract the inner value directly
+        if len(val) == 1:
+            only_val = next(iter(val.values()))
+            res = normalize_reflection_text(only_val, fallback="")
+            if res:
+                return res
+
+        # If multiple keys, format human-readably: e.g. "Action: ... Reason: ..."
+        parts = []
+        for k, v in val.items():
+            norm_v = normalize_reflection_text(v, fallback="")
+            if not norm_v:
+                continue
+            clean_k = str(k).replace("_", " ").strip().capitalize()
+            if norm_v.lower().startswith(clean_k.lower() + ":"):
+                parts.append(norm_v)
+            else:
+                parts.append(f"{clean_k}: {norm_v}")
+
+        return ". ".join(parts) if parts else fallback
+
+    s = str(val).strip()
+    return s if s else fallback
+
+
+def normalize_reflection_confidence(val: Any, default: float = 0.85) -> float:
+    """Safely parse confidence score into a float clamped between 0.0 and 1.0."""
+    if val is None:
+        return default
+    if isinstance(val, (int, float)) and not isinstance(val, bool):
+        score = float(val)
+    elif isinstance(val, str):
+        try:
+            score = float(val.strip().rstrip("%"))
+            if score > 1.0 and score <= 100.0:
+                score /= 100.0
+        except ValueError:
+            val_lower = val.lower().strip()
+            if "high" in val_lower:
+                score = 0.85
+            elif "medium" in val_lower or "moderate" in val_lower:
+                score = 0.70
+            elif "low" in val_lower:
+                score = 0.40
+            else:
+                score = default
+    elif isinstance(val, dict):
+        inner_score = val.get("score") or val.get("value") or val.get("confidence")
+        return normalize_reflection_confidence(inner_score, default=default)
+    elif isinstance(val, (list, tuple)) and len(val) > 0:
+        return normalize_reflection_confidence(val[0], default=default)
+    else:
+        score = default
+
+    return max(0.0, min(1.0, score))
+
+
+def normalize_reflection_payload(
+    parsed: Any,
+    task_input: str,
+    domain: str,
+    user_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Validate and normalize arbitrary LLM reflection output into a strictly typed candidate experience.
+    Ensures trigger_condition, strategy_lesson, and pitfall are strings, confidence is a float [0, 1].
+    """
+    if isinstance(parsed, list) and len(parsed) > 0 and isinstance(parsed[0], dict):
+        parsed = parsed[0]
+
+    if not isinstance(parsed, dict):
+        parsed = {}
+
+    # Check for root wrapper keys like {"reflection": {...}} or {"experience": {...}}
+    for wrapper in ("reflection", "experience", "candidate_experience", "candidate", "response", "data", "result"):
+        if wrapper in parsed and isinstance(parsed[wrapper], dict):
+            inner = parsed[wrapper]
+            if any(k in inner for k in ("strategy_lesson", "trigger_condition", "pitfall", "confidence")):
+                parsed = inner
+                break
+
+    safe_task_prefix = str(task_input)[:50] if task_input else "general"
+
+    trigger = normalize_reflection_text(
+        parsed.get("trigger_condition"),
+        fallback=f"Tasks similar to: {safe_task_prefix}",
+    )
+    strategy = normalize_reflection_text(
+        parsed.get("strategy_lesson"),
+        fallback="Follow verified step-by-step reasoning constraints.",
+    )
+    pitfall = normalize_reflection_text(
+        parsed.get("pitfall"),
+        fallback="Avoid relying on uncorroborated single-source facts.",
+    )
+    confidence = normalize_reflection_confidence(
+        parsed.get("confidence"),
+        default=0.85,
+    )
+
+    return {
+        "user_id": user_id,
+        "task_domain": domain,
+        "trigger_condition": trigger,
+        "strategy_lesson": strategy,
+        "pitfall": pitfall,
+        "confidence": confidence,
+        "status": ExperienceStatus.CANDIDATE.value,
+    }
 
 
 async def reflect_node(state: AgentState) -> Dict[str, Any]:
@@ -76,18 +215,16 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
             messages, config=provider_config, json_mode=True,
             temperature=requested_temperature,
         )
-        # Parse JSON
+        # Parse JSON safely and normalize structured types
         parsed = json.loads(raw_json)
-        candidate_exp = {
-            "user_id": state.get("user_id"),
-            "task_domain": domain,
-            "trigger_condition": parsed.get("trigger_condition", f"Tasks similar to: {task_input[:50]}"),
-            "strategy_lesson": parsed.get("strategy_lesson", "Follow verified step-by-step reasoning constraints."),
-            "pitfall": parsed.get("pitfall", "Avoid relying on uncorroborated single-source facts."),
-            "confidence": float(parsed.get("confidence", 0.85)),
-            "status": ExperienceStatus.CANDIDATE.value,
-        }
-    except Exception:
+        candidate_exp = normalize_reflection_payload(
+            parsed=parsed,
+            task_input=task_input,
+            domain=domain,
+            user_id=state.get("user_id"),
+        )
+    except Exception as exc:
+        logger.warning(f"Reflection LLM generation or parsing error: {exc}. Using safe candidate fallback.")
         has_provider_error = True
         candidate_exp = {
             "user_id": state.get("user_id"),
@@ -130,6 +267,8 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
     duration_ms = int((time.time() - start_ts) * 1000)
 
     # Build stepper trace
+    strat_snippet = str(candidate_exp.get("strategy_lesson") or "")[:70]
+    pit_snippet = str(candidate_exp.get("pitfall") or "")[:70]
     trace = {
         "id": f"step_reflect_{int(start_ts)}",
         "type": "reflection",
@@ -137,8 +276,8 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
         "title": "Structured Experience Distillation",
         "detail": (
             f"Distilled candidate experience tuple for domain '{domain}'. "
-            f"Strategy: '{candidate_exp['strategy_lesson'][:70]}...'. "
-            f"Pitfall: '{candidate_exp['pitfall'][:70]}...'. "
+            f"Strategy: '{strat_snippet}...'. "
+            f"Pitfall: '{pit_snippet}...'. "
             f"Tokens consumed: {step_tokens} (cost: ${step_cost:.5f})."
         ),
         "durationMs": duration_ms,
@@ -168,3 +307,4 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
         "budget_exceeded": is_budget_exceeded,
         "status": "updating_trust",
     }
+
