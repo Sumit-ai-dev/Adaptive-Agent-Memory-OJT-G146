@@ -114,6 +114,7 @@ class BaseMemoryStore(ABC):
         domain: Optional[TaskDomain] = None,
         top_k: int = 5,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Tuple[Experience, float]]:
         """
         Returns list of (Experience, cosine_similarity) tuples.
@@ -957,8 +958,13 @@ class SQLiteMemoryStore(BaseMemoryStore):
         domain: Optional[TaskDomain] = None,
         top_k: int = 5,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Tuple[Experience, float]]:
-        experiences = await self.list_experiences(domain=domain, user_id=user_id)
+        experiences = await self.list_experiences(
+            domain=domain,
+            user_id=user_id,
+            exact_user_match=exact_user_match,
+        )
         if not experiences:
             return []
 
@@ -2649,6 +2655,7 @@ class PostgresMemoryStore(BaseMemoryStore):
         domain: Optional[TaskDomain] = None,
         top_k: int = 5,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Tuple[Experience, float]]:
         pool = await self._get_pool()
         domain_val = domain.value if isinstance(domain, TaskDomain) else domain
@@ -2659,7 +2666,8 @@ class PostgresMemoryStore(BaseMemoryStore):
                     await register_vector(conn)
                 except Exception:
                     pass
-            query = """
+            user_clause = "($4::text IS NULL OR user_id = $4)" if exact_user_match else "($4::text IS NULL OR user_id = $4 OR user_id IS NULL)"
+            query = f"""
                 SELECT id, user_id, task_domain, trigger_condition, strategy_lesson, pitfall,
                        confidence, trust_score, uses_count, successes_count, failures_count,
                        status, embedding, source_task_id, created_at, updated_at,
@@ -2667,7 +2675,7 @@ class PostgresMemoryStore(BaseMemoryStore):
                 FROM experiences
                 WHERE status = 'active'
                   AND ($2::text IS NULL OR task_domain = $2)
-                  AND ($4::text IS NULL OR user_id = $4 OR user_id IS NULL)
+                  AND {user_clause}
                   AND embedding IS NOT NULL
                 ORDER BY similarity DESC
                 LIMIT $3;
@@ -2889,6 +2897,7 @@ class SupabaseMemoryStore(BaseMemoryStore):
         domain: Optional[TaskDomain] = None,
         top_k: int = 5,
         user_id: Optional[str] = None,
+        exact_user_match: bool = False,
     ) -> List[Tuple[Experience, float]]:
         domain_val = (domain.value if isinstance(domain, TaskDomain) else domain) if domain else None
         rpc_payload = {
@@ -2906,8 +2915,11 @@ class SupabaseMemoryStore(BaseMemoryStore):
                     results = []
                     for r in rows:
                         exp = self._dict_to_experience(r)
-                        if user_id is not None and exp.user_id != user_id and exp.user_id is not None:
-                            continue
+                        if user_id is not None:
+                            if exact_user_match and exp.user_id != user_id:
+                                continue
+                            elif not exact_user_match and exp.user_id != user_id and exp.user_id is not None:
+                                continue
                         sim = float(r.get("similarity", 0.0))
                         results.append((exp, sim))
                         if len(results) >= top_k:
@@ -2919,7 +2931,11 @@ class SupabaseMemoryStore(BaseMemoryStore):
                 logger.warning(f"Supabase RPC match_experiences call failed ({e}); falling back to client-side cosine")
 
         # Resilient fallback: list and compute cosine similarity
-        all_exps = await self.list_experiences(domain=domain, user_id=user_id)
+        all_exps = await self.list_experiences(
+            domain=domain,
+            user_id=user_id,
+            exact_user_match=exact_user_match,
+        )
         q_vec = np.array(query_embedding, dtype=np.float32)
         q_norm = np.linalg.norm(q_vec)
         if q_norm < 1e-6:

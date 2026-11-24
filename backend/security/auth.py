@@ -119,6 +119,19 @@ def decode_jwt_token(token: str) -> Dict[str, Any]:
             last_error = err
             continue
 
+    # Development-only fallback: if SUPABASE_JWT_SECRET is unconfigured in local development,
+    # decode the authentic Supabase token payload so local developers aren't blocked by 401s.
+    if not is_production and not settings.SUPABASE_JWT_SECRET:
+        try:
+            unverified = jwt.decode(token, options={"verify_signature": False})
+            if "supabase" in unverified.get("iss", "") or unverified.get("role") in ("authenticated", "anon"):
+                logger.info(
+                    f"Decoded Supabase JWT without signature check in development for tenant: {unverified.get('sub')}"
+                )
+                return unverified
+        except Exception:
+            pass
+
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Invalid authentication token.",
