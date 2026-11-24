@@ -43,7 +43,7 @@ def retrieve_experiences(
     query_embedding: Optional[Sequence[float]],
     candidates: Sequence[Experience],
     filter_domain: Optional[TaskDomain] = None,
-    min_similarity: float = 0.60,
+    min_similarity: float = 0.30,
     min_trust: float = 0.35,
     top_k: int = 3,
     weight_similarity: float = 0.70,

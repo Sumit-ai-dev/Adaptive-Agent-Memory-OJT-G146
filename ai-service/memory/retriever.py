@@ -96,7 +96,7 @@ class MemoryRetriever:
             # Condition B: Naive Vector RAG (relevance only, no quarantine, no trust weighting)
             if mode == MemoryMode.NAIVE:
                 # Naive RAG accepts any memory above similarity cutoff, ignoring trust score
-                if sim >= (settings.SIMILARITY_THRESHOLD - 0.20):
+                if sim >= settings.SIMILARITY_THRESHOLD:
                     results.append(
                         RetrievedMemory(
                             experience=exp,
@@ -130,14 +130,6 @@ class MemoryRetriever:
                         experience=exp,
                         similarity=sim,
                         composite_score=round(composite, 4),
-                    )
-                )
-                composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * trust)
-                results.append(
-                    RetrievedMemory(
-                        experience=exp,
-                        similarity=sim,
-                        composite_score=composite,
                     )
                 )
 
@@ -176,7 +168,7 @@ class MemoryRetriever:
                     alpha_0=settings.PRIOR_ALPHA,
                     beta_0=settings.PRIOR_BETA,
                 )
-                composite = round(sim * lcb_val, 4)
+                composite = round((settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * lcb_val), 4)
                 results.append(
                     RetrievedMemory(
                         experience=exp,
