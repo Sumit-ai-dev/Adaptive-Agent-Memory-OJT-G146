@@ -17,7 +17,7 @@ export const CONSECUTIVE_FAILURES_BOUND = 3 // k* = ceil((ln(0.35) - ln(1.0)) / 
 // ─── Centralized Canonical Provider Default Models (Aligned with backend) ────
 export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
   groq: 'openai/gpt-oss-120b',
-  gemini: 'gemini-1.5-flash',
+  gemini: 'gemini-2.5-flash',
   nvidia: 'nvidia/llama-3.1-nemotron-70b-instruct',
   ollama: 'llama3.2:3b',
   openai: 'gpt-4o-mini',
@@ -241,15 +241,18 @@ export async function fetchExperiences(
   domain?: TaskDomain | 'all',
   search?: string,
   status?: ExperienceStatus | string | 'all',
+  exactUserMatch?: boolean,
 ): Promise<Experience[]> {
   try {
     const session = await getCurrentSession()
     const token = session.data?.session?.access_token
+    const userId = session.data?.session?.user?.id
 
     const params = new URLSearchParams()
     if (domain && domain !== 'all') params.set('domain', domain)
     if (search && search.trim()) params.set('search', search.trim())
     if (status && status !== 'all') params.set('status', status)
+    if (exactUserMatch !== undefined) params.set('exactUserMatch', String(exactUserMatch))
     const qs = params.toString() ? `?${params.toString()}` : ''
 
     const url = `${API_BASE_URL}/api/v1/memories${qs}`
@@ -285,12 +288,18 @@ export async function fetchExperiences(
     }
 
     // Try Supabase if backend API not reachable
-    const dbResults = await dbFetchExperiences(domain, status)
-    if (dbResults && dbResults.length > 0) {
+    const dbResults = await dbFetchExperiences(domain, status, exactUserMatch ? userId : undefined)
+    if (dbResults) {
       return dbResults
     }
   } catch {
     // Fall through to memory store cache
+  }
+
+  // If exact user matching is active (authenticated real user with no personal memories yet),
+  // return empty array instead of polluting workspace with demo seed memories.
+  if (exactUserMatch) {
+    return []
   }
 
   let result = localExperiences
@@ -812,11 +821,19 @@ async function runExplicitDemoSimulation({
 
 export async function fetchExecutions(limit = 20, sessionId?: string): Promise<TaskExecution[]> {
   try {
+    const session = await getCurrentSession()
+    const token = session.data?.session?.access_token
+
     const query = new URLSearchParams({ limit: String(limit) })
     if (sessionId) {
       query.set('sessionId', sessionId)
     }
-    const res = await fetch(`${API_BASE_URL}/api/agent/executions?${query.toString()}`)
+    const res = await fetch(`${API_BASE_URL}/api/agent/executions?${query.toString()}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data.items)) {
@@ -860,7 +877,15 @@ export async function fetchExecutions(limit = 20, sessionId?: string): Promise<T
 
 export async function fetchSessions(limit = 50): Promise<SessionSummary[]> {
   try {
-    const res = await fetch(`${API_BASE_URL}/api/agent/sessions?limit=${limit}`)
+    const session = await getCurrentSession()
+    const token = session.data?.session?.access_token
+
+    const res = await fetch(`${API_BASE_URL}/api/agent/sessions?limit=${limit}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
     if (res.ok) {
       const data = await res.json()
       if (Array.isArray(data)) {
@@ -880,8 +905,14 @@ export async function fetchSessions(limit = 50): Promise<SessionSummary[]> {
 
 export async function deleteSession(sessionId: string): Promise<boolean> {
   try {
+    const session = await getCurrentSession()
+    const token = session.data?.session?.access_token
+
     const res = await fetch(`${API_BASE_URL}/api/agent/sessions/${sessionId}`, {
       method: 'DELETE',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
     })
     if (res.ok) return true
   } catch (err) {
@@ -892,9 +923,15 @@ export async function deleteSession(sessionId: string): Promise<boolean> {
 
 export async function renameSession(sessionId: string, newTitle: string): Promise<boolean> {
   try {
+    const session = await getCurrentSession()
+    const token = session.data?.session?.access_token
+
     const res = await fetch(`${API_BASE_URL}/api/agent/sessions/${sessionId}`, {
       method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ title: newTitle }),
     })
     if (res.ok) return true

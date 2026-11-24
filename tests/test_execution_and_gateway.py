@@ -31,12 +31,12 @@ def test_model_provider_enum_and_defaults():
 
     gemini_cfg = ProviderConfig.default_for(ModelProvider.GEMINI)
     assert gemini_cfg.provider == ModelProvider.GEMINI
-    assert gemini_cfg.model == "gemini-1.5-flash"
+    assert gemini_cfg.model == "gemini-2.5-flash"
     assert "googleapis" in gemini_cfg.base_url
 
     # Verify that directly initializing ProviderConfig per provider gets correct default models
     assert ProviderConfig(provider=ModelProvider.GROQ).model == "openai/gpt-oss-120b"
-    assert ProviderConfig(provider=ModelProvider.GEMINI).model == "gemini-1.5-flash"
+    assert ProviderConfig(provider=ModelProvider.GEMINI).model == "gemini-2.5-flash"
     assert ProviderConfig(provider=ModelProvider.OLLAMA).model == "llama3.2:3b"
 
     ollama_cfg = ProviderConfig.default_for(ModelProvider.OLLAMA)

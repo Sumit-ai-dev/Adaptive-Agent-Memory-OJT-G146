@@ -96,6 +96,7 @@ async def list_memories(
     min_trust: float = Query(0.0, ge=0.0, le=1.0, description="Minimum trust threshold"),
     search: Optional[str] = Query(None, description="Semantic or keyword search query"),
     user_id: Annotated[Optional[str], Query(alias="userId", description="Optional user/tenant namespace filter")] = None,
+    exact_user_match: Optional[bool] = Query(None, alias="exactUserMatch", description="Strict tenant match excluding global seeds"),
     limit: int = Query(50, ge=1, le=200),
     offset: int = Query(0, ge=0),
     auth: Optional[AuthContext] = Depends(get_optional_auth_context),
@@ -106,11 +107,18 @@ async def list_memories(
     Enforces multi-tenant isolation: non-admin users only access their own private memories plus global baseline memories.
     """
     effective_user = user_id
+    enforce_exact = False
+    if exact_user_match is not None:
+        enforce_exact = exact_user_match
+
     if isinstance(auth, AuthContext) and auth.is_authenticated:
         if auth.is_admin or auth.is_machine:
             effective_user = user_id
         else:
             effective_user = auth.user_id
+            if exact_user_match is None:
+                # Default to strict tenant isolation for real authenticated non-admin users
+                enforce_exact = True
     else:
         if getattr(settings, "REQUIRE_USER_AUTH", False):
             raise HTTPException(
@@ -149,6 +157,7 @@ async def list_memories(
                 domain=TaskDomain(domain) if domain and domain != "all" else None,
                 top_k=limit,
                 user_id=effective_user,
+                exact_user_match=enforce_exact,
             )
             out = []
             for exp, sim in results:
@@ -167,6 +176,7 @@ async def list_memories(
             status=resolved_status,
             min_trust=min_trust,
             user_id=effective_user,
+            exact_user_match=enforce_exact,
         )
 
         paged = all_exps[offset : offset + limit]

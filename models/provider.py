@@ -33,7 +33,7 @@ class ProviderConfig(BaseModel):
             ModelProvider.GROQ: ("openai/gpt-oss-120b", "https://api.groq.com/openai/v1", None),
             ModelProvider.NVIDIA: ("nvidia/llama-3.1-nemotron-70b-instruct", "https://integrate.api.nvidia.com/v1", None),
             ModelProvider.OLLAMA: ("llama3.2:3b", "http://localhost:11434/v1", "ollama"),
-            ModelProvider.GEMINI: ("gemini-1.5-flash", "https://generativelanguage.googleapis.com/v1beta", None),
+            ModelProvider.GEMINI: ("gemini-2.5-flash", "https://generativelanguage.googleapis.com/v1beta", None),
             ModelProvider.OPENAI: ("gpt-4o-mini", "https://api.openai.com/v1", None),
             ModelProvider.ANTHROPIC: ("claude-3-5-haiku-20241022", "https://api.anthropic.com/v1", None),
             ModelProvider.MOCK: ("mock-deterministic-v1", "mock://localhost", None),

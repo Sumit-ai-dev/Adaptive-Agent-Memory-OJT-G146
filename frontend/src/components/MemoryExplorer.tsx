@@ -9,6 +9,7 @@ interface MemoryExplorerProps {
   onRefresh?: (domain?: TaskDomain | 'all', search?: string, status?: string) => void
   onAddExperience?: (exp: Partial<Experience>) => void
   onDeleteExperience?: (id: string) => void
+  onNavigateToStudio?: () => void
 }
 
 export default function MemoryExplorer({
@@ -17,6 +18,7 @@ export default function MemoryExplorer({
   onRefresh,
   onAddExperience,
   onDeleteExperience,
+  onNavigateToStudio,
 }: MemoryExplorerProps) {
   const [search, setSearch] = useState('')
   const [selectedDomain, setSelectedDomain] = useState<TaskDomain | 'all'>('all')
@@ -224,28 +226,38 @@ export default function MemoryExplorer({
       {/* Grid of Experiences */}
       {filtered.length === 0 ? (
         <div className="rounded-lg border p-12 text-center bg-[#161614] border-[#242422]">
-          <Database size={28} className="mx-auto text-[#7E7D77] mb-3 opacity-50" />
-          <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-[#EDECE8]">
+          <Database size={32} className="mx-auto text-[#7E7D77] mb-3 opacity-60" />
+          <h3 className="text-sm font-mono font-semibold uppercase tracking-wider text-[#EDECE8]">
             {experiences.length === 0
               ? isDemo
                 ? 'No experiences in demo sandbox'
-                : 'No persistent experiences recorded yet'
+                : 'No procedural memories extracted yet'
               : 'No matching experiences found'}
           </h3>
-          <p className="text-xs text-[#7E7D77] font-mono mt-1 max-w-sm mx-auto">
+          <p className="text-xs text-[#7E7D77] font-mono mt-2 max-w-md mx-auto leading-relaxed">
             {experiences.length === 0
               ? isDemo
-                ? 'The demo sandbox environment has no loaded memories.'
-                : 'Experiences are distilled automatically after task runs in Execution Studio, or you can record one manually.'
+                ? 'The demo sandbox environment currently has no loaded memories.'
+                : 'Run your first task in the Execution Studio to watch AEMA distill operational strategies automatically, or record a strategy manually.'
               : 'Try adjusting your search query, domain filter, or status criteria.'}
           </p>
           {experiences.length === 0 && (
-            <button
-              onClick={() => setIsAddOpen(true)}
-              className="mt-4 px-3.5 py-2 rounded-lg text-xs font-mono font-semibold text-[#141412] bg-[#EDECE8] hover:bg-white transition-colors cursor-pointer"
-            >
-              Record First Experience
-            </button>
+            <div className="mt-5 flex items-center justify-center gap-3">
+              {onNavigateToStudio && (
+                <button
+                  onClick={onNavigateToStudio}
+                  className="px-4 py-2 rounded-lg text-xs font-mono font-semibold text-[#141412] bg-[#4EAA79] hover:bg-[#5EBA89] transition-colors cursor-pointer"
+                >
+                  Open Execution Studio &rarr;
+                </button>
+              )}
+              <button
+                onClick={() => setIsAddOpen(true)}
+                className="px-4 py-2 rounded-lg text-xs font-mono font-semibold text-[#EDECE8] bg-[#1E1E1B] hover:bg-[#2A2A26] border border-[#2E2E2A] transition-colors cursor-pointer"
+              >
+                + Record Manually
+              </button>
+            </div>
           )}
         </div>
       ) : (

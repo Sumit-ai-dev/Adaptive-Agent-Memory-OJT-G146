@@ -177,8 +177,8 @@ export default function LandingPage() {
   const [activeStageIdx, setActiveStageIdx] = useState(0)
   const [isPaused, setIsPaused] = useState(false)
 
-  // SpringWinter FAQ Accordion: Set of open indices (default first open)
-  const [openFaqs, setOpenFaqs] = useState<number[]>([0])
+  // FAQ Accordion: Set of open indices (all collapsed by default)
+  const [openFaqs, setOpenFaqs] = useState<number[]>([])
 
   const toggleFaq = (index: number) => {
     setOpenFaqs((prev) =>
@@ -268,7 +268,7 @@ curl -X POST https://api.aema.dev/api/agent/execute \\
 
   return (
     <div className="min-h-screen bg-[#FAFAF7] text-[#141413] flex flex-col selection:bg-[#EAE8E3]">
-      {/* ── Top Atmospheric Hero Header (SpringWinter Sky Aesthetic) ── */}
+      {/* ── Top Atmospheric Hero Header (Atmospheric Sky Aesthetic) ── */}
       <div className="relative overflow-hidden w-full border-b border-[#EAE8E3]/60">
         {/* Layer 1: Ethereal Sky & Soft Cloud Backdrop */}
         <div
@@ -280,7 +280,7 @@ curl -X POST https://api.aema.dev/api/agent/execute \\
           }}
         />
 
-        {/* Layer 2: Ethereal Atmospheric Mesh Gradient (SpringWinter Pale Sky + Diffuse Mist) */}
+        {/* Layer 2: Ethereal Atmospheric Mesh Gradient (Pale Sky + Diffuse Mist) */}
         <div
           className="absolute inset-0 z-0 pointer-events-none"
           style={{
@@ -677,11 +677,11 @@ curl -X POST https://api.aema.dev/api/agent/execute \\
               </p>
             </div>
 
-            <div className="border border-[#EAE8E3] bg-white rounded-lg p-5">
-              <div className="font-mono text-[11px] uppercase tracking-wider text-[#141413] font-semibold mb-2">
+            <div className="border-2 border-[#141413] bg-white rounded-lg p-5 relative shadow-sm">
+              <div className="font-mono text-[11px] uppercase tracking-wider text-[#141413] font-bold mb-2">
                 3. Zero-Leak Infrastructure
               </div>
-              <p className="text-[#6B6A65]">
+              <p className="text-[#141413]">
                 Runs completely air-gapped on local SQLite and Chroma for development, with zero external network calls. In production, it connects seamlessly to PostgreSQL with pgvector for strict multi-tenant isolation.
               </p>
             </div>
@@ -829,7 +829,7 @@ curl -X POST https://api.aema.dev/api/agent/execute \\
           </div>
         </section>
 
-        {/* 7. Frequently Asked Questions (SpringWinter Accordion Layout) */}
+        {/* 7. Frequently Asked Questions (Numbered Accordion Layout) */}
         <section className="mt-20 pt-16 border-t border-[#EAE8E3] w-full">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14">
             {/* Left Column: Context & Docs Link (Col 4) */}

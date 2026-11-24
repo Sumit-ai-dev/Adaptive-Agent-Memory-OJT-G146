@@ -5,6 +5,8 @@ import { ThemeProvider } from './context/ThemeContext'
 import LandingPage from './pages/LandingPage'
 import DashboardPage from './pages/DashboardPage'
 import DocumentationPage from './pages/DocumentationPage'
+import ResearchPage from './pages/ResearchPage'
+import BenchmarksPage from './pages/BenchmarksPage'
 
 function ScrollToTop() {
   const { pathname, hash } = useLocation()
@@ -28,6 +30,8 @@ export default function App() {
             <Route path="/" element={<LandingPage />} />
             <Route path="/docs" element={<DocumentationPage />} />
             <Route path="/documentation" element={<DocumentationPage />} />
+            <Route path="/research" element={<ResearchPage />} />
+            <Route path="/benchmarks" element={<BenchmarksPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
