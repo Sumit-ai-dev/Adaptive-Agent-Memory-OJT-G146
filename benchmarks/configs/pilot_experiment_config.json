@@ -1,0 +1,113 @@
+{
+  "benchmark": "MemoryAgentBench",
+  "version": "1.0.0",
+  "provenance": {
+    "paper": "Evaluating Memory in LLM Agents via Incremental Multi-Turn Interactions (ICLR 2026)",
+    "arxiv": "arXiv:2507.05257",
+    "upstream_dataset": "ai-hyz/MemoryAgentBench",
+    "upstream_repo": "https://github.com/HUST-AI-HYZ/MemoryAgentBench"
+  },
+  "pilot_evaluation_scope": {
+    "total_tasks": 100,
+    "tasks_per_competency": 25,
+    "competencies": [
+      {
+        "name": "Conflict_Resolution",
+        "split": "factconsolidation_sh_6k",
+        "manifest_file": "pilot_conflict_resolution_25.json",
+        "sha256": "e74e4cfdd529fa81f1857c7ca9ea5801ecb0e2716a445773ce0208d27770e7a2",
+        "task_count": 25,
+        "evaluation_metric": "substring_exact_match"
+      },
+      {
+        "name": "Accurate_Retrieval",
+        "split": "ruler_qa1_197K",
+        "manifest_file": "pilot_accurate_retrieval_25.json",
+        "sha256": "f7d0a202d09c25cf62a39a5d7c35fa9eaae1eb64e72fcbb427e5ec0d53c7a0d4",
+        "task_count": 25,
+        "evaluation_metric": "substring_exact_match"
+      },
+      {
+        "name": "Test_Time_Learning",
+        "split": "icl_trec_coarse_6600shot_balance",
+        "manifest_file": "pilot_test_time_learning_25.json",
+        "sha256": "a10ca951d1380bf5e571dffe53332a4a6a4578443426222ddb480a1e7a111a23",
+        "task_count": 25,
+        "evaluation_metric": "exact_match"
+      },
+      {
+        "name": "Long_Range_Understanding",
+        "split": "detective_qa",
+        "manifest_file": "pilot_long_range_understanding_25.json",
+        "sha256": "974eb657246dd11b4c5656b8343463ae25e88236493c7578508eb80241cd39ff",
+        "task_count": 25,
+        "evaluation_metric": "exact_match"
+      }
+    ]
+  },
+  "conditions": [
+    {
+      "name": "vanilla",
+      "mode": "off",
+      "description": "Baseline without external memory"
+    },
+    {
+      "name": "naive_rag",
+      "mode": "naive",
+      "description": "Standard cosine similarity vector retrieval"
+    },
+    {
+      "name": "recency",
+      "mode": "recency",
+      "description": "Cosine similarity with exponential recency decay"
+    },
+    {
+      "name": "symmetric",
+      "mode": "symmetric",
+      "description": "Reliability-aware retrieval without quarantine"
+    },
+    {
+      "name": "adaptive",
+      "mode": "adaptive",
+      "description": "Full AEMA: Epistemic conflict detection, asymmetric Bayesian update, and statistical quarantine (theta=0.35)"
+    }
+  ],
+  "hyperparameters": {
+    "seed": 42,
+    "top_k": 3,
+    "temperature": 0.0,
+    "max_tokens": 256,
+    "similarity_threshold": 0.60,
+    "theta_cutoff": 0.35,
+    "weight_similarity": 0.70,
+    "weight_trust": 0.30
+  },
+  "provider_options": {
+    "anthropic": {
+      "default_model": "claude-3-5-haiku-20241022",
+      "env_var": "ANTHROPIC_API_KEY"
+    },
+    "openai": {
+      "default_model": "gpt-4o-mini",
+      "env_var": "OPENAI_API_KEY"
+    },
+    "gemini": {
+      "default_model": "gemini-1.5-flash",
+      "env_var": "GEMINI_API_KEY"
+    },
+    "groq": {
+      "default_model": "llama-3.3-70b-versatile",
+      "env_var": "GROQ_API_KEY"
+    },
+    "ollama": {
+      "default_model": "llama3.2:3b",
+      "env_var": "OLLAMA_BASE_URL",
+      "default_url": "http://localhost:11434/v1"
+    }
+  },
+  "output": {
+    "results_dir": "benchmarks/results/memoryagentbench",
+    "telemetry_format": "jsonl",
+    "summary_format": "csv"
+  }
+}

@@ -1,0 +1,335 @@
+{
+  "benchmark": "MemoryAgentBench",
+  "competency": "Test_Time_Learning",
+  "split": "icl_trec_coarse_6600shot_balance",
+  "source_dataset": "ai-hyz/MemoryAgentBench",
+  "total_pilot_tasks": 25,
+  "context": "What city was John F. Kennedy nominated for president in ?\nlabel: 5\n\nWhat does Elysium mean ?\nlabel: 3\n\nWhat was Jimmy Durante 's theme song ?\nlabel: 1\n\nWhat does HIV stand for ?\nlabel: 2\n\nWho won the Battle of Gettysburg ?\nlabel: 0\n\nWhat are the unemployment statistics for the years 1965 and 1990 ?\nlabel: 4\n\nHow many `` eyes '' does a coconut have ?\nlabel: 4\n\nWhat was Edward Albee 's first full-length play ?\nlabel: 1\n\nWhat is the abbreviation of the company name ` General Motors ' ?\nlabel: 2\n\nWhat causes pneumonia ?\nlabel: 3\n\nWhat was the first country to put a second woman in space ?\nlabel: 5\n\nWho wrote The Collector ?\nlabel: 0\n\nWhat TV series saw many of its aquatic scenes shot at Silver Springs , Florida ?\nlabel: 1\n\nHow do telephones work ?\nlabel: 3\n\nHow many hours of work does it take a typist to complete a 100-page screenplay ?\nlabel: 4\n\nWhat political party is Sinn Fein a part of ?\nlabel: 0\n\nWhat does NASDAQ stand for ?\nlabel: 2\n\nWhere can I get a photograph of professor Randolph Quirk ?\nlabel: 5\n\nWhat do the letters ZIP stand for in the phrase `` ZIP code '' ?\nlabel: 2\n\nWhat is the most important nation in the world , historically ?\nlabel: 5\n\nWhat is the term for the side of the mountain that faces the prevailing winds ?\nlabel: 1\n\nWho wrote the song , `` Silent Night '' ?\nlabel: 0\n\nHow does the tail affect the flight of a kite ?\nlabel: 3\n\nHow many questions are on this thing ?\nlabel: 4\n\nWhere can I find a website that gives comparisons of good prices ?\nlabel: 5\n\nHow do I contact answers.com ?\nlabel: 3\n\nIn a computer , what does SCSI mean ?\nlabel: 2\n\nWhat was the name of the lawyer who represented Randy Craft ?\nlabel: 0\n\nWhat geological time do we live in ?\nlabel: 4\n\nWhat food did Marco Polo introduce into Italy from the court of Kubla Khan ?\nlabel: 1\n\nWhat does NASA stand for ?\nlabel: 2\n\nWhat non-mechanical sport achieves the highest speeds ?\nlabel: 1\n\nOn what continent is Mozambique ?\nlabel: 5\n\nHow do clouds form ?\nlabel: 3\n\nWho is the famous sister of actress Olivia De Havilland ?\nlabel: 0\n\nHow many stars are there in Big Dipper ?\nlabel: 4\n\nHow do you look up criminal records on the Internet ?\nlabel: 3\n\nHow big is the Electoral College ?\nlabel: 4\n\nWhat powdered soft drink mix went into space ?\nlabel: 1\n\nWhat does snafu stand for ?\nlabel: 2\n\nOn what river is Strasbourg built ?\nlabel: 5\n\nWhat is Steve Rogers 's profession when he 's not Captain America ?\nlabel: 0\n\nWhat was the largest city in the world to declare martial law in 1989 ?\nlabel: 5\n\nWhere did the energy for the Big Bang come from ?\nlabel: 3\n\nWhat percentage of the body is muscle ?\nlabel: 4\n\nWhat is HDLC ?\nlabel: 2\n\nWhat President was assassinated by Charles J. Guiteau ?\nlabel: 0\n\nWhat is the legal blood alcohol limit for the state of California ?\nlabel: 1\n\nWhat 's the origin of the word ` news ' ?\nlabel: 3\n\nWhat is the abbreviation of General Motors ?\nlabel: 2",
+  "tasks": [
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no0",
+      "index": 0,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is the population of Venezuela ?",
+      "ground_truth_answers": [
+        "['4']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no1",
+      "index": 1,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What does target heart rate mean ?",
+      "ground_truth_answers": [
+        "['3']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no2",
+      "index": 2,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What currency does Luxembourg use ?",
+      "ground_truth_answers": [
+        "['1']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no3",
+      "index": 3,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "How long did Rip Van Winkle sleep ?",
+      "ground_truth_answers": [
+        "['4']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no4",
+      "index": 4,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "Material called linen is made from what plant ?",
+      "ground_truth_answers": [
+        "['1']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no5",
+      "index": 5,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is phenylalanine ?",
+      "ground_truth_answers": [
+        "['3']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no6",
+      "index": 6,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is a group of turkeys called ?",
+      "ground_truth_answers": [
+        "['1']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no7",
+      "index": 7,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What are enzymes ?",
+      "ground_truth_answers": [
+        "['3']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no8",
+      "index": 8,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "Why is the sun yellow ?",
+      "ground_truth_answers": [
+        "['3']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no9",
+      "index": 9,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What state is the geographic center of the lower 48 states ?",
+      "ground_truth_answers": [
+        "['5']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no10",
+      "index": 10,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is foot and mouth disease ?",
+      "ground_truth_answers": [
+        "['1']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no11",
+      "index": 11,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is sonar ?",
+      "ground_truth_answers": [
+        "['3']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no12",
+      "index": 12,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "When was Thomas Jefferson born ?",
+      "ground_truth_answers": [
+        "['4']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no13",
+      "index": 13,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is the Ohio state bird ?",
+      "ground_truth_answers": [
+        "['1']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no14",
+      "index": 14,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What are the colors of the German flag ?",
+      "ground_truth_answers": [
+        "['1']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no15",
+      "index": 15,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "Who won Ms. American in 1989 ?",
+      "ground_truth_answers": [
+        "['0']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no16",
+      "index": 16,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "Where on the body is a mortarboard worn ?",
+      "ground_truth_answers": [
+        "['5']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no17",
+      "index": 17,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is the width of a football field ?",
+      "ground_truth_answers": [
+        "['4']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no18",
+      "index": 18,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "Who is the Prime Minister of Canada ?",
+      "ground_truth_answers": [
+        "['0']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no19",
+      "index": 19,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is the conversion rate between dollars and pounds ?",
+      "ground_truth_answers": [
+        "['4']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no20",
+      "index": 20,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What is fibromyalgia ?",
+      "ground_truth_answers": [
+        "['3']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no21",
+      "index": 21,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What are the spots on dominoes called ?",
+      "ground_truth_answers": [
+        "['1']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no22",
+      "index": 22,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "What city is also known as `` The Gateway to the West '' ?",
+      "ground_truth_answers": [
+        "['5']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no23",
+      "index": 23,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "Who discovered x-rays ?",
+      "ground_truth_answers": [
+        "['0']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    },
+    {
+      "task_id": "icl_trec_coarse_6600shot_balance_no24",
+      "index": 24,
+      "benchmark": "MemoryAgentBench",
+      "competency": "Test_Time_Learning",
+      "sub_dataset": "icl_trec_coarse_6600shot_balance",
+      "question": "How much does water weigh ?",
+      "ground_truth_answers": [
+        "['4']"
+      ],
+      "context_sample": "icl_trec_coarse_6600shot_balance_pilot50",
+      "pilot_subset": true
+    }
+  ]
+}

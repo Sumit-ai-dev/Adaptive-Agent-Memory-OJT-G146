@@ -1,0 +1,32 @@
+{
+  "provenance": {
+    "upstream_hf_dataset": "ai-hyz/MemoryAgentBench",
+    "upstream_github_repo": "https://github.com/HUST-AI-HYZ/MemoryAgentBench",
+    "paper": "Evaluating Memory in LLM Agents via Incremental Multi-Turn Interactions (ICLR 2026)",
+    "paper_arxiv": "arXiv:2507.05257",
+    "retrieval_date": "2026-11-22"
+  },
+  "files": {
+    "pilot_conflict_resolution_25.json": {
+      "sha256": "4bf16ee10d6e4d45063d60b38a4140ca682872c6f2dbf3067245c2bb3bbb027e",
+      "tasks_count": 25,
+      "source_split": "Conflict_Resolution/factconsolidation_sh_6k"
+    },
+    "pilot_accurate_retrieval_25.json": {
+      "sha256": "c4a7adab15d105a2be7c4eef6f2f6c3044f483fa0a39b5f16e324b760dcf1ff5",
+      "tasks_count": 25,
+      "source_split": "Accurate_Retrieval/ruler_qa1_197K"
+    },
+    "pilot_test_time_learning_25.json": {
+      "sha256": "a10ca951d1380bf5e571dffe53332a4a6a4578443426222ddb480a1e7a111a23",
+      "tasks_count": 25,
+      "source_split": "Test_Time_Learning/icl_trec_coarse_6600shot_balance"
+    },
+    "pilot_long_range_understanding_25.json": {
+      "sha256": "974eb657246dd11b4c5656b8343463ae25e88236493c7578508eb80241cd39ff",
+      "tasks_count": 25,
+      "source_split": "Long_Range_Understanding/detective_qa"
+    }
+  },
+  "integrity_status": "verified"
+}

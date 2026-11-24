@@ -6,7 +6,9 @@ Memory Retriever supporting the 4 Controlled Experimental Ablation Conditions:
   - Condition D: Adaptive Agent Memory (composite 0.70*Sim + 0.30*Trust, theta=0.35 cutoff)
 """
 
+from datetime import datetime, timezone
 import logging
+import math
 from typing import Any, Dict, List, Optional, Tuple
 
 from ai_service.config import settings
@@ -105,8 +107,31 @@ class MemoryRetriever:
                 else:
                     gate_reasons[exp.id] = f"similarity below naive cutoff ({sim:.3f})"
 
-            # Condition C: Symmetric Reflexion
-            elif mode == MemoryMode.SYMMETRIC:
+            # Condition 3: Recency-Based Retrieval (similarity + recency decay, no trust filtering)
+            elif mode == MemoryMode.RECENCY:
+                now_utc = datetime.now(timezone.utc)
+                exp_ts = exp.updated_at if getattr(exp, "updated_at", None) and exp.updated_at.tzinfo else (exp.updated_at.replace(tzinfo=timezone.utc) if getattr(exp, "updated_at", None) else now_utc)
+                age_hours = max(0.0, (now_utc - exp_ts).total_seconds() / 3600.0)
+                decay = math.exp(-0.0288 * age_hours)
+                composite = round(sim * max(0.10, decay), 4)
+                results.append(
+                    RetrievedMemory(
+                        experience=exp,
+                        similarity=sim,
+                        composite_score=composite,
+                    )
+                )
+
+            # Condition 4: Trust Scoring without Quarantine (Continuous trust, zero quarantine cutoff)
+            elif mode in (MemoryMode.TRUST_NO_QUARANTINE, MemoryMode.SYMMETRIC):
+                composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * trust)
+                results.append(
+                    RetrievedMemory(
+                        experience=exp,
+                        similarity=sim,
+                        composite_score=round(composite, 4),
+                    )
+                )
                 composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * trust)
                 results.append(
                     RetrievedMemory(

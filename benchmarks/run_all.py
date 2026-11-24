@@ -1,8 +1,10 @@
 """
-Master Empirical Benchmark Evaluation Suite — Adaptive Agent Memory
-Unified CLI runner across HotpotQA, ToolBench, and ALFWorld.
-Evaluates 4 ablation conditions: Vanilla ReAct, Naive RAG, Symmetric Reflexion, and Adaptive Memory.
+Master Empirical Benchmark Evaluation Suite — Adaptive Agent Memory (Research-Grade).
+
+Unified CLI runner across HotpotQA and ToolBench (and ALFWorld when environment is available).
+Evaluates ablation conditions: Vanilla ReAct, Naive RAG, Symmetric Reflexion, and Adaptive Memory.
 Computes and outputs Pass@k, ERR, Token Economy (E_token), and Quarantine Precision (Q_prec).
+Enforces strict decoupling, unpolluted task prompts, and empirical telemetry collection.
 """
 
 import argparse
@@ -11,11 +13,11 @@ import datetime
 import json
 import logging
 import os
-import sys
 from pathlib import Path
+import sys
 from typing import Dict, List
 
-from benchmarks.alfworld_runner import run_alfworld_benchmark
+from benchmarks.alfworld_runner import is_alfworld_available, run_alfworld_benchmark
 from benchmarks.hotpotqa_runner import run_hotpotqa_benchmark
 from benchmarks.metrics import compute_all_metrics, load_telemetry, print_summary_table
 from benchmarks.toolbench_runner import run_toolbench_benchmark
@@ -25,7 +27,7 @@ logger = logging.getLogger("benchmarks.run_all")
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Adaptive Agent Memory — Empirical Evaluation Suite")
+    parser = argparse.ArgumentParser(description="Adaptive Agent Memory — Empirical Evaluation Suite (Research-Grade)")
     parser.add_argument(
         "--benchmark",
         choices=["hotpotqa", "toolbench", "alfworld", "all"],
@@ -35,8 +37,8 @@ def parse_args():
     parser.add_argument(
         "--conditions",
         nargs="+",
-        default=["vanilla", "naive_rag", "symmetric", "adaptive"],
-        help="Ablation conditions to test (default: vanilla naive_rag symmetric adaptive)",
+        default=["vanilla", "naive_rag", "recency", "symmetric", "adaptive"],
+        help="Ablation conditions to test (default: vanilla naive_rag recency symmetric adaptive)",
     )
     parser.add_argument(
         "--n",
@@ -61,6 +63,12 @@ def parse_args():
         default=None,
         help="Path to telemetry jsonl output file",
     )
+    parser.add_argument(
+        "--mode",
+        choices=["smoke", "exploratory", "confirmatory"],
+        default=None,
+        help="Research execution mode (default: smoke if --quick else confirmatory)",
+    )
     return parser.parse_args()
 
 
@@ -69,25 +77,27 @@ async def main():
 
     n_tasks = 2 if args.quick else args.n
     max_trials = 2 if args.quick else args.trials
+    run_mode = args.mode or ("smoke" if args.quick else "confirmatory")
 
     # Resolve conditions
     if "all" in args.conditions:
-        conditions = ["vanilla", "naive_rag", "symmetric", "adaptive"]
+        conditions = ["vanilla", "naive_rag", "recency", "symmetric", "adaptive"]
     else:
         conditions = args.conditions
 
-    # Output paths
+    # Output paths routed to research_runs directory
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_dir = Path(__file__).parent / "results"
-    results_dir.mkdir(parents=True, exist_ok=True)
+    base_runs_dir = Path(__file__).parent / "research_runs" / run_mode
+    base_runs_dir.mkdir(parents=True, exist_ok=True)
 
-    telemetry_path = args.output or str(results_dir / f"telemetry_{ts}.jsonl")
-    latest_path = str(results_dir / "telemetry_latest.jsonl")
+    telemetry_path = args.output or str(base_runs_dir / f"telemetry_{ts}.jsonl")
+    latest_path = str(base_runs_dir / "telemetry_latest.jsonl")
 
     print("\n" + "=" * 78)
-    print("  ADAPTIVE AGENT MEMORY — EMPIRICAL BENCHMARK EVALUATION (MONTH 2)")
+    print("  ADAPTIVE AGENT MEMORY — RESEARCH-GRADE BENCHMARK EVALUATION")
     print("=" * 78)
     print(f"  Target Benchmark:    {args.benchmark.upper()}")
+    print(f"  Research Mode:       {run_mode.upper()}")
     print(f"  Ablation Conditions: {', '.join(conditions)}")
     print(f"  Tasks per Suite:     {n_tasks}")
     print(f"  Trials per Task:     {max_trials}")
@@ -100,7 +110,10 @@ async def main():
     if args.benchmark in ["toolbench", "all"]:
         benchmarks_to_run.append("toolbench")
     if args.benchmark in ["alfworld", "all"]:
-        benchmarks_to_run.append("alfworld")
+        if is_alfworld_available():
+            benchmarks_to_run.append("alfworld")
+        else:
+            print("[ALFWorld] Skipped: Genuine 'alfworld' environment is not installed.")
 
     for bm in benchmarks_to_run:
         print(f"\n>>> Running Benchmark: {bm.upper()} <<<")
@@ -152,11 +165,11 @@ async def main():
         print_summary_table(combined_summary, benchmark_name="Combined Benchmark Aggregate")
 
     # Save summary json
-    summary_path = str(results_dir / f"table2_summary_{ts}.json")
+    summary_path = str(base_runs_dir / f"summary_{ts}.json")
     with open(summary_path, "w", encoding="utf-8") as f:
         json.dump(all_summaries, f, indent=2)
 
-    latest_summary_path = str(results_dir / "table2_summary_latest.json")
+    latest_summary_path = str(base_runs_dir / "summary_latest.json")
     with open(latest_summary_path, "w", encoding="utf-8") as f:
         json.dump(all_summaries, f, indent=2)
 
