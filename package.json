@@ -15,6 +15,12 @@
     "build:extension": "node scripts/build_extension.mjs",
     "test:sdk": "npm --prefix packages/aema test"
   },
+  "overrides": {
+    "esbuild": "^0.28.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  },
   "author": "Sakshi Kasat & Sumit Das",
   "license": "MIT"
 }

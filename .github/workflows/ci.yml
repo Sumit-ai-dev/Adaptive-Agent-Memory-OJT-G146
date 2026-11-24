@@ -9,12 +9,15 @@ on:
     branches:
       - main
 
-permissions: read-all
+permissions:
+  contents: read
 
 jobs:
   test-backend:
     name: Run Pytest & Algorithmic Invariants
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     timeout-minutes: 20
 
     steps:
@@ -35,7 +38,7 @@ jobs:
 
       - name: Install core dependencies
         run: |
-          python -m pip install --upgrade pip
+          python -m pip install --upgrade pip==24.3.1
           # Install everything except sentence-transformers (pulls in torch ~2 GB).
           # The LocalEmbedder falls back to a deterministic hash embedder when
           # sentence-transformers is absent, so all tests pass without it.
@@ -61,19 +64,26 @@ jobs:
   test-sdk:
     name: Build & Test AEMA TypeScript SDK
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install SDK dependencies
         run: |
           cd packages/aema
-          npm install
+          npm ci
+
+      - name: Build AEMA SDK & CLI
+        run: |
+          cd packages/aema
+          npm run build
 
       - name: Run AEMA SDK Test Suite
         run: |
@@ -83,19 +93,21 @@ jobs:
   build-frontend:
     name: Build & Typecheck React Dashboard
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - name: Checkout Code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 22
         uses: actions/setup-node@1d0ff469b7ec7b3cb9d8673fde0c81c44821de2a # v4.2.0
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Install Frontend Dependencies
         run: |
           cd frontend
-          npm install
+          npm ci
 
       - name: Typecheck and Build Frontend
         run: |
