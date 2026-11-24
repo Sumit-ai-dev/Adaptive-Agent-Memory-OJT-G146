@@ -238,7 +238,12 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
         except ValueError:
             task_domain_enum = TaskDomain.GENERAL
 
+        # Procedural Strategy & Pitfall Activation:
+        # Verified successes (outcome_score >= 0.80) are ACTIVE with initial trust 0.75.
+        # Failing attempts (outcome_score < 0.80) are recorded as CANDIDATE memories with provisional trust 0.60,
+        # while their distilled negative pitfall is immediately propagated into state for in-session retries.
         initial_status = ExperienceStatus.ACTIVE if outcome_score >= 0.80 else ExperienceStatus.CANDIDATE
+        initial_trust = 0.75 if outcome_score >= 0.80 else 0.60
 
         new_exp_obj = Experience(
             user_id=candidate_exp.get("user_id") or state.get("user_id"),
@@ -247,7 +252,7 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
             strategy_lesson=candidate_exp.get("strategy_lesson", ""),
             pitfall=candidate_exp.get("pitfall"),
             confidence=candidate_exp.get("confidence", 0.85),
-            trust_score=0.75,
+            trust_score=initial_trust,
             status=initial_status,
         )
 
@@ -265,7 +270,7 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
         "title": "Reliability Audit & Trust Calibration",
         "detail": (
             f"Updated {len(trust_updates)} experiences via Asymmetric EMA. "
-            f"{'New candidate memory stored in quarantine.' if new_exp_obj else ''}"
+            f"{'New experience initialized and calibrated.' if new_exp_obj else ''}"
         ),
         "durationMs": duration_ms,
         "metadata": {
@@ -277,9 +282,20 @@ async def async_trust_node(state: dict[str, Any]) -> dict[str, Any]:
     trajectory = list(state.get("trajectory", []))
     trajectory.append(trace)
 
-    return {
+    return_payload: dict[str, Any] = {
         "trust_updates": trust_updates,
         "new_experience": new_exp_obj,
         "trajectory": trajectory,
         "status": "completed",
     }
+
+    # In-Session Self-Healing State Propagation:
+    # If a candidate experience was distilled from this attempt, propagate its pitfall and corrective strategy
+    # directly into state for subsequent cyclical attempts in the execution graph.
+    if candidate_exp:
+        if candidate_exp.get("pitfall"):
+            return_payload["negative_pitfall"] = candidate_exp.get("pitfall")
+        if candidate_exp.get("strategy_lesson"):
+            return_payload["positive_strategy"] = candidate_exp.get("strategy_lesson")
+
+    return return_payload
