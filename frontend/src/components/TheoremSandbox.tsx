@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { ShieldAlert, RefreshCw, CheckCircle, Calculator } from 'lucide-react'
+import { useTheme } from '../context/ThemeContext'
 
 export default function TheoremSandbox() {
   const [alpha, setAlpha] = useState(0.85)
@@ -33,28 +34,57 @@ export default function TheoremSandbox() {
     return steps
   }, [s0, beta, theta, kStar])
 
+  const { theme } = useTheme()
+  const isLight = theme === 'light'
   const currentSimTrust = Math.max(0, s0 * Math.pow(beta, simFailures))
   const isCurrentlyQuarantined = currentSimTrust < theta
 
   return (
-    <div className="rounded-lg border border-[#242422] p-5 bg-[#161614] text-[#EDECE8] space-y-6">
+    <div
+      className={`rounded-lg border p-5 space-y-6 transition-colors ${
+        isLight
+          ? 'bg-[#FFFFFF] border-[#EAE8E3] text-[#141413]'
+          : 'bg-[#161614] border-[#242422] text-[#EDECE8]'
+      }`}
+    >
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4 border-[#242422]">
+      <div
+        className={`flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-4 ${
+          isLight ? 'border-[#EAE8E3]' : 'border-[#242422]'
+        }`}
+      >
         <div>
           <div className="flex items-center gap-2">
-            <Calculator size={16} className="text-[#4EAA79]" />
-            <h3 className="text-xs font-mono font-semibold uppercase tracking-wider text-[#EDECE8]">
+            <Calculator size={16} className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'} />
+            <h3
+              className={`text-xs font-mono font-semibold uppercase tracking-wider ${
+                isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+              }`}
+            >
               Theorem 1 Deterministic Quarantine Sandbox
             </h3>
           </div>
-          <p className="text-xs text-[#7E7D77] mt-1 font-mono">
-            Isolating negative transfer within exactly <code className="font-mono font-bold text-[#4EAA79]">k*</code> consecutive failures.
+          <p className={`text-xs mt-1 font-mono ${isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}`}>
+            Isolating negative transfer within exactly{' '}
+            <code className={`font-mono font-bold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
+              k*
+            </code>{' '}
+            consecutive failures.
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          <span className="text-xs font-mono px-3 py-1 rounded-lg border bg-[#141412] border-[#2E2E2A] text-[#EDECE8]">
-            Theorem 1 Bound: <strong className="text-[#4EAA79]">k* = {kStar} Failures</strong>
+          <span
+            className={`text-xs font-mono px-3 py-1 rounded-lg border ${
+              isLight
+                ? 'bg-[#F5F4EF] border-[#EAE8E3] text-[#141413]'
+                : 'bg-[#141412] border-[#2E2E2A] text-[#EDECE8]'
+            }`}
+          >
+            Theorem 1 Bound:{' '}
+            <strong className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>
+              k* = {kStar} Failures
+            </strong>
           </span>
         </div>
       </div>
@@ -62,8 +92,11 @@ export default function TheoremSandbox() {
       {/* Hyperparameter Controls */}
       <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 text-xs font-mono">
         <div>
-          <label className="block text-[#9E9D96] mb-1">
-            Success Momentum (α): <strong className="text-[#EDECE8]">{alpha.toFixed(2)}</strong>
+          <label className={`block mb-1 ${isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'}`}>
+            Success Momentum (α):{' '}
+            <strong className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>
+              {alpha.toFixed(2)}
+            </strong>
           </label>
           <input
             type="range"
@@ -77,8 +110,11 @@ export default function TheoremSandbox() {
         </div>
 
         <div>
-          <label className="block text-[#9E9D96] mb-1">
-            Failure Penalty (β): <strong className="text-[#EDECE8]">{beta.toFixed(2)}</strong>
+          <label className={`block mb-1 ${isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'}`}>
+            Failure Penalty (β):{' '}
+            <strong className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>
+              {beta.toFixed(2)}
+            </strong>
           </label>
           <input
             type="range"
@@ -92,8 +128,11 @@ export default function TheoremSandbox() {
         </div>
 
         <div>
-          <label className="block text-[#9E9D96] mb-1">
-            Quarantine Threshold (θ): <strong className="text-[#EDECE8]">{theta.toFixed(2)}</strong>
+          <label className={`block mb-1 ${isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'}`}>
+            Quarantine Threshold (θ):{' '}
+            <strong className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>
+              {theta.toFixed(2)}
+            </strong>
           </label>
           <input
             type="range"
@@ -107,8 +146,11 @@ export default function TheoremSandbox() {
         </div>
 
         <div>
-          <label className="block text-[#9E9D96] mb-1">
-            Initial Trust (S₀): <strong className="text-[#EDECE8]">{s0.toFixed(2)}</strong>
+          <label className={`block mb-1 ${isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'}`}>
+            Initial Trust (S₀):{' '}
+            <strong className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>
+              {s0.toFixed(2)}
+            </strong>
           </label>
           <input
             type="range"
@@ -117,16 +159,37 @@ export default function TheoremSandbox() {
             step="0.01"
             value={s0}
             onChange={(e) => setS0(parseFloat(e.target.value))}
-            className="w-full accent-[#EDECE8] cursor-pointer"
+            className={`w-full cursor-pointer ${isLight ? 'accent-[#141413]' : 'accent-[#EDECE8]'}`}
           />
         </div>
       </div>
 
       {/* Mathematical Proof Visualizer */}
-      <div className="p-4 rounded-lg border bg-[#141412] border-[#242422] space-y-3">
-        <div className="text-xs font-mono text-[#9E9D96] flex items-center justify-between">
-          <span>Formula: <code className="text-[#4EAA79]">k* = ⌈(ln θ - ln S₀) / ln β⌉</code></span>
-          <span>= ⌈(ln({theta.toFixed(2)}) - ln({s0.toFixed(2)})) / ln({beta.toFixed(2)})⌉ = <strong className="text-[#EDECE8]">{kStar}</strong></span>
+      <div
+        className={`p-4 rounded-lg border space-y-3 ${
+          isLight
+            ? 'bg-[#F9F8F6] border-[#EAE8E3]'
+            : 'bg-[#141412] border-[#242422]'
+        }`}
+      >
+        <div
+          className={`text-xs font-mono flex items-center justify-between ${
+            isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'
+          }`}
+        >
+          <span>
+            Formula:{' '}
+            <code className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>
+              k* = ⌈(ln θ - ln S₀) / ln β⌉
+            </code>
+          </span>
+          <span>
+            = ⌈(ln({theta.toFixed(2)}) - ln({s0.toFixed(2)})) / ln({beta.toFixed(2)}
+            )⌉ ={' '}
+            <strong className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>
+              {kStar}
+            </strong>
+          </span>
         </div>
 
         {/* Trajectory Table / Steps */}
@@ -136,11 +199,15 @@ export default function TheoremSandbox() {
               key={step.step}
               className={`p-2.5 rounded-lg border text-center font-mono text-xs transition-all ${
                 step.quarantined
-                  ? 'bg-[#2E1E1E] border-[#4E2A2A] text-[#D9534F]'
+                  ? isLight
+                    ? 'bg-[#FEF2F2] border-[#FECACA] text-[#DC2626]'
+                    : 'bg-[#2E1E1E] border-[#4E2A2A] text-[#D9534F]'
+                  : isLight
+                  ? 'bg-[#FFFFFF] border-[#EAE8E3] text-[#141413]'
                   : 'bg-[#181816] border-[#2E2E2A] text-[#EDECE8]'
               }`}
             >
-              <div className="text-[10px] text-[#7E7D77]">
+              <div className={`text-[10px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
                 {step.step === 0 ? 'Initial (t=0)' : `Failure ${step.step}`}
               </div>
               <div className="text-sm font-bold mt-1">
@@ -157,21 +224,45 @@ export default function TheoremSandbox() {
       {/* Interactive Failure Simulation Tester */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2">
         <div className="flex items-center gap-3">
-          <div className="text-xs font-mono text-[#9E9D96]">
-            Simulated Failures: <strong className="text-[#EDECE8]">{simFailures}</strong>
+          <div className={`text-xs font-mono ${isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'}`}>
+            Simulated Failures:{' '}
+            <strong className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>
+              {simFailures}
+            </strong>
           </div>
-          <div className="text-xs font-mono text-[#9E9D96]">
-            Current St: <strong className={isCurrentlyQuarantined ? 'text-[#D9534F]' : 'text-[#4EAA79]'}>
+          <div className={`text-xs font-mono ${isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'}`}>
+            Current St:{' '}
+            <strong
+              className={
+                isCurrentlyQuarantined
+                  ? 'text-[#D9534F]'
+                  : isLight
+                  ? 'text-[#059669]'
+                  : 'text-[#4EAA79]'
+              }
+            >
               {(currentSimTrust * 100).toFixed(1)}%
             </strong>
           </div>
           {isCurrentlyQuarantined ? (
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-[#4E2A2A] bg-[#2E1E1E] text-[#D9534F] font-semibold flex items-center gap-1">
+            <span
+              className={`text-[11px] font-mono px-2 py-0.5 rounded border font-semibold flex items-center gap-1 ${
+                isLight
+                  ? 'border-[#FECACA] bg-[#FEF2F2] text-[#DC2626]'
+                  : 'border-[#4E2A2A] bg-[#2E1E1E] text-[#D9534F]'
+              }`}
+            >
               <ShieldAlert size={12} />
               Quarantined
             </span>
           ) : (
-            <span className="text-[11px] font-mono px-2 py-0.5 rounded border border-[#2E4234] bg-[#1E2E24] text-[#4EAA79] font-semibold flex items-center gap-1">
+            <span
+              className={`text-[11px] font-mono px-2 py-0.5 rounded border font-semibold flex items-center gap-1 ${
+                isLight
+                  ? 'border-[#A7F3D0] bg-[#ECFDF5] text-[#059669]'
+                  : 'border-[#2E4234] bg-[#1E2E24] text-[#4EAA79]'
+              }`}
+            >
               <CheckCircle size={12} />
               Active in Retrieval
             </span>
@@ -187,7 +278,11 @@ export default function TheoremSandbox() {
           </button>
           <button
             onClick={() => setSimFailures(0)}
-            className="p-1.5 rounded-lg border text-[#7E7D77] hover:text-[#EDECE8] border-[#2E2E2A] bg-[#141412] cursor-pointer"
+            className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+              isLight
+                ? 'border-[#EAE8E3] bg-[#F5F4EF] text-[#6B7280] hover:text-[#141413]'
+                : 'border-[#2E2E2A] bg-[#141412] text-[#7E7D77] hover:text-[#EDECE8]'
+            }`}
             title="Reset failures"
           >
             <RefreshCw size={14} />
