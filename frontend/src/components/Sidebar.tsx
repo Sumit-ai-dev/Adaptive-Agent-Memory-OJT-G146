@@ -10,10 +10,13 @@ import {
   ChevronDown,
   Sparkles,
   PanelLeftOpen,
+  BookOpen,
+  Award,
 } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
-export type TabType = 'overview' | 'studio' | 'memory' | 'runs' | 'research' | 'settings'
+export type TabType = 'overview' | 'studio' | 'memory' | 'runs' | 'settings'
 
 interface SidebarProps {
   activeTab: TabType
@@ -30,7 +33,6 @@ const NAV_ITEMS: { id: TabType; label: string; icon: any }[] = [
   { id: 'studio', label: 'Execution Studio', icon: Terminal },
   { id: 'memory', label: 'Experiential Memory', icon: Database },
   { id: 'runs', label: 'Runs & Traces', icon: ListTree },
-  { id: 'research', label: 'Research & Proofs', icon: FlaskConical },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -104,6 +106,32 @@ export default function Sidebar({
               </button>
             )
           })}
+
+          <div className="w-6 border-t border-[#242422] my-1" />
+
+          <Link
+            to="/research"
+            title="Research & Proofs"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-[#7E7D77] hover:text-[#4EAA79] hover:bg-[#1E1E1B] transition-colors"
+          >
+            <FlaskConical size={16} />
+          </Link>
+
+          <Link
+            to="/benchmarks"
+            title="Empirical Benchmarks"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-[#7E7D77] hover:text-[#4EAA79] hover:bg-[#1E1E1B] transition-colors"
+          >
+            <Award size={16} />
+          </Link>
+
+          <Link
+            to="/docs"
+            title="Documentation"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-[#7E7D77] hover:text-[#EDECE8] hover:bg-[#1E1E1B] transition-colors"
+          >
+            <BookOpen size={16} />
+          </Link>
         </nav>
 
         {/* Compact Footer */}
@@ -201,6 +229,34 @@ export default function Sidebar({
             </button>
           )
         })}
+
+        {/* Portals & Research Links */}
+        <div className="pt-3 mt-3 border-t border-[#242422] space-y-0.5">
+          <div className="text-[10px] font-mono uppercase tracking-widest text-[#7E7D77] px-3 py-1 font-semibold">
+            Portals & Research
+          </div>
+          <Link
+            to="/research"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs transition-colors text-[#9E9D96] hover:text-[#EDECE8] hover:bg-[#1E1E1B]"
+          >
+            <FlaskConical size={15} className="text-[#4EAA79]" />
+            <span>Research & Proofs</span>
+          </Link>
+          <Link
+            to="/benchmarks"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs transition-colors text-[#9E9D96] hover:text-[#EDECE8] hover:bg-[#1E1E1B]"
+          >
+            <Award size={15} className="text-[#4EAA79]" />
+            <span>Empirical Benchmarks</span>
+          </Link>
+          <Link
+            to="/docs"
+            className="w-full flex items-center gap-2.5 px-3 py-2 rounded text-xs transition-colors text-[#9E9D96] hover:text-[#EDECE8] hover:bg-[#1E1E1B]"
+          >
+            <BookOpen size={15} className="text-[#9E9D96]" />
+            <span>Documentation</span>
+          </Link>
+        </div>
       </nav>
 
       {/* Demo Mode Banner (if active) */}

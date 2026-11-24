@@ -16,6 +16,7 @@ import { executeAgentTask, fetchSessions, fetchExecutions, deleteSession, rename
 import MarkdownRenderer from './MarkdownRenderer'
 import ExecutionStepper from './ExecutionStepper'
 import ContextInspector from './ContextInspector'
+import { useAuth } from '../context/AuthContext'
 
 type ProviderType = 'gemini' | 'groq' | 'ollama' | 'openai' | 'mock'
 
@@ -82,6 +83,7 @@ interface ConversationStudioProps {
 }
 
 export default function ConversationStudio({ onExecutionComplete }: ConversationStudioProps) {
+  const { user } = useAuth()
   // Session States
   const [sessions, setSessions] = useState<SessionSummary[]>([])
   const [currentSessionId, setCurrentSessionId] = useState<string>(() => `sess_${Date.now()}`)
@@ -242,7 +244,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
 
   useEffect(() => {
     loadSessions()
-  }, [])
+  }, [user])
 
   const loadSessions = async () => {
     const list = await fetchSessions(30)

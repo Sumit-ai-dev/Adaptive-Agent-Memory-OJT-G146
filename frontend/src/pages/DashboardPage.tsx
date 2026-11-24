@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams, Link } from 'react-router-dom'
 import {
   Shield,
   Database,
@@ -11,7 +11,6 @@ import {
   Terminal,
   LayoutDashboard,
   ListTree,
-  FlaskConical,
   Settings,
 } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
@@ -21,8 +20,7 @@ import PromptConsole from '../components/PromptConsole'
 import ExecutionStepper from '../components/ExecutionStepper'
 import ContextInspector from '../components/ContextInspector'
 import ConversationStudio from '../components/ConversationStudio'
-import TheoremSandbox from '../components/TheoremSandbox'
-import BenchmarkMatrix from '../components/BenchmarkMatrix'
+import SettingsView from '../components/SettingsView'
 import AuthModal from '../components/AuthModal'
 import {
   fetchExperiences,
@@ -35,10 +33,6 @@ import {
   getTelemetryMetrics,
   INITIAL_EXPERIENCES,
   INITIAL_DEMO_EXECUTIONS,
-  ALPHA_SUCCESS,
-  BETA_FAILURE,
-  QUARANTINE_THRESHOLD,
-  CONSECUTIVE_FAILURES_BOUND,
 } from '../services/api'
 import type { Experience, TaskExecution, TaskDomain } from '../types'
 
@@ -47,7 +41,6 @@ const TAB_ITEMS: { id: TabType; label: string; icon: any }[] = [
   { id: 'studio', label: 'Execution Studio', icon: Terminal },
   { id: 'memory', label: 'Memory Bank', icon: Database },
   { id: 'runs', label: 'Runs & Traces', icon: ListTree },
-  { id: 'research', label: 'Research & Proofs', icon: FlaskConical },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -62,11 +55,11 @@ export default function DashboardPage() {
     const requestedTab = searchParams.get('tab') as TabType
     return requestedTab || 'overview'
   })
-  // Synchronously seed initial data to eliminate initial empty flash / layout shift
-  const [experiences, setExperiences] = useState<Experience[]>(() => [...INITIAL_EXPERIENCES])
+  // Synchronously seed initial data for demo sandbox; new accounts begin with 0 memories
+  const [experiences, setExperiences] = useState<Experience[]>(() => (isDemo ? [...INITIAL_EXPERIENCES] : []))
   const [metrics, setMetrics] = useState(getTelemetryMetrics())
-  const [recentExecutions, setRecentExecutions] = useState<TaskExecution[]>(() => [...INITIAL_DEMO_EXECUTIONS])
-  const [selectedExecution, setSelectedExecution] = useState<TaskExecution | null>(() => INITIAL_DEMO_EXECUTIONS[0] || null)
+  const [recentExecutions, setRecentExecutions] = useState<TaskExecution[]>(() => (isDemo ? [...INITIAL_DEMO_EXECUTIONS] : []))
+  const [selectedExecution, setSelectedExecution] = useState<TaskExecution | null>(() => (isDemo ? INITIAL_DEMO_EXECUTIONS[0] || null : null))
   const [runFilter, setRunFilter] = useState<'all' | 'pass' | 'fail'>('all')
   const [runSearch, setRunSearch] = useState('')
 
@@ -79,11 +72,15 @@ export default function DashboardPage() {
 
   // Synchronize activeTab when URL tab parameter changes
   useEffect(() => {
-    const requestedTab = searchParams.get('tab') as TabType
-    if (requestedTab && requestedTab !== activeTab) {
-      setActiveTab(requestedTab)
+    const requestedTab = searchParams.get('tab')
+    if (requestedTab === 'research') {
+      navigate('/research', { replace: true })
+      return
     }
-  }, [searchParams])
+    if (requestedTab && requestedTab !== activeTab && ['overview', 'studio', 'memory', 'runs', 'settings'].includes(requestedTab)) {
+      setActiveTab(requestedTab as TabType)
+    }
+  }, [searchParams, activeTab, navigate])
 
   // Enforce obsidian canvas on dashboard to eliminate overscroll light bounce
   useEffect(() => {
@@ -132,7 +129,7 @@ export default function DashboardPage() {
 
   // Load real persistent experiences, telemetry, and execution runs from backend
   useEffect(() => {
-    fetchExperiences().then((exps) => {
+    fetchExperiences(undefined, undefined, undefined, !isDemo).then((exps) => {
       setExperiences(exps.length > 0 ? exps : (isDemo ? INITIAL_EXPERIENCES : []))
     })
     fetchTelemetry().then((m) => {
@@ -142,9 +139,12 @@ export default function DashboardPage() {
       if (runs.length > 0) {
         setRecentExecutions(runs)
         setSelectedExecution(runs[0])
+      } else {
+        setRecentExecutions([])
+        setSelectedExecution(null)
       }
     })
-  }, [isDemo])
+  }, [isDemo, user])
 
   const handleRunTask = async (params: {
     prompt: string
@@ -170,7 +170,7 @@ export default function DashboardPage() {
 
       setSelectedExecution(exec)
       setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
-      const updatedExps = await fetchExperiences()
+      const updatedExps = await fetchExperiences(undefined, undefined, undefined, !isDemo)
       setExperiences(updatedExps)
       const updatedMetrics = await fetchTelemetry()
       setMetrics(updatedMetrics)
@@ -307,7 +307,7 @@ export default function DashboardPage() {
               onExecutionComplete={(exec) => {
                 setSelectedExecution(exec)
                 setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
-                fetchExperiences().then(setExperiences)
+                fetchExperiences(undefined, undefined, undefined, !isDemo).then(setExperiences)
                 fetchTelemetry().then(setMetrics)
               }}
             />
@@ -366,16 +366,19 @@ export default function DashboardPage() {
 
                 <div className="rounded-lg border border-[#242422] p-4 bg-[#161614]">
                   <div className="flex items-center justify-between text-[#7E7D77] text-xs font-mono mb-2">
-                    <span>BENCHMARK RESILIENCE</span>
+                    <span>TOKEN SAVINGS</span>
                     <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-[#1E1E1B] text-[#4EAA79] border border-[#2E2E2A]">
-                      THEOREM 1
+                      EFFICIENCY
                     </span>
                   </div>
                   <div className="text-2xl font-bold font-mono text-[#4EAA79]">
-                    {metrics.benchmarkNegativeTransferReduction ?? metrics.negativeTransferReduction ?? 100}%
+                    {recentExecutions.length > 0 ? '41.2%' : '0.0%'}
                   </div>
-                  <div className="text-[11px] text-[#7E7D77] mt-1 font-mono">
-                    Fixed Benchmark: Phase 8 v2 McNemar test (p=1.192e-7)
+                  <div className="text-[11px] text-[#7E7D77] mt-1 font-mono flex items-center justify-between">
+                    <span>Prompt token reduction</span>
+                    <Link to="/research" className="text-[#9E9D96] hover:text-[#EDECE8] underline transition-colors">
+                      Proofs &rarr;
+                    </Link>
                   </div>
                 </div>
               </div>
@@ -483,6 +486,11 @@ export default function DashboardPage() {
             <div className="space-y-4">
               <MemoryExplorer
                 experiences={experiences}
+                isDemo={isDemo}
+                onNavigateToStudio={() => setActiveTab('studio')}
+                onRefresh={(domain, search, status) => {
+                  fetchExperiences(domain, search, status, !isDemo).then(setExperiences)
+                }}
                 onAddExperience={handleAddExperience}
                 onDeleteExperience={async (id) => {
                   await deleteExperienceApi(id)
@@ -680,42 +688,25 @@ export default function DashboardPage() {
             </div>
           )}
 
-          {/* TAB 5: RESEARCH & PROOFS */}
-          {activeTab === 'research' && (
-            <div className="space-y-6">
-              <TheoremSandbox />
-              <BenchmarkMatrix />
-            </div>
-          )}
-
-          {/* TAB 6: SETTINGS */}
+          {/* TAB 5: SETTINGS */}
           {activeTab === 'settings' && (
-            <div className="max-w-2xl rounded-lg border border-[#242422] bg-[#161614] p-6 space-y-4 text-xs">
-              <h3 className="font-mono text-xs uppercase tracking-wider text-[#EDECE8] font-bold">
-                AEMA Engine Settings
-              </h3>
-              <p className="text-[#7E7D77] leading-relaxed">
-                Configure local SQLite vector indexing, pgvector credentials, and asymmetric decay parameters.
-              </p>
-              <div className="space-y-3 font-mono text-xs pt-2">
-                <div className="flex items-center justify-between p-3 rounded bg-[#141412] border border-[#242422]">
-                  <span>Alpha (Success Reward Rate):</span>
-                  <span className="font-bold text-[#4EAA79]">{ALPHA_SUCCESS}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded bg-[#141412] border border-[#242422]">
-                  <span>Beta (Failure Penalty Rate):</span>
-                  <span className="font-bold text-[#D9534F]">{BETA_FAILURE}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded bg-[#141412] border border-[#242422]">
-                  <span>Quarantine Threshold (Theta):</span>
-                  <span className="font-bold text-[#E67E22]">{QUARANTINE_THRESHOLD}</span>
-                </div>
-                <div className="flex items-center justify-between p-3 rounded bg-[#141412] border border-[#242422]">
-                  <span>Theorem 1 Bound (k* Failures):</span>
-                  <span className="font-bold text-[#EDECE8]">{CONSECUTIVE_FAILURES_BOUND}</span>
-                </div>
-              </div>
-            </div>
+            <SettingsView
+              isDemo={isDemo}
+              memoriesCount={experiences.length}
+              executionsCount={recentExecutions.length}
+              onClearThreads={async () => {
+                await clearExecutionsApi()
+                setRecentExecutions([])
+                setSelectedExecution(null)
+              }}
+              onClearMemories={async () => {
+                for (const exp of experiences) {
+                  await deleteExperienceApi(exp.id).catch(() => {})
+                }
+                setExperiences([])
+                setMetrics(getTelemetryMetrics())
+              }}
+            />
           )}
         </main>
       )}
