@@ -5,6 +5,7 @@ import {
   signInWithEmail,
   signUpWithEmail,
   signInWithGoogle as supabaseSignInWithGoogle,
+  signInWithGitHub as supabaseSignInWithGitHub,
   signOut as supabaseSignOut,
   getCurrentSession,
 } from '../lib/supabase'
@@ -14,6 +15,7 @@ export interface AuthUser {
   email: string
   name?: string
   avatarUrl?: string
+  provider?: string
 }
 
 interface AuthContextType {
@@ -23,6 +25,7 @@ interface AuthContextType {
   signIn: (email: string, pass: string) => Promise<{ error: Error | null }>
   signUp: (email: string, pass: string, name?: string) => Promise<{ error: Error | null }>
   signInWithGoogle: () => Promise<{ error: Error | null }>
+  signInWithGitHub: () => Promise<{ error: Error | null }>
   signOut: () => Promise<void>
 }
 
@@ -42,6 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: session.user.email || '',
           name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
           avatarUrl: session.user.user_metadata?.avatar_url,
+          provider: session.user.app_metadata?.provider || session.user.user_metadata?.provider || 'email',
         })
       } else {
         setUser(null)
@@ -61,6 +65,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             email: session.user.email || '',
             name: session.user.user_metadata?.name || session.user.email?.split('@')[0],
             avatarUrl: session.user.user_metadata?.avatar_url,
+            provider: session.user.app_metadata?.provider || session.user.user_metadata?.provider || 'email',
           })
         } else {
           setUser(null)
@@ -128,6 +133,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const signInWithGitHub = async () => {
+    try {
+      const { error } = await supabaseSignInWithGitHub()
+      return { error: error ? new Error(error.message) : null }
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err : new Error('GitHub sign in failed') }
+    }
+  }
+
   const signOut = async () => {
     setLoading(true)
     try {
@@ -147,6 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         signIn,
         signUp,
         signInWithGoogle,
+        signInWithGitHub,
         signOut,
       }}
     >

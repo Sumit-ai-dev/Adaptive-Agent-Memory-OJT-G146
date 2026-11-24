@@ -23,13 +23,13 @@ export default function Footer() {
             Documentation
           </Link>
           <Link
-            to="/dashboard?demo=true&tab=research"
+            to="/research"
             className="hover:text-[#141413] transition-colors"
           >
             Research
           </Link>
           <Link
-            to="/docs#benchmarks"
+            to="/benchmarks"
             className="hover:text-[#141413] transition-colors"
           >
             Benchmarks

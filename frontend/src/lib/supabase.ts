@@ -59,6 +59,18 @@ export async function signInWithGoogle() {
   })
 }
 
+export async function signInWithGitHub() {
+  if (!supabase) {
+    throw new Error('GitHub OAuth requires Supabase authentication credentials.')
+  }
+  return supabase.auth.signInWithOAuth({
+    provider: 'github',
+    options: {
+      redirectTo: `${window.location.origin}/dashboard`,
+    },
+  })
+}
+
 export async function signOut() {
   if (!supabase) {
     return { error: null }
@@ -75,10 +87,13 @@ export async function getCurrentSession() {
 
 // --- Direct Database Helpers (Supabase PostgreSQL / pgvector) ----------------
 
-export async function dbFetchExperiences(domain?: string, status?: string): Promise<Experience[]> {
+export async function dbFetchExperiences(domain?: string, status?: string, exactUserId?: string): Promise<Experience[]> {
   if (!supabase) return []
   try {
     let query = supabase.from('experiences').select('*').order('trust_score', { ascending: false })
+    if (exactUserId) {
+      query = query.eq('user_id', exactUserId)
+    }
     if (domain && domain !== 'all') {
       query = query.eq('task_domain', domain)
     }

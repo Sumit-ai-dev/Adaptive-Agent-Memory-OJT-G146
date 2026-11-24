@@ -30,13 +30,13 @@ export default function Navbar({ onOpenAuth }: NavbarProps) {
               Documentation
             </Link>
             <Link
-              to="/dashboard?demo=true&tab=research"
+              to="/research"
               className="hover:text-[#141413] transition-colors"
             >
               Research
             </Link>
             <Link
-              to="/docs#benchmarks"
+              to="/benchmarks"
               className="hover:text-[#141413] transition-colors"
             >
               Benchmarks
@@ -57,7 +57,7 @@ export default function Navbar({ onOpenAuth }: NavbarProps) {
         <div className="flex items-center gap-4">
           {user ? (
             <Link
-              to="/dashboard?tab=overview"
+              to="/dashboard?tab=studio"
               className="px-3.5 py-1.5 rounded text-xs font-medium text-[#FAFAF7] bg-[#141413] hover:bg-[#2B2B28] transition-colors flex items-center gap-1.5 shadow-sm"
             >
               <span>Open Studio</span>
