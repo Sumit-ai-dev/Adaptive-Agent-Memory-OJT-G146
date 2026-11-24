@@ -22,7 +22,7 @@ from benchmarks.evaluators.python_api_evaluator import PythonAPIEvolutionEvaluat
 from benchmarks.telemetry import estimate_tokens_fallback, TrialTelemetryRecord
 from models.domain import ExperienceStatus, MemoryMode, TaskDomain
 from models.experience import Experience
-from models.task import TaskExecuteRequest
+from models.task import EvaluatorName, TaskExecuteRequest
 
 logger = logging.getLogger("benchmarks.python_api")
 
@@ -206,6 +206,11 @@ async def run_api_evolution_trial(
         req = TaskExecuteRequest(
             task_input=prompt,
             task_domain=TaskDomain.CODING,
+            evaluator=EvaluatorName.PYTEST_EXECUTION,
+            evaluator_config={
+                "test_code": task.get("test_suite", ""),
+                "timeout_s": 15.0,
+            },
             memory_enabled=(mode != MemoryMode.OFF),
             memory_mode=mode,
             model=effective_model,
