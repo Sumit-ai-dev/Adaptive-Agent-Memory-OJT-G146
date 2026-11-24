@@ -200,14 +200,17 @@ async def run_api_evolution_trial(
 
         prompt = "\n".join(prompt_parts)
 
+        effective_provider = provider or os.getenv("LLM_PROVIDER") or "mock"
+        effective_model = model or os.getenv("LLM_MODEL") or ("llama3.1:8b" if effective_provider == "ollama" else None)
+
         req = TaskExecuteRequest(
             task_input=prompt,
             task_domain=TaskDomain.CODING,
             memory_enabled=(mode != MemoryMode.OFF),
             memory_mode=mode,
-            model=model,
-            provider=provider,
-            seed=seed,
+            model=effective_model,
+            provider=effective_provider,
+            seed=seed if str(effective_provider).lower() in ("openai", "groq") else None,
         )
 
         t0 = time.perf_counter()
@@ -293,7 +296,10 @@ async def run_api_evolution_benchmark(
     evaluator = PythonAPIEvolutionEvaluator()
     all_records: List[Dict[str, Any]] = []
 
-    print(f"\n[Python API Evolution] Starting benchmark with {len(tasks)} tasks across conditions: {conditions} (max_trials={max_trials})")
+    effective_provider = provider or os.getenv("LLM_PROVIDER") or "mock"
+    effective_model = model or os.getenv("LLM_MODEL") or ("llama3.1:8b" if effective_provider == "ollama" else None)
+
+    print(f"\n[Python API Evolution] Starting benchmark with {len(tasks)} tasks across conditions: {conditions} (max_trials={max_trials}, provider={effective_provider}, model={effective_model or 'default'})")
 
     for cond in conditions:
         print(f"  --> Condition: {cond}")
@@ -323,8 +329,8 @@ async def run_api_evolution_benchmark(
                         previous_trial_failed=prev_failed,
                         last_error_feedback=last_err,
                         seed=seed,
-                        model=model,
-                        provider=provider,
+                        model=effective_model,
+                        provider=effective_provider,
                     )
                     rec_dict = rec.to_dict()
                     all_records.append(rec_dict)
@@ -348,5 +354,22 @@ async def run_api_evolution_benchmark(
 
 
 if __name__ == "__main__":
-    records = asyncio.run(run_api_evolution_benchmark(tasks_limit=2, max_trials=2))
+    import argparse
+    parser = argparse.ArgumentParser(description="Python API Evolution Benchmark Runner")
+    parser.add_argument("--tasks", type=int, default=2, help="Number of tasks to evaluate")
+    parser.add_argument("--trials", type=int, default=2, help="Max retry trials per task")
+    parser.add_argument("--provider", type=str, default=os.getenv("LLM_PROVIDER", "mock"), help="LLM Provider: mock, ollama, groq, etc.")
+    parser.add_argument("--model", type=str, default=os.getenv("LLM_MODEL"), help="Model name (e.g. llama3.1:8b)")
+    parser.add_argument("--conditions", nargs="+", default=["vanilla", "naive_rag", "recency", "symmetric", "adaptive"])
+    args = parser.parse_args()
+
+    records = asyncio.run(
+        run_api_evolution_benchmark(
+            tasks_limit=args.tasks,
+            max_trials=args.trials,
+            conditions=args.conditions,
+            provider=args.provider,
+            model=args.model,
+        )
+    )
     print(f"Completed {len(records)} research-grade Python API Evolution trial records.")
