@@ -183,13 +183,33 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
             "status": "updating_trust",
         }
 
+    # Format structured diagnostic feedback for causal reflection
+    eval_details = state.get("evaluator_details") or {}
+    eval_reason = state.get("outcome_reason") or eval_details.get("reason") or "No explicit evaluator reason provided."
+    eval_error = eval_details.get("error") or ""
+    eval_assertion = eval_details.get("assertion_error") or eval_details.get("stderr") or eval_details.get("output") or ""
+
+    diag_lines = [f"- Evaluator Reason: {eval_reason}"]
+    if eval_error:
+        diag_lines.append(f"- Error Category: {eval_error}")
+    if eval_assertion:
+        diag_lines.append(f"- Test Diagnostic Trace / Mismatch: {str(eval_assertion)[:600]}")
+
+    tool_calls = state.get("tool_calls") or []
+    if tool_calls:
+        tool_names = [tc.get("name", "tool") for tc in tool_calls if isinstance(tc, dict)]
+        diag_lines.append(f"- Tools Invoked: {', '.join(tool_names)}")
+
+    diagnostic_block = "\n".join(diag_lines)
+
     prompt = (
         f"You are the Reflection Engine for an autonomous agent with persistent experiential memory.\n"
         f"Analyze this completed task execution:\n"
         f"Task: {task_input}\n"
         f"Domain: {domain}\n"
-        f"Final Output: {final_answer[:400]}\n"
-        f"Outcome Score (R): {outcome_score:.2f}\n\n"
+        f"Final Output: {final_answer[:1500]}\n"
+        f"Outcome Score (R): {outcome_score:.2f}\n"
+        f"Diagnostic Execution Feedback:\n{diagnostic_block}\n\n"
         f"Extract a structured experience tuple in valid JSON format with keys:\n"
         f"- 'trigger_condition': General applicability predicate (when to recall this lesson)\n"
         f"- 'strategy_lesson': Actionable positive operational directive (+sigma)\n"
