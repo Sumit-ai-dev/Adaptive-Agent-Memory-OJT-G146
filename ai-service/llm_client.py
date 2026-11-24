@@ -703,6 +703,85 @@ class UniversalLLMClient:
                 120,
             )
 
+        if "merge_sensor_readings" in user_msg.lower():
+            if has_negative_constraint or "pd.concat" in user_msg.lower() or "[previous attempt" in user_msg.lower():
+                return (
+                    "```python\n"
+                    "import pandas as pd\n\n"
+                    "def merge_sensor_readings(existing_df, new_readings_list):\n"
+                    "    if not new_readings_list:\n"
+                    "        return existing_df.copy()\n"
+                    "    new_df = pd.DataFrame(new_readings_list)\n"
+                    "    return pd.concat([existing_df, new_df], ignore_index=True)\n"
+                    "```",
+                    110,
+                )
+            elif "df.append" in user_msg.lower() or "append(row" in user_msg.lower():
+                return (
+                    "```python\n"
+                    "import pandas as pd\n\n"
+                    "def merge_sensor_readings(existing_df, new_readings_list):\n"
+                    "    res = existing_df.copy()\n"
+                    "    for row in new_readings_list:\n"
+                    "        res = res.append(row, ignore_index=True)\n"
+                    "    return res\n"
+                    "```",
+                    100,
+                )
+            else:
+                return (
+                    "```python\n"
+                    "import pandas as pd\n\n"
+                    "def merge_sensor_readings(existing_df, new_readings_list):\n"
+                    "    if not new_readings_list:\n"
+                    "        return existing_df.copy()\n"
+                    "    new_df = pd.DataFrame(new_readings_list)\n"
+                    "    return pd.concat([existing_df, new_df], ignore_index=True)\n"
+                    "```",
+                    110,
+                )
+
+        if "find_threshold_breaches" in user_msg.lower():
+            if has_negative_constraint or "series.items" in user_msg.lower() or "[previous attempt" in user_msg.lower():
+                return (
+                    "```python\n"
+                    "import pandas as pd\n\n"
+                    "def find_threshold_breaches(metric_series, threshold):\n"
+                    "    breaches = []\n"
+                    "    for idx, val in metric_series.items():\n"
+                    "        if val >= threshold:\n"
+                    "            breaches.append((idx, val))\n"
+                    "    return breaches\n"
+                    "```",
+                    95,
+                )
+            elif "iteritems" in user_msg.lower():
+                return (
+                    "```python\n"
+                    "import pandas as pd\n\n"
+                    "def find_threshold_breaches(metric_series, threshold):\n"
+                    "    breaches = []\n"
+                    "    for idx, val in metric_series.iteritems():\n"
+                    "        if val >= threshold:\n"
+                    "            breaches.append((idx, val))\n"
+                    "    return breaches\n"
+                    "```",
+                    90,
+                )
+            else:
+                return (
+                    "```python\n"
+                    "import pandas as pd\n\n"
+                    "def find_threshold_breaches(metric_series, threshold):\n"
+                    "    breaches = []\n"
+                    "    for idx, val in metric_series.items():\n"
+                    "        if val >= threshold:\n"
+                    "            breaches.append((idx, val))\n"
+                    "    return breaches\n"
+                    "```",
+                    95,
+                )
+
         if "prime number" in user_msg.lower():
             return "Final Answer: 17 is a prime number because it is divisible only by 1 and itself.", 80
 
