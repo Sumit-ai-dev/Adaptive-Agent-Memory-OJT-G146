@@ -281,6 +281,11 @@ class MemoryAgentBenchSession:
                     statements.append((int(m.group(1)), m.group(2).strip()))
                 elif not line.lower().startswith("here is a list of facts"):
                     statements.append((i, line))
+        elif competency == "Test_Time_Learning":
+            # Demonstration-based parsing for Test-Time Learning (ICL question-label pairs)
+            demo_blocks = [b.strip() for b in context_text.split("\n\n") if b.strip()]
+            for idx, block in enumerate(demo_blocks):
+                statements.append((idx, block))
         else:
             # Document-based parsing for Accurate Retrieval
             doc_chunks = re.split(r"(Document\s+\d+:)", context_text)
@@ -424,16 +429,28 @@ class MemoryAgentBenchSession:
             # Vanilla baseline has no external memory
             context_str = "No external memory retrieved.\n\n"
 
-        system_msg = (
-            "You are an accurate, grounded research assistant. "
-            "Answer questions concisely and precisely using only the facts provided. "
-            "Always state your final answer enclosed in <answer>...</answer> tags."
-        )
-        user_msg = (
-            f"{context_str}"
-            f"Question: {question}\n"
-            f"Provide your concise final answer enclosed in <answer>...</answer> tags."
-        )
+        if competency == "Test_Time_Learning":
+            system_msg = (
+                "You are an accurate, grounded research assistant for test-time learning. "
+                "Based on the demonstrated examples provided in memory, determine the correct label for the question. "
+                "Always state your final answer (the label) enclosed in <answer>...</answer> tags."
+            )
+            user_msg = (
+                f"{context_str}"
+                f"Question: {question}\n"
+                f"Provide the correct label enclosed in <answer>...</answer> tags."
+            )
+        else:
+            system_msg = (
+                "You are an accurate, grounded research assistant. "
+                "Answer questions concisely and precisely using only the facts provided. "
+                "Always state your final answer enclosed in <answer>...</answer> tags."
+            )
+            user_msg = (
+                f"{context_str}"
+                f"Question: {question}\n"
+                f"Provide your concise final answer enclosed in <answer>...</answer> tags."
+            )
 
         messages = [
             {"role": "system", "content": system_msg},
@@ -609,8 +626,12 @@ class MemoryAgentBenchSession:
         if prov_name == "mock":
             if retrieved_memories:
                 top_lesson = retrieved_memories[0].experience.strategy_lesson
-                m_obj = re.search(r"(?:is|was|located in|famous for|in the country of)\s+([A-Za-z0-9\s,\.'\-]+?)\.?$", top_lesson, re.I)
-                ans = m_obj.group(1).strip() if m_obj else top_lesson
+                m_label = re.search(r"(?:label:|answer:)\s*([A-Za-z0-9_-]+)", top_lesson, re.I)
+                if m_label:
+                    ans = m_label.group(1).strip()
+                else:
+                    m_obj = re.search(r"(?:is|was|located in|famous for|in the country of)\s+([A-Za-z0-9\s,\.'\-]+?)\.?$", top_lesson, re.I)
+                    ans = m_obj.group(1).strip() if m_obj else top_lesson
                 response_text = f"Based on the retrieved context, the answer is <answer>{ans}</answer>."
             else:
                 response_text = "I do not have sufficient information in memory to answer this question."
@@ -663,12 +684,17 @@ class MemoryAgentBenchSession:
 # ============================================================================
 
 def load_pilot_manifest(competency: str) -> Dict[str, Any]:
-    """Load pilot manifest for Conflict_Resolution or Accurate_Retrieval."""
-    filename = (
-        "pilot_conflict_resolution_25.json"
-        if competency == "Conflict_Resolution"
-        else "pilot_accurate_retrieval_25.json"
-    )
+    """Load pilot manifest for Conflict_Resolution, Accurate_Retrieval, or Test_Time_Learning."""
+    if competency == "Conflict_Resolution":
+        filename = "pilot_conflict_resolution_25.json"
+    elif competency == "Accurate_Retrieval":
+        filename = "pilot_accurate_retrieval_25.json"
+    elif competency == "Test_Time_Learning":
+        filename = "pilot_test_time_learning_25.json"
+    else:
+        raise ValueError(
+            f"Unknown competency: '{competency}'. Valid options: Conflict_Resolution, Accurate_Retrieval, Test_Time_Learning"
+        )
     manifest_path = DATA_DIR / filename
     if not manifest_path.exists():
         raise FileNotFoundError(f"Pilot manifest not found at {manifest_path}")
@@ -790,7 +816,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="MemoryAgentBench Streaming Benchmark Runner (Research-Grade)")
     parser.add_argument(
         "--competency",
-        choices=["Conflict_Resolution", "Accurate_Retrieval", "all"],
+        choices=["Conflict_Resolution", "Accurate_Retrieval", "Test_Time_Learning", "all"],
         default="all",
         help="Target competency split (default: all)",
     )
@@ -837,7 +863,7 @@ async def async_main():
     args = parse_args()
 
     competencies = (
-        ["Conflict_Resolution", "Accurate_Retrieval"]
+        ["Conflict_Resolution", "Accurate_Retrieval", "Test_Time_Learning"]
         if args.competency == "all"
         else [args.competency]
     )

@@ -7,7 +7,8 @@
     "paper": "Evaluating Memory in LLM Agents via Incremental Multi-Turn Interactions (ICLR 2026)",
     "upstream_dataset": "ai-hyz/MemoryAgentBench",
     "split_conflict_resolution": "factconsolidation_sh_6k",
-    "split_accurate_retrieval": "ruler_qa1_197K"
+    "split_accurate_retrieval": "ruler_qa1_197K",
+    "split_test_time_learning": "icl_trec_coarse_6600shot_balance"
   },
   "hardware_requirements": {
     "min_ram_gb": 8,

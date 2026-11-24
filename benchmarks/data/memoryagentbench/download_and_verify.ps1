@@ -30,6 +30,7 @@ if ($Download) {
     $urls = @{
         "Conflict_Resolution" = "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench/resolve/main/data/Conflict_Resolution-00000-of-00001.parquet"
         "Accurate_Retrieval" = "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench/resolve/main/data/Accurate_Retrieval-00000-of-00001.parquet"
+        "Test_Time_Learning" = "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench/resolve/main/data/Test_Time_Learning-00000-of-00001.parquet"
     }
 
     foreach ($name in $urls.Keys) {

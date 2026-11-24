@@ -16,6 +16,11 @@
       "sha256": "c4a7adab15d105a2be7c4eef6f2f6c3044f483fa0a39b5f16e324b760dcf1ff5",
       "tasks_count": 25,
       "source_split": "Accurate_Retrieval/ruler_qa1_197K"
+    },
+    "pilot_test_time_learning_25.json": {
+      "sha256": "a10ca951d1380bf5e571dffe53332a4a6a4578443426222ddb480a1e7a111a23",
+      "tasks_count": 25,
+      "source_split": "Test_Time_Learning/icl_trec_coarse_6600shot_balance"
     }
   },
   "integrity_status": "verified"

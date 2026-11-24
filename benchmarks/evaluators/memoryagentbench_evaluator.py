@@ -206,12 +206,12 @@ def parse_output(output_text: str, answer_prefix: str = "Answer:") -> Optional[s
     xml_ans = extract_xml_answer(output_text)
     if xml_ans:
         clean_xml = re.sub(
-            f"^{re.escape(answer_prefix)}", "", xml_ans, flags=re.IGNORECASE
+            rf"^(?:{re.escape(answer_prefix)}|label:)\s*", "", xml_ans, flags=re.IGNORECASE
         ).strip()
         return clean_xml or xml_ans
 
     extraction_patterns = [
-        re.compile(f"(?:{answer_prefix})(.*)(?:\n|$)", flags=re.IGNORECASE),
+        re.compile(rf"(?:{re.escape(answer_prefix)}|label:)\s*(.*)(?:\n|$)", flags=re.IGNORECASE),
         re.compile(r"(?:^)(.*)(?:\n|$)"),
     ]
 
@@ -220,7 +220,7 @@ def parse_output(output_text: str, answer_prefix: str = "Answer:") -> Optional[s
         if match:
             extracted_text = match[1].strip()
             clean_answer = re.sub(
-                f"^{re.escape(answer_prefix)}", "", extracted_text, flags=re.IGNORECASE
+                rf"^(?:{re.escape(answer_prefix)}|label:)\s*", "", extracted_text, flags=re.IGNORECASE
             ).strip()
             if clean_answer:
                 return clean_answer
@@ -366,10 +366,15 @@ class MemoryAgentBenchEvaluator(BaseBenchmarkEvaluator):
             }
 
         # 5. Primary Benchmark Score
-        # Per MemoryAgentBench protocol: Substring Exact Match represents the official Accuracy
-        # for fact_sh, fact_mh, and ruler_qa.
-        primary_score = final_sem
-        passed = (final_sem >= 1.0)
+        # Per MemoryAgentBench protocol: Substring Exact Match represents official Accuracy
+        # for fact_sh, fact_mh, and ruler_qa. Exact Match represents official Accuracy for TTL (ICL).
+        competency = task.get("competency", "")
+        if competency == "Test_Time_Learning":
+            primary_score = final_em
+            passed = (final_em >= 1.0)
+        else:
+            primary_score = final_sem
+            passed = (final_sem >= 1.0)
 
         failure_reason = None
         if not passed:
@@ -385,7 +390,7 @@ class MemoryAgentBenchEvaluator(BaseBenchmarkEvaluator):
             evaluator_version=self.version,
             metrics={
                 "official": {
-                    "accuracy": final_sem,
+                    "accuracy": final_em if competency == "Test_Time_Learning" else final_sem,
                     "exact_match": final_em,
                     "substring_exact_match": final_sem,
                     "token_f1": final_f1,

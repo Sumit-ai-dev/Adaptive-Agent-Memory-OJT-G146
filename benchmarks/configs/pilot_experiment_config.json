@@ -8,7 +8,7 @@
     "upstream_repo": "https://github.com/HUST-AI-HYZ/MemoryAgentBench"
   },
   "pilot_evaluation_scope": {
-    "total_tasks": 50,
+    "total_tasks": 75,
     "tasks_per_competency": 25,
     "competencies": [
       {
@@ -26,6 +26,14 @@
         "sha256": "f7d0a202d09c25cf62a39a5d7c35fa9eaae1eb64e72fcbb427e5ec0d53c7a0d4",
         "task_count": 25,
         "evaluation_metric": "substring_exact_match"
+      },
+      {
+        "name": "Test_Time_Learning",
+        "split": "icl_trec_coarse_6600shot_balance",
+        "manifest_file": "pilot_test_time_learning_25.json",
+        "sha256": "a10ca951d1380bf5e571dffe53332a4a6a4578443426222ddb480a1e7a111a23",
+        "task_count": 25,
+        "evaluation_metric": "exact_match"
       }
     ]
   },
