@@ -448,6 +448,11 @@ class MemoryAgentBenchSession:
             # Vanilla baseline has no external memory
             context_str = "No external memory retrieved.\n\n"
 
+        # Cross-Episode Failure Mitigation: Append negative pitfalls if known
+        if retrieval_diagnostics.get("candidate_pitfalls"):
+            pitfall_lines = [f"- AVOID: {p}" for p in retrieval_diagnostics["candidate_pitfalls"][:2]]
+            context_str += "Known failure pitfalls to avoid:\n" + "\n".join(pitfall_lines) + "\n\n"
+
         if competency == "Test_Time_Learning":
             system_msg = (
                 "You are an accurate, grounded research assistant for test-time learning. "
@@ -946,7 +951,7 @@ async def async_main():
     )
 
     print("\n" + "=" * 78)
-    print("  MEMORYAGENTBENCH — RESEARCH-GRADE PILOT EVALUATION")
+    print("  MEMORYAGENTBENCH: RESEARCH-GRADE PILOT EVALUATION")
     print("=" * 78)
     print(f"  Competencies:        {', '.join(competencies)}")
     print(f"  Conditions:          {', '.join(args.conditions)}")

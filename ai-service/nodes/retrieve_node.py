@@ -173,7 +173,10 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
             mode = MemoryMode(mode_str)
             custom_store = state.get("memory_store")
             user_id = state.get("user_id")
-            active_retriever = MemoryRetriever(store=custom_store) if custom_store else memory_retriever
+            active_retriever = (
+                state.get("memory_retriever")
+                or (MemoryRetriever(store=custom_store) if custom_store else memory_retriever)
+            )
             if hasattr(active_retriever, "retrieve_with_diagnostics"):
                 retrieved_models, retrieval_diagnostics = await active_retriever.retrieve_with_diagnostics(
                     query=task_input,
@@ -266,6 +269,13 @@ async def async_retrieve_node(state: dict[str, Any]) -> dict[str, Any]:
         was_compacted = comp_res.was_compacted or list_was_compacted
         compacted_memory_tokens = comp_res.compacted_tokens
         original_memory_tokens = comp_res.original_tokens
+
+    # Cross-Episode Failure Mitigation:
+    # If no negative pitfall was extracted from active memories, check if any relevant
+    # candidate memory from a prior failed task provided a critical pitfall warning.
+    if negative_pitfall is None and retrieval_diagnostics.get("candidate_pitfalls"):
+        negative_pitfall = retrieval_diagnostics["candidate_pitfalls"][0]
+        logger.info("Admitted cross-episode negative pitfall constraint: %s", negative_pitfall[:80])
 
     # Invariant: candidateCount >= admissibleCount >= retrievedCount
     if retrieved:

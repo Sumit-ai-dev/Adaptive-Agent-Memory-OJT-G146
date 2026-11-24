@@ -45,6 +45,7 @@ class MemoryRetriever:
             "candidate_count": 0,
             "admissible_count": 0,
             "gate_reasons": {},
+            "candidate_pitfalls": [],
             "ranker": "lcb" if mode == MemoryMode.ADAPTIVE else f"retriever_{mode.value}",
             "policy": "aema" if mode == MemoryMode.ADAPTIVE else mode.value,
         }
@@ -83,6 +84,7 @@ class MemoryRetriever:
         diagnostics["candidate_count"] = len(raw_matches)
         results: List[RetrievedMemory] = []
         gate_reasons: Dict[str, str] = {}
+        candidate_pitfalls: List[str] = []
 
         for exp, raw_sim in raw_matches:
             trust = float(exp.trust_score)
@@ -153,6 +155,9 @@ class MemoryRetriever:
                 # 2. Status filter: Require ACTIVE status for production task retrieval (CANDIDATE and DEPRECATED excluded)
                 if exp.status != ExperienceStatus.ACTIVE:
                     gate_reasons[exp.id] = f"inadmissible_status_{exp.status.value if hasattr(exp.status, 'value') else exp.status}"
+                    # Cross-episode failure mitigation: admit pitfall from relevant candidate memories
+                    if exp.status == ExperienceStatus.CANDIDATE and exp.pitfall and sim >= settings.SIMILARITY_THRESHOLD:
+                        candidate_pitfalls.append(exp.pitfall)
                     continue
 
                 # 3. Relevance threshold
@@ -181,6 +186,7 @@ class MemoryRetriever:
         results.sort(key=lambda m: m.composite_score, reverse=True)
         diagnostics["admissible_count"] = len(results)
         diagnostics["gate_reasons"] = gate_reasons
+        diagnostics["candidate_pitfalls"] = candidate_pitfalls
         return results[:top_k], diagnostics
 
     async def retrieve(
