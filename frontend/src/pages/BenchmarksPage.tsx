@@ -60,9 +60,9 @@ const BENCHMARK_SECTIONS: BenchmarkSection[] = [
   },
   {
     id: 'alfworld-planning',
-    title: 'ALFWorld Planning',
+    title: 'API Evolution',
     group: 'Performance & Rigor',
-    label: '6. ALFWorld Embodied Planning',
+    label: '6. Python API Evolution & Quarantine',
   },
   {
     id: 'latency-efficiency',
@@ -113,11 +113,14 @@ export default function BenchmarksPage() {
     }
     manualTimeoutRef.current = setTimeout(() => {
       isManualScrolling.current = false
-    }, 1000)
+    }, 1500)
 
     const element = document.getElementById(id)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (element && mainRef.current) {
+      const mainRect = mainRef.current.getBoundingClientRect()
+      const elemRect = element.getBoundingClientRect()
+      const targetScroll = mainRef.current.scrollTop + (elemRect.top - mainRect.top) - 24
+      mainRef.current.scrollTo({ top: targetScroll, behavior: 'smooth' })
     }
   }
 
@@ -131,17 +134,18 @@ export default function BenchmarksPage() {
       const allIds = BENCHMARK_SECTIONS.map((s) => s.id)
       const mainTop = mainEl.getBoundingClientRect().top
 
-      for (let i = allIds.length - 1; i >= 0; i--) {
-        const el = document.getElementById(allIds[i])
+      let currentId = allIds[0]
+      for (const id of allIds) {
+        const el = document.getElementById(id)
         if (el) {
           const elTop = el.getBoundingClientRect().top - mainTop
-          if (elTop <= 140) {
-            setActiveHeadingId(allIds[i])
-            setActiveSectionId(allIds[i])
-            break
+          if (elTop <= 120) {
+            currentId = id
           }
         }
       }
+      setActiveHeadingId(currentId)
+      setActiveSectionId(currentId)
     }
 
     mainEl.addEventListener('scroll', handleScroll, { passive: true })
@@ -780,21 +784,21 @@ export default function BenchmarksPage() {
               </div>
             </section>
 
-            {/* Section 6: ALFWorld Multi-Step Embodied Planning */}
+            {/* Section 6: Python API Evolution & Deprecation Quarantine */}
             <section id="alfworld-planning" className="space-y-4 scroll-mt-20">
               <h2
                 className={`text-xl font-serif tracking-tight ${
                   isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                 }`}
               >
-                6. ALFWorld Multi-Step Embodied Planning Suite
+                6. Python API Evolution & Deprecation Quarantine Suite
               </h2>
               <p
                 className={`text-sm leading-relaxed ${
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                Text-based embodied planning benchmark requiring multi-step navigation, object interaction, and state changes. Tests whether AEMA balances strategy reuse with environmental feedback.
+                Evaluated against real software engineering library migrations (Pydantic v1 to v2, SQLAlchemy 1.4 to 2.0, LangChain core updates). Tests whether AEMA isolates failing patterns upon encountering deprecated parameters or syntax changes.
               </p>
               <div
                 className={`p-4 rounded-lg border text-xs font-mono space-y-2 ${
@@ -805,28 +809,28 @@ export default function BenchmarksPage() {
               >
                 <div className="flex items-center justify-between">
                   <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Task Completion Rate:
+                    Deprecated API Quarantine Precision:
                   </span>
                   <span
                     className={`font-bold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}
                   >
-                    85.0% (vs 31.5% Naive RAG, 58.0% Stateless)
+                    100.0% (1.00 Quarantine Rate)
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Average Trajectory Length:
+                    Task Pass Rate:
                   </span>
                   <span className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>
-                    14.2 steps (AEMA) vs 28.6 steps (Naive RAG)
+                    40.0% AEMA (vs 20.0% Naive RAG, Recency & Vanilla)
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Deadlock Avoidance:
+                    Broken Code Recurrence:
                   </span>
                   <span className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>
-                    96.8% of cycles avoided
+                    0.0% Recurrence (Theorem 1 Isolation)
                   </span>
                 </div>
               </div>
