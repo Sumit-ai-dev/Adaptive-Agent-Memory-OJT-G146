@@ -1,0 +1,97 @@
+{
+  "project": "AEMA (Adaptive Experiential Memory Agent)",
+  "version": "v1.0-pilot",
+  "evaluated_at": "2026-11-24",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 3060 (12.0 GiB VRAM)",
+    "runtime": "Local Ollama Daemon",
+    "model": "llama3.1:8b",
+    "temperature": 0.0,
+    "top_p": 1.0,
+    "seed": 42
+  },
+  "summary": {
+    "total_benchmarks": 5,
+    "conditions": [
+      "vanilla",
+      "naive_rag",
+      "recency",
+      "symmetric",
+      "adaptive"
+    ],
+    "total_evaluations": 525,
+    "status": "COMPLETED"
+  },
+  "benchmarks": {
+    "conflict_resolution": {
+      "competency": "Conflict_Resolution",
+      "dataset": "MemoryAgentBench (synthetic_conflict_qa)",
+      "tasks_count": 25,
+      "total_evaluations": 125,
+      "outcomes": {
+        "aema": {"exact_match": 0.40, "substring_exact_match": 0.40, "obsolete_intrusions": 0.00},
+        "naive_rag": {"exact_match": 0.32, "substring_exact_match": 0.40, "obsolete_intrusions": 0.24},
+        "recency": {"exact_match": 0.36, "substring_exact_match": 0.40, "obsolete_intrusions": 0.12},
+        "symmetric": {"exact_match": 0.36, "substring_exact_match": 0.40, "obsolete_intrusions": 0.08},
+        "vanilla": {"exact_match": 0.32, "substring_exact_match": 0.32, "obsolete_intrusions": 0.00}
+      },
+      "finding": "AEMA suppresses obsolete memories (+8% EM over Naive RAG) via asymmetric trust decay and LCB gating."
+    },
+    "accurate_retrieval": {
+      "competency": "Accurate_Retrieval",
+      "dataset": "MemoryAgentBench (accurate_qa)",
+      "tasks_count": 25,
+      "total_evaluations": 125,
+      "outcomes": {
+        "symmetric": {"exact_match": 0.52},
+        "naive_rag": {"exact_match": 0.48},
+        "aema": {"exact_match": 0.32},
+        "recency": {"exact_match": 0.36},
+        "vanilla": {"exact_match": 0.28}
+      },
+      "finding": "AEMA's Lower Confidence Bound (LCB) penalty is conservative on benign recall without verified positive feedback."
+    },
+    "python_api_evolution": {
+      "competency": "Software_API_Obsolescence",
+      "dataset": "Python API Evolution Pilot (5 real library migrations)",
+      "tasks_count": 5,
+      "total_evaluations": 25,
+      "outcomes": {
+        "aema": {"pass_rate": 0.40, "passed": 2, "total": 5, "quarantine_rate": 1.00},
+        "naive_rag": {"pass_rate": 0.20, "passed": 1, "total": 5, "quarantine_rate": 0.00},
+        "recency": {"pass_rate": 0.20, "passed": 1, "total": 5, "quarantine_rate": 0.00},
+        "symmetric": {"pass_rate": 0.20, "passed": 1, "total": 5, "quarantine_rate": 0.00},
+        "vanilla": {"pass_rate": 0.20, "passed": 1, "total": 5, "quarantine_rate": 0.00}
+      },
+      "finding": "AEMA successfully quarantines deprecated API calls upon execution failure (100% quarantine rate), preventing repeated broken code generation."
+    },
+    "test_time_learning": {
+      "competency": "Test_Time_Learning",
+      "dataset": "MemoryAgentBench (icl_trec_coarse_6600shot_balance)",
+      "tasks_count": 25,
+      "total_evaluations": 125,
+      "outcomes": {
+        "symmetric": {"accuracy": 0.32},
+        "naive_rag": {"accuracy": 0.28},
+        "recency": {"accuracy": 0.24},
+        "aema": {"accuracy": 0.00},
+        "vanilla": {"accuracy": 0.00}
+      },
+      "finding": "Revealed candidate memory lockout: unverified demonstration memories with default prior trust were excluded by AEMA's strict production threshold."
+    },
+    "long_range_understanding": {
+      "competency": "Long_Range_Understanding",
+      "dataset": "MemoryAgentBench (detective_qa, 4 books)",
+      "tasks_count": 25,
+      "total_evaluations": 125,
+      "outcomes": {
+        "aema": {"accuracy": 0.40, "passed": 10, "total": 25},
+        "vanilla": {"accuracy": 0.40, "passed": 10, "total": 25},
+        "naive_rag": {"accuracy": 0.36, "passed": 9, "total": 25},
+        "symmetric": {"accuracy": 0.36, "passed": 9, "total": 25},
+        "recency": {"accuracy": 0.32, "passed": 8, "total": 25}
+      },
+      "finding": "AEMA matches Vanilla at 40% accuracy with higher Token F1 and Exact Match, while consuming significantly fewer prompt tokens than RAG conditions."
+    }
+  }
+}

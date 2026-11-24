@@ -64,7 +64,9 @@ scripts/verify_paper_compliance.py
 runs/
 manifests/
 *.jsonl
-benchmarks/results/
+benchmarks/results/*
+!benchmarks/results/*.md
+!benchmarks/results/aema_v1_pilot_summary.json
 
 # Large downloaded benchmark corpora (ALFWorld / HotpotQA / ToolBench, ~2.2 GB)
 benchmarks/data/*
