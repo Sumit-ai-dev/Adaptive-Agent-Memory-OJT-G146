@@ -285,7 +285,7 @@ async def run_api_evolution_benchmark(
     tasks_limit: int = 5,
     conditions: Optional[List[str]] = None,
     max_trials: int = 3,
-    telemetry_path: Optional[str] = None,
+    telemetry_path: Optional[str] = "benchmarks/results/python_api_evolution_telemetry.jsonl",
     seed_legacy_memory: bool = True,
     seed: Optional[int] = 42,
     model: Optional[str] = None,
@@ -372,4 +372,15 @@ if __name__ == "__main__":
             model=args.model,
         )
     )
-    print(f"Completed {len(records)} research-grade Python API Evolution trial records.")
+
+    print("\n" + "=" * 78)
+    print("  PYTHON API EVOLUTION: EMPIRICAL BENCHMARK SUMMARY")
+    print("=" * 78)
+    print(f"{'Condition':<14} | {'Task ID':<28} | {'Trial':<5} | {'Passed':<6} | {'Quarantined'}")
+    print("-" * 78)
+    for r in records:
+        passed_str = "YES" if r.get("success") else "NO"
+        quar_str = "YES" if r.get("quarantine_triggered") else "NO"
+        print(f"{r.get('condition', ''):<14} | {r.get('task_id', '')[:28]:<28} | {r.get('trial', 1):<5} | {passed_str:<6} | {quar_str}")
+    print("=" * 78)
+    print(f"\n[+] Completed {len(records)} research-grade Python API Evolution trial records.")
