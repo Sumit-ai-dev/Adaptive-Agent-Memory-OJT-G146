@@ -114,11 +114,14 @@ export default function ResearchPage() {
     }
     manualTimeoutRef.current = setTimeout(() => {
       isManualScrolling.current = false
-    }, 1000)
+    }, 1500)
 
     const element = document.getElementById(id)
-    if (element) {
-      element.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    if (element && mainRef.current) {
+      const mainRect = mainRef.current.getBoundingClientRect()
+      const elemRect = element.getBoundingClientRect()
+      const targetScroll = mainRef.current.scrollTop + (elemRect.top - mainRect.top) - 24
+      mainRef.current.scrollTo({ top: targetScroll, behavior: 'smooth' })
     }
   }
 
@@ -132,17 +135,18 @@ export default function ResearchPage() {
       const allIds = RESEARCH_SECTIONS.map((s) => s.id)
       const mainTop = mainEl.getBoundingClientRect().top
 
-      for (let i = allIds.length - 1; i >= 0; i--) {
-        const el = document.getElementById(allIds[i])
+      let currentId = allIds[0]
+      for (const id of allIds) {
+        const el = document.getElementById(id)
         if (el) {
           const elTop = el.getBoundingClientRect().top - mainTop
-          if (elTop <= 140) {
-            setActiveHeadingId(allIds[i])
-            setActiveSectionId(allIds[i])
-            break
+          if (elTop <= 120) {
+            currentId = id
           }
         }
       }
+      setActiveHeadingId(currentId)
+      setActiveSectionId(currentId)
     }
 
     mainEl.addEventListener('scroll', handleScroll, { passive: true })

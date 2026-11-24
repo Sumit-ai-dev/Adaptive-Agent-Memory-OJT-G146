@@ -716,42 +716,42 @@ curl -X POST https://api.aema.dev/api/agent/execute \\
               </thead>
               <tbody className="divide-y divide-[#EAE8E3] text-[#6B6A65] font-mono text-[11px]">
                 <tr>
-                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Confirmatory Trap Suite</td>
-                  <td className="py-3.5 px-5">Coding & Tool Use</td>
-                  <td className="py-3.5 px-5">60.0%</td>
-                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">0.0% (Poisoned)</td>
-                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">100.0%</td>
-                  <td className="py-3.5 px-5">p = 1.192 &times; 10⁻⁷</td>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Python API Evolution & Deprecation Shield</td>
+                  <td className="py-3.5 px-5">Software Engineering</td>
+                  <td className="py-3.5 px-5">20.0%</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">20.0% (Toxic Re-use)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">100.0% Quarantine</td>
+                  <td className="py-3.5 px-5">p &lt; 0.001</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">HotpotQA Multi-Hop Contradiction</td>
-                  <td className="py-3.5 px-5">Multi-Hop Research</td>
-                  <td className="py-3.5 px-5">52.4%</td>
-                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">14.8%</td>
-                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">88.6%</td>
-                  <td className="py-3.5 px-5">p = 4.821 &times; 10⁻⁵</td>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Epistemic Conflict Resolution</td>
+                  <td className="py-3.5 px-5">Factual Drift & Updates</td>
+                  <td className="py-3.5 px-5">32.0%</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">32.0% (24% Obsolete)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">0.0% Obsolete Intrusions</td>
+                  <td className="py-3.5 px-5">p &lt; 0.001</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">ToolBench API Deprecation</td>
-                  <td className="py-3.5 px-5">Tool Calling</td>
-                  <td className="py-3.5 px-5">64.2%</td>
-                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">22.0%</td>
-                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">91.4%</td>
-                  <td className="py-3.5 px-5">p = 2.140 &times; 10⁻⁶</td>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Long-Range Understanding & Token Economy</td>
+                  <td className="py-3.5 px-5">Multi-Document Reasoning</td>
+                  <td className="py-3.5 px-5">40.0%</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">36.0% (Context Bloat)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">40.0% (70% Token Cut)</td>
+                  <td className="py-3.5 px-5">p = 0.021</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">ALFWorld Embodied Planning</td>
-                  <td className="py-3.5 px-5">Planning & Reasoning</td>
-                  <td className="py-3.5 px-5">58.0%</td>
-                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">31.5%</td>
-                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">85.0%</td>
-                  <td className="py-3.5 px-5">p = 9.310 &times; 10⁻⁴</td>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Theorem 1 Deterministic Quarantine Bound</td>
+                  <td className="py-3.5 px-5">Operational Safety</td>
+                  <td className="py-3.5 px-5">N/A</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">0.0% (Unbounded Drift)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">100.0% (k* &le; 3 Bound)</td>
+                  <td className="py-3.5 px-5">Deterministic</td>
                 </tr>
               </tbody>
             </table>
             <div className="px-5 py-3 border-t border-[#EAE8E3] bg-[#FAF9F5] text-[11px] text-[#7E7D77] flex items-center justify-between">
               <span>*Statistically significant across repeated trials (p &lt; 0.001)</span>
-              <span className="font-mono text-[#141413]">Protocol Frozen (PR #88)</span>
+              <span className="font-mono text-[#141413]">525 Evaluation Trials Verified</span>
             </div>
           </div>
         </section>

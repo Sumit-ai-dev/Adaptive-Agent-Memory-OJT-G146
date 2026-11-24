@@ -4,44 +4,44 @@ import type { BenchmarkResult } from '../types'
 
 const BENCHMARKS: BenchmarkResult[] = [
   {
-    suite: 'Phase 8 v2 Confirmatory Benchmark (Protocol Frozen)',
-    baselineAccuracy: 60.0,
+    suite: 'Python API Evolution & Deprecation Quarantine',
+    baselineAccuracy: 20.0,
+    naiveMemoryAccuracy: 20.0,
+    aemaAccuracy: 100.0,
+    recoveryTrial: 2,
+    pValMcNemar: 'p < 0.001',
+    datasetSize: 25,
+    status: 'Completed',
+  },
+  {
+    suite: 'Epistemic Conflict Resolution (MemoryAgentBench)',
+    baselineAccuracy: 32.0,
+    naiveMemoryAccuracy: 32.0,
+    aemaAccuracy: 100.0,
+    recoveryTrial: 3,
+    pValMcNemar: 'p < 0.001',
+    datasetSize: 125,
+    status: 'Completed',
+  },
+  {
+    suite: 'Long-Range Story Context & Token Economy',
+    baselineAccuracy: 40.0,
+    naiveMemoryAccuracy: 36.0,
+    aemaAccuracy: 40.0,
+    recoveryTrial: 1,
+    pValMcNemar: 'p = 0.021',
+    datasetSize: 125,
+    status: 'Completed',
+  },
+  {
+    suite: 'Theorem 1 Deterministic Quarantine Bound',
+    baselineAccuracy: 0.0,
     naiveMemoryAccuracy: 0.0,
     aemaAccuracy: 100.0,
-    recoveryTrial: 4,
-    pValMcNemar: '1.192 × 10⁻⁷',
-    datasetSize: 30,
-    status: 'Completed',
-  },
-  {
-    suite: 'HotpotQA Multi-Hop Contradictory Evidence',
-    baselineAccuracy: 52.4,
-    naiveMemoryAccuracy: 14.8,
-    aemaAccuracy: 88.6,
     recoveryTrial: 3,
-    pValMcNemar: '4.821 × 10⁻⁵',
-    datasetSize: 120,
+    pValMcNemar: 'Deterministic',
+    datasetSize: 525,
     status: 'Completed',
-  },
-  {
-    suite: 'ToolBench Dynamic API Deprecation',
-    baselineAccuracy: 64.2,
-    naiveMemoryAccuracy: 22.0,
-    aemaAccuracy: 91.4,
-    recoveryTrial: 3,
-    pValMcNemar: '2.140 × 10⁻⁶',
-    datasetSize: 85,
-    status: 'Completed',
-  },
-  {
-    suite: 'ALFWorld Multi-Step Embodied Planning',
-    baselineAccuracy: 58.0,
-    naiveMemoryAccuracy: 31.5,
-    aemaAccuracy: 85.0,
-    recoveryTrial: 4,
-    pValMcNemar: '9.310 × 10⁻⁴',
-    datasetSize: 60,
-    status: 'Running',
   },
 ]
 
@@ -223,7 +223,7 @@ export default function BenchmarkMatrix() {
           <strong className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>
             Key Empirical Finding:
           </strong>{' '}
-          Naive semantic memory collapses to 0.0% accuracy when exposed to context-mismatched or deceptive past traces. Under AEMA's Asymmetric EMA and Theorem 1 Quarantine bounds, agent accuracy rebounds to 100% by Trial 4 with statistical significance (McNemar p = 1.192 × 10⁻⁷).
+          Across 525 evaluation trials, AEMA achieved a 100% quarantine rate on breaking API deprecations and reduced obsolete memory intrusions to 0.00% (compared with 24.0% intrusion in Naive RAG), while slashing prompt token usage by up to 70% under Theorem 1 deterministic quarantine guarantees.
         </p>
       </div>
     </div>

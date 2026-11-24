@@ -99,13 +99,25 @@ async def execute_node(
     positive_strategy = comp_res.positive_strategy
     negative_pitfall = comp_res.negative_pitfall
 
-    # Formulate System Prompt with Bilateral Constraints
+    # Formulate System Prompt with Bilateral Constraints and Epistemic Grounding Directive
     system_prompt_parts = [
         "You are an elite, proactive autonomous language agent with persistent experiential memory.",
         "Solve the user's task rigorously, providing accurate, verifiable, and structured answers.",
         "Provide direct, concise, and to-the-point answers. Focus strictly on resolving the user's inquiry efficiently without redundant repetitions, unnecessary preamble, or sprawling multi-table essays.",
         "For coding tasks, provide the clean, functional code implementation with concise explanation. Avoid generating lengthy auxiliary demonstration tables or unnecessary recaps.",
+        "EPISTEMIC GROUNDING DIRECTIVE: The retrieved operational memories and negative pitfalls represent verified empirical facts and constraints from your specific runtime environment. You MUST prioritize these empirical directives and negative pitfalls over your general pre-trained parametric knowledge whenever an inconsistency arises.",
     ]
+
+    # Retry feedback header if this is a cyclical retry attempt
+    if loop_count > 1:
+        prev_attempts = state.get("attempts", [])
+        last_reason = prev_attempts[-1].get("reason", "") if prev_attempts else ""
+        retry_msg = f"RETRY NOTICE (Attempt {loop_count}): A prior execution attempt failed verification."
+        if last_reason:
+            retry_msg += f" Evaluator note: {last_reason}."
+        if negative_pitfall:
+            retry_msg += f" Ensure you avoid this pitfall: {negative_pitfall}."
+        system_prompt_parts.append(retry_msg)
 
     # Heuristic prompt injection detection on task input (OWASP LLM01)
     has_injection, matched_pattern = detect_prompt_injection_heuristic(task_input)

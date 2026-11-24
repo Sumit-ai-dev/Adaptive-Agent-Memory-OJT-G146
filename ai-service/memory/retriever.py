@@ -45,6 +45,7 @@ class MemoryRetriever:
             "candidate_count": 0,
             "admissible_count": 0,
             "gate_reasons": {},
+            "candidate_pitfalls": [],
             "ranker": "lcb" if mode == MemoryMode.ADAPTIVE else f"retriever_{mode.value}",
             "policy": "aema" if mode == MemoryMode.ADAPTIVE else mode.value,
         }
@@ -83,6 +84,7 @@ class MemoryRetriever:
         diagnostics["candidate_count"] = len(raw_matches)
         results: List[RetrievedMemory] = []
         gate_reasons: Dict[str, str] = {}
+        candidate_pitfalls: List[str] = []
 
         for exp, raw_sim in raw_matches:
             trust = float(exp.trust_score)
@@ -96,7 +98,7 @@ class MemoryRetriever:
             # Condition B: Naive Vector RAG (relevance only, no quarantine, no trust weighting)
             if mode == MemoryMode.NAIVE:
                 # Naive RAG accepts any memory above similarity cutoff, ignoring trust score
-                if sim >= (settings.SIMILARITY_THRESHOLD - 0.20):
+                if sim >= settings.SIMILARITY_THRESHOLD:
                     results.append(
                         RetrievedMemory(
                             experience=exp,
@@ -132,14 +134,6 @@ class MemoryRetriever:
                         composite_score=round(composite, 4),
                     )
                 )
-                composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * trust)
-                results.append(
-                    RetrievedMemory(
-                        experience=exp,
-                        similarity=sim,
-                        composite_score=composite,
-                    )
-                )
 
             # Condition D: Adaptive Agent Memory (OURS: Bayesian LCB + Statistical Quarantine)
             elif mode == MemoryMode.ADAPTIVE:
@@ -161,6 +155,9 @@ class MemoryRetriever:
                 # 2. Status filter: Require ACTIVE status for production task retrieval (CANDIDATE and DEPRECATED excluded)
                 if exp.status != ExperienceStatus.ACTIVE:
                     gate_reasons[exp.id] = f"inadmissible_status_{exp.status.value if hasattr(exp.status, 'value') else exp.status}"
+                    # Cross-episode failure mitigation: admit pitfall from relevant candidate memories
+                    if exp.status == ExperienceStatus.CANDIDATE and exp.pitfall and sim >= settings.SIMILARITY_THRESHOLD:
+                        candidate_pitfalls.append(exp.pitfall)
                     continue
 
                 # 3. Relevance threshold
@@ -176,7 +173,7 @@ class MemoryRetriever:
                     alpha_0=settings.PRIOR_ALPHA,
                     beta_0=settings.PRIOR_BETA,
                 )
-                composite = round(sim * lcb_val, 4)
+                composite = round((settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * lcb_val), 4)
                 results.append(
                     RetrievedMemory(
                         experience=exp,
@@ -189,6 +186,7 @@ class MemoryRetriever:
         results.sort(key=lambda m: m.composite_score, reverse=True)
         diagnostics["admissible_count"] = len(results)
         diagnostics["gate_reasons"] = gate_reasons
+        diagnostics["candidate_pitfalls"] = candidate_pitfalls
         return results[:top_k], diagnostics
 
     async def retrieve(

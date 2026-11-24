@@ -52,7 +52,7 @@ class AIServiceSettings(BaseSettings):
     # Constrained Hybrid Retrieval Weights
     WEIGHT_SIMILARITY: float = Field(default=0.70, description="Weight for semantic cosine similarity")
     WEIGHT_TRUST: float = Field(default=0.30, description="Weight for empirical trust S_e(t)")
-    SIMILARITY_THRESHOLD: float = Field(default=0.60, description="Minimum cosine similarity cutoff")
+    SIMILARITY_THRESHOLD: float = Field(default=0.30, description="Minimum cosine similarity cutoff")
 
     # Storage Paths & Engines
     STORAGE_ENGINE: str = Field(default="sqlite", description="Storage backend: 'sqlite', 'postgres', or 'supabase'")
