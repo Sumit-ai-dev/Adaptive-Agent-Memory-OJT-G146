@@ -120,7 +120,7 @@ def drqa_exact_match_score(prediction: str, ground_truth: str) -> float:
     return float(normalize_answer(prediction) == normalize_answer(ground_truth))
 
 
-OPT_MODIFIERS = r"(?:(a|an|the|actually|really|just|in|at|located in|born in)\s+)?"
+OPT_MODIFIERS = r"(?:(a|an|the|actually|really|just|in|at|located in|born in|[a-d]\.?)\s+)?"
 
 PRE_NEGATION_PATTERNS = [
     re.compile(rf"\b(not|no|never|neither|isnt|wasnt|arent|werent|cannot|wont|instead of|rather than)\s+{OPT_MODIFIERS}$"),
@@ -210,6 +210,13 @@ def parse_output(output_text: str, answer_prefix: str = "Answer:") -> Optional[s
         ).strip()
         return clean_xml or xml_ans
 
+    # Check for JSON answer field: {"answer": "..."}
+    json_match = re.search(r'"answer"\s*:\s*"([^"]+)"', output_text, flags=re.IGNORECASE)
+    if json_match:
+        extracted_json = json_match.group(1).strip()
+        if extracted_json:
+            return extracted_json
+
     extraction_patterns = [
         re.compile(rf"(?:{re.escape(answer_prefix)}|label:)\s*(.*)(?:\n|$)", flags=re.IGNORECASE),
         re.compile(r"(?:^)(.*)(?:\n|$)"),
@@ -280,42 +287,56 @@ class MemoryAgentBenchEvaluator(BaseBenchmarkEvaluator):
         xml_answer = extract_xml_answer(agent_output)
         parsed_output = parse_output(agent_output)
 
+        # Expand multiple-choice options if present (e.g. 'C. The Brandt couple' -> text 'The Brandt couple')
+        candidate_ground_truths = list(ground_truth_answers)
+        clean_eval = normalize_answer(parsed_output or xml_answer or agent_output)
+        for gt in ground_truth_answers:
+            if isinstance(gt, str):
+                m_opt = re.match(r"^([A-D])\.\s*(.+)$", gt.strip(), flags=re.IGNORECASE)
+                if m_opt:
+                    opt_letter = m_opt.group(1).strip()
+                    opt_text = m_opt.group(2).strip()
+                    if opt_text not in candidate_ground_truths:
+                        candidate_ground_truths.append(opt_text)
+                    if clean_eval == opt_letter.lower():
+                        candidate_ground_truths.append(opt_letter)
+
         if xml_answer:
             # When model explicitly provides an <answer>...</answer> tag as instructed,
             # evaluate official metrics on the declared answer to prevent scratchpad reasoning
             # from causing spurious false positives or mask errors.
             eval_target = parsed_output or xml_answer
             final_em = drqa_metric_max_over_ground_truths(
-                drqa_exact_match_score, eval_target, ground_truth_answers
+                drqa_exact_match_score, eval_target, candidate_ground_truths
             )
             final_sem = drqa_metric_max_over_ground_truths(
-                substring_exact_match_score, eval_target, ground_truth_answers
+                substring_exact_match_score, eval_target, candidate_ground_truths
             )
             final_f1 = drqa_metric_max_over_ground_truths(
-                lambda p, gt: f1_score(p, gt)[0], eval_target, ground_truth_answers
+                lambda p, gt: f1_score(p, gt)[0], eval_target, candidate_ground_truths
             )
         else:
             # 1. Compute official metrics on raw output
             raw_em = drqa_metric_max_over_ground_truths(
-                drqa_exact_match_score, agent_output, ground_truth_answers
+                drqa_exact_match_score, agent_output, candidate_ground_truths
             )
             raw_sem = drqa_metric_max_over_ground_truths(
-                substring_exact_match_score, agent_output, ground_truth_answers
+                substring_exact_match_score, agent_output, candidate_ground_truths
             )
             raw_f1 = drqa_metric_max_over_ground_truths(
-                lambda p, gt: f1_score(p, gt)[0], agent_output, ground_truth_answers
+                lambda p, gt: f1_score(p, gt)[0], agent_output, candidate_ground_truths
             )
 
             # 2. Compute official metrics on parsed output (Answer: prefix extraction)
             if parsed_output:
                 parsed_em = drqa_metric_max_over_ground_truths(
-                    drqa_exact_match_score, parsed_output, ground_truth_answers
+                    drqa_exact_match_score, parsed_output, candidate_ground_truths
                 )
                 parsed_sem = drqa_metric_max_over_ground_truths(
-                    substring_exact_match_score, parsed_output, ground_truth_answers
+                    substring_exact_match_score, parsed_output, candidate_ground_truths
                 )
                 parsed_f1 = drqa_metric_max_over_ground_truths(
-                    lambda p, gt: f1_score(p, gt)[0], parsed_output, ground_truth_answers
+                    lambda p, gt: f1_score(p, gt)[0], parsed_output, candidate_ground_truths
                 )
 
                 # Official post_process rule: take max of original and parsed score
@@ -372,9 +393,15 @@ class MemoryAgentBenchEvaluator(BaseBenchmarkEvaluator):
         if competency == "Test_Time_Learning":
             primary_score = final_em
             passed = (final_em >= 1.0)
+            accuracy = final_em
+        elif competency == "Long_Range_Understanding":
+            primary_score = max(final_em, final_sem)
+            passed = (primary_score >= 1.0)
+            accuracy = primary_score
         else:
             primary_score = final_sem
             passed = (final_sem >= 1.0)
+            accuracy = final_sem
 
         failure_reason = None
         if not passed:
@@ -390,7 +417,7 @@ class MemoryAgentBenchEvaluator(BaseBenchmarkEvaluator):
             evaluator_version=self.version,
             metrics={
                 "official": {
-                    "accuracy": final_em if competency == "Test_Time_Learning" else final_sem,
+                    "accuracy": accuracy,
                     "exact_match": final_em,
                     "substring_exact_match": final_sem,
                     "token_f1": final_f1,

@@ -8,7 +8,7 @@
     "upstream_repo": "https://github.com/HUST-AI-HYZ/MemoryAgentBench"
   },
   "pilot_evaluation_scope": {
-    "total_tasks": 75,
+    "total_tasks": 100,
     "tasks_per_competency": 25,
     "competencies": [
       {
@@ -32,6 +32,14 @@
         "split": "icl_trec_coarse_6600shot_balance",
         "manifest_file": "pilot_test_time_learning_25.json",
         "sha256": "a10ca951d1380bf5e571dffe53332a4a6a4578443426222ddb480a1e7a111a23",
+        "task_count": 25,
+        "evaluation_metric": "exact_match"
+      },
+      {
+        "name": "Long_Range_Understanding",
+        "split": "detective_qa",
+        "manifest_file": "pilot_long_range_understanding_25.json",
+        "sha256": "974eb657246dd11b4c5656b8343463ae25e88236493c7578508eb80241cd39ff",
         "task_count": 25,
         "evaluation_metric": "exact_match"
       }

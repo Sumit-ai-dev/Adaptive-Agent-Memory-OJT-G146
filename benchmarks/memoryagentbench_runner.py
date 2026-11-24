@@ -286,6 +286,25 @@ class MemoryAgentBenchSession:
             demo_blocks = [b.strip() for b in context_text.split("\n\n") if b.strip()]
             for idx, block in enumerate(demo_blocks):
                 statements.append((idx, block))
+        elif competency == "Long_Range_Understanding":
+            # Paragraph-based chunking for Long-Range Understanding (detective novels)
+            # Group consecutive numbered paragraphs up to ~1,000 words (~1,300 tokens)
+            lines = [l.strip() for l in context_text.splitlines() if l.strip()]
+            curr_chunk: List[str] = []
+            curr_words = 0
+            chunk_idx = 0
+            for l in lines:
+                words = len(l.split())
+                if curr_words + words > 1000 and curr_chunk:
+                    statements.append((chunk_idx, "\n".join(curr_chunk)))
+                    chunk_idx += 1
+                    curr_chunk = [l]
+                    curr_words = words
+                else:
+                    curr_chunk.append(l)
+                    curr_words += words
+            if curr_chunk:
+                statements.append((chunk_idx, "\n".join(curr_chunk)))
         else:
             # Document-based parsing for Accurate Retrieval
             doc_chunks = re.split(r"(Document\s+\d+:)", context_text)
@@ -439,6 +458,17 @@ class MemoryAgentBenchSession:
                 f"{context_str}"
                 f"Question: {question}\n"
                 f"Provide the correct label enclosed in <answer>...</answer> tags."
+            )
+        elif competency == "Long_Range_Understanding":
+            system_msg = (
+                "You are an accurate, grounded detective research assistant. "
+                "Based on the story context in memory, answer the multiple-choice question. "
+                "Always state your final answer (including option letter and text) enclosed in <answer>...</answer> tags (e.g., <answer>C. The Brandt couple</answer>)."
+            )
+            user_msg = (
+                f"{context_str}"
+                f"{question}\n\n"
+                f"Provide the correct option enclosed in <answer>...</answer> tags."
             )
         else:
             system_msg = (
@@ -625,14 +655,26 @@ class MemoryAgentBenchSession:
 
         if prov_name == "mock":
             if retrieved_memories:
-                top_lesson = retrieved_memories[0].experience.strategy_lesson
-                m_label = re.search(r"(?:label:|answer:)\s*([A-Za-z0-9_-]+)", top_lesson, re.I)
-                if m_label:
-                    ans = m_label.group(1).strip()
+                retrieved_all = " ".join(m.experience.strategy_lesson for m in retrieved_memories)
+                q_after = question.split("Now Answer the Question:")[-1] if "Now Answer the Question:" in question else question
+                options = [m.strip() for m in re.findall(r"([A-D]\.\s*[^<\n\r]+)", q_after)]
+                if options:
+                    best_opt = options[0]
+                    for opt in options:
+                        opt_body = re.sub(r"^[A-D]\.\s*", "", opt).strip().lower()
+                        if opt_body and opt_body in retrieved_all.lower():
+                            best_opt = opt
+                            break
+                    response_text = f"Based on the retrieved context, the answer is <answer>{best_opt}</answer>."
                 else:
-                    m_obj = re.search(r"(?:is|was|located in|famous for|in the country of)\s+([A-Za-z0-9\s,\.'\-]+?)\.?$", top_lesson, re.I)
-                    ans = m_obj.group(1).strip() if m_obj else top_lesson
-                response_text = f"Based on the retrieved context, the answer is <answer>{ans}</answer>."
+                    top_lesson = retrieved_memories[0].experience.strategy_lesson
+                    m_label = re.search(r"(?:label:|answer:)\s*([A-Za-z0-9_-]+)", top_lesson, re.I)
+                    if m_label:
+                        ans = m_label.group(1).strip()
+                    else:
+                        m_obj = re.search(r"(?:is|was|located in|famous for|in the country of)\s+([A-Za-z0-9\s,\.'\-]+?)\.?$", top_lesson, re.I)
+                        ans = m_obj.group(1).strip() if m_obj else top_lesson
+                    response_text = f"Based on the retrieved context, the answer is <answer>{ans}</answer>."
             else:
                 response_text = "I do not have sufficient information in memory to answer this question."
 
@@ -684,16 +726,18 @@ class MemoryAgentBenchSession:
 # ============================================================================
 
 def load_pilot_manifest(competency: str) -> Dict[str, Any]:
-    """Load pilot manifest for Conflict_Resolution, Accurate_Retrieval, or Test_Time_Learning."""
+    """Load pilot manifest for Conflict_Resolution, Accurate_Retrieval, Test_Time_Learning, or Long_Range_Understanding."""
     if competency == "Conflict_Resolution":
         filename = "pilot_conflict_resolution_25.json"
     elif competency == "Accurate_Retrieval":
         filename = "pilot_accurate_retrieval_25.json"
     elif competency == "Test_Time_Learning":
         filename = "pilot_test_time_learning_25.json"
+    elif competency == "Long_Range_Understanding":
+        filename = "pilot_long_range_understanding_25.json"
     else:
         raise ValueError(
-            f"Unknown competency: '{competency}'. Valid options: Conflict_Resolution, Accurate_Retrieval, Test_Time_Learning"
+            f"Unknown competency: '{competency}'. Valid options: Conflict_Resolution, Accurate_Retrieval, Test_Time_Learning, Long_Range_Understanding"
         )
     manifest_path = DATA_DIR / filename
     if not manifest_path.exists():
@@ -717,34 +761,67 @@ async def run_scenario_evaluation(
     Execute full streaming ingestion and probe query evaluation for a pilot scenario.
     """
     manifest = load_pilot_manifest(competency)
-    context_text = manifest["context"]
-    tasks = manifest["tasks"]
-    if limit is not None:
-        tasks = tasks[:limit]
-
     evaluator = evaluator or MemoryAgentBenchEvaluator()
 
-    # Initialize isolated session
-    session = MemoryAgentBenchSession(
-        scenario_id=f"{competency}_{manifest.get('split', 'pilot')}",
-        condition_name=condition_name,
-        trial=trial,
-        seed=seed,
-        model=model,
-        provider=provider,
-    )
+    if competency == "Long_Range_Understanding":
+        # Multi-novel batching: ingest each novel once into an isolated session,
+        # then evaluate its associated questions read-only.
+        books = manifest.get("books", [])
+        all_tasks = manifest.get("tasks", [])
+        if limit is not None:
+            all_tasks = all_tasks[:limit]
+        allowed_task_ids = {t["task_id"] for t in all_tasks}
 
-    try:
-        # Turn Ingestion Phase
-        await session.ingest_stream(context_text, competency)
-
-        # Query Probing Phase
         records: List[TrialTelemetryRecord] = []
-        for task in tasks:
-            rec = await session.query(task, evaluator=evaluator)
-            records.append(rec)
-    finally:
-        session.close()
+        for book in books:
+            book_id = book["book_id"]
+            book_context = book["context"]
+            book_tasks = [t for t in all_tasks if t.get("book_id") == book_id and t["task_id"] in allowed_task_ids]
+            if not book_tasks:
+                continue
+
+            session = MemoryAgentBenchSession(
+                scenario_id=f"{competency}_{book_id}",
+                condition_name=condition_name,
+                trial=trial,
+                seed=seed,
+                model=model,
+                provider=provider,
+            )
+            try:
+                await session.ingest_stream(book_context, competency)
+                for task in book_tasks:
+                    rec = await session.query(task, evaluator=evaluator)
+                    records.append(rec)
+            finally:
+                session.close()
+    else:
+        context_text = manifest["context"]
+        tasks = manifest["tasks"]
+        if limit is not None:
+            tasks = tasks[:limit]
+
+        # Initialize isolated session
+        session = MemoryAgentBenchSession(
+            scenario_id=f"{competency}_{manifest.get('split', 'pilot')}",
+            condition_name=condition_name,
+            trial=trial,
+            seed=seed,
+            model=model,
+            provider=provider,
+        )
+
+        try:
+            # Turn Ingestion Phase
+            await session.ingest_stream(context_text, competency)
+
+            # Query Probing Phase
+            records = []
+            for task in tasks:
+                rec = await session.query(task, evaluator=evaluator)
+                records.append(rec)
+        finally:
+            session.close()
 
     # Telemetry Persistence (JSONL)
     output_log_dir = RESULTS_DIR / condition_name
@@ -816,7 +893,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="MemoryAgentBench Streaming Benchmark Runner (Research-Grade)")
     parser.add_argument(
         "--competency",
-        choices=["Conflict_Resolution", "Accurate_Retrieval", "Test_Time_Learning", "all"],
+        choices=["Conflict_Resolution", "Accurate_Retrieval", "Test_Time_Learning", "Long_Range_Understanding", "all"],
         default="all",
         help="Target competency split (default: all)",
     )
@@ -863,7 +940,7 @@ async def async_main():
     args = parse_args()
 
     competencies = (
-        ["Conflict_Resolution", "Accurate_Retrieval", "Test_Time_Learning"]
+        ["Conflict_Resolution", "Accurate_Retrieval", "Test_Time_Learning", "Long_Range_Understanding"]
         if args.competency == "all"
         else [args.competency]
     )

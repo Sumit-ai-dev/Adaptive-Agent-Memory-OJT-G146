@@ -22,12 +22,14 @@ METADATA_FILE = SCRIPT_DIR / "manifest_metadata.json"
 CR_MANIFEST_FILE = SCRIPT_DIR / "pilot_conflict_resolution_25.json"
 AR_MANIFEST_FILE = SCRIPT_DIR / "pilot_accurate_retrieval_25.json"
 TTL_MANIFEST_FILE = SCRIPT_DIR / "pilot_test_time_learning_25.json"
+LRU_MANIFEST_FILE = SCRIPT_DIR / "pilot_long_range_understanding_25.json"
 
 HF_BASE_URL = "https://huggingface.co/datasets/ai-hyz/MemoryAgentBench/resolve/main/data"
 PARQUET_URLS = {
     "Conflict_Resolution": f"{HF_BASE_URL}/Conflict_Resolution-00000-of-00001.parquet",
     "Accurate_Retrieval": f"{HF_BASE_URL}/Accurate_Retrieval-00000-of-00001.parquet",
     "Test_Time_Learning": f"{HF_BASE_URL}/Test_Time_Learning-00000-of-00001.parquet",
+    "Long_Range_Understanding": f"{HF_BASE_URL}/Long_Range_Understanding-00000-of-00001.parquet",
 }
 
 
