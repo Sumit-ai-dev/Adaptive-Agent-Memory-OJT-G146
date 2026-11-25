@@ -163,16 +163,32 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
     final_answer = state.get("final_answer", "")
     outcome_score = state.get("outcome_score", 0.5)
 
-    # Short-circuit: do not run reflection or generate candidate memories if task budget was exceeded
-    if state.get("budget_exceeded") is True or state.get("budget_error"):
+    # Format structured diagnostic feedback early to skip reflection on budget or provider errors
+    eval_details = state.get("evaluator_details") or {}
+
+    if (
+        state.get("budget_exceeded") is True
+        or state.get("budget_error")
+        or eval_details.get("error") == "provider_error"
+        or str(final_answer).startswith("Execution encountered a model provider error:")
+    ):
+        is_provider_err = (
+            eval_details.get("error") == "provider_error"
+            or str(final_answer).startswith("Execution encountered a model provider error:")
+        )
+        skip_reason = "Provider Error" if is_provider_err else "Budget Exceeded"
         trace = {
             "id": f"step_reflect_skip_{int(start_ts)}",
             "type": "thought",
             "node": "reflect_node",
-            "title": "Reflection Skipped (Budget Exceeded)",
-            "detail": "Reflection distillation skipped because task budget was exceeded.",
+            "title": f"Reflection Skipped ({skip_reason})",
+            "detail": (
+                "Reflection distillation skipped because the model provider request failed."
+                if is_provider_err
+                else "Reflection distillation skipped because task budget was exceeded."
+            ),
             "durationMs": int((time.time() - start_ts) * 1000),
-            "metadata": {"budgetExceeded": True},
+            "metadata": {"providerError": is_provider_err, "budgetExceeded": not is_provider_err},
         }
         trajectory = list(state.get("trajectory", []))
         trajectory.append(trace)
@@ -183,8 +199,6 @@ async def reflect_node(state: AgentState) -> Dict[str, Any]:
             "status": "updating_trust",
         }
 
-    # Format structured diagnostic feedback for causal reflection
-    eval_details = state.get("evaluator_details") or {}
     eval_reason = state.get("outcome_reason") or eval_details.get("reason") or "No explicit evaluator reason provided."
     eval_error = eval_details.get("error") or ""
     eval_assertion = eval_details.get("assertion_error") or eval_details.get("stderr") or eval_details.get("output") or ""

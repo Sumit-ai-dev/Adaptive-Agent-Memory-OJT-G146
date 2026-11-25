@@ -1,49 +1,25 @@
-import { useState, useRef, useEffect } from 'react'
-import { Play, Sparkles, Terminal, KeyRound, ChevronDown, Check, Cpu } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Play, Sparkles, Terminal, KeyRound } from 'lucide-react'
 import type { TaskDomain } from '../types'
+import {
+  BYOK_UPDATED_EVENT,
+  MODEL_PREFS_UPDATED_EVENT,
+  PROVIDER_DEFAULT_MODELS,
+  SupportedProvider,
+  getByokKeyPlaceholder,
+  getByokKeyWarning,
+  getProviderApiKey,
+  loadByokKeys,
+  loadProviderPreference,
+  loadSelectedModels,
+  saveByokKey,
+  saveProviderPreference,
+  saveSelectedModel,
+} from '../services/api'
+import ProviderSelect from './ProviderSelect'
+import ProviderModelSelect from './ProviderModelSelect'
 
-type ProviderType = 'gemini' | 'groq' | 'ollama' | 'openai' | 'mock'
-
-interface ModelOption {
-  id: ProviderType
-  name: string
-  subname: string
-  logo?: string
-  isIcon?: boolean
-}
-
-const MODEL_OPTIONS: ModelOption[] = [
-  {
-    id: 'groq',
-    name: 'Groq Cloud',
-    subname: 'Fast - Default',
-    logo: '/images/models/groq.webp',
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini Flash',
-    subname: 'Hosted',
-    logo: '/images/models/gemini.webp',
-  },
-  {
-    id: 'openai',
-    name: 'GPT-4o Mini',
-    subname: 'OpenAI',
-    logo: '/images/models/openai.webp',
-  },
-  {
-    id: 'ollama',
-    name: 'Ollama Local',
-    subname: 'llama3.2',
-    logo: '/images/models/ollama.webp',
-  },
-  {
-    id: 'mock',
-    name: 'Deterministic Mock',
-    subname: 'Offline',
-    isIcon: true,
-  },
-]
+type ProviderType = SupportedProvider
 
 interface PromptConsoleProps {
   onRunTask: (params: {
@@ -51,6 +27,7 @@ interface PromptConsoleProps {
     domain: TaskDomain
     memoryEnabled: boolean
     provider?: string
+    model?: string
     apiKey?: string
     simulateFailure?: boolean
   }) => void
@@ -62,78 +39,40 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
   const [domain, setDomain] = useState<TaskDomain>('coding')
   const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [simulateFailure, setSimulateFailure] = useState(false)
-  const [provider, setProvider] = useState<ProviderType>('groq')
-  const [isModelOpen, setIsModelOpen] = useState(false)
-  const modelDropdownRef = useRef<HTMLDivElement>(null)
+  const [provider, setProvider] = useState<ProviderType>(() => loadProviderPreference())
+  const [selectedModels, setSelectedModels] = useState<Record<string, string>>(() => loadSelectedModels())
+  const activeModel = selectedModels[provider] || PROVIDER_DEFAULT_MODELS[provider]
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
-        setIsModelOpen(false)
-      }
+    function handleByokSync() {
+      setApiKeys(loadByokKeys())
     }
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsModelOpen(false)
-      }
+    function handleModelPrefsSync() {
+      setProvider(loadProviderPreference())
+      setSelectedModels(loadSelectedModels())
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener(BYOK_UPDATED_EVENT, handleByokSync)
+    window.addEventListener(MODEL_PREFS_UPDATED_EVENT, handleModelPrefsSync)
+    window.addEventListener('storage', handleByokSync)
+    window.addEventListener('storage', handleModelPrefsSync)
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside)
-      document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener(BYOK_UPDATED_EVENT, handleByokSync)
+      window.removeEventListener(MODEL_PREFS_UPDATED_EVENT, handleModelPrefsSync)
+      window.removeEventListener('storage', handleByokSync)
+      window.removeEventListener('storage', handleModelPrefsSync)
     }
   }, [])
 
-  const currentModel = MODEL_OPTIONS.find((m) => m.id === provider) || MODEL_OPTIONS[0]
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
-    try {
-      const saved = localStorage.getItem('aema_byok_keys')
-      return saved ? JSON.parse(saved) : {}
-    } catch {
-      return {}
-    }
-  })
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => loadByokKeys())
   const [showKeyInput, setShowKeyInput] = useState(false)
 
-  const apiKey = apiKeys[provider] || ''
+  const apiKey = getProviderApiKey(apiKeys, provider) || ''
   const setApiKey = (val: string) => {
-    setApiKeys((prev) => {
-      const next = { ...prev, [provider]: val }
-      try {
-        localStorage.setItem('aema_byok_keys', JSON.stringify(next))
-      } catch {}
-      return next
-    })
+    setApiKeys(saveByokKey(provider, val))
   }
 
   // Detect mismatched API key types to prevent confusing provider errors
-  const keyWarning = (() => {
-    if (!apiKey) return null
-    if (provider === 'groq' && apiKey.startsWith('AIza')) {
-      return 'Warning: This looks like a Google Gemini key (AIza...). Groq keys start with "gsk_". Get a free key at console.groq.com.'
-    }
-    if (provider === 'gemini' && apiKey.startsWith('gsk_')) {
-      return 'Warning: This looks like a Groq key (gsk_...). Gemini keys start with "AIza...". Get a key at aistudio.google.com.'
-    }
-    if (provider === 'openai' && !apiKey.startsWith('sk-')) {
-      return 'Note: OpenAI API keys typically start with "sk-".'
-    }
-    return null
-  })()
-
-  const getKeyPlaceholder = () => {
-    switch (provider) {
-      case 'gemini':
-        return 'Enter Gemini API key (starts with AIzaSy...)'
-      case 'groq':
-        return 'Enter Groq API key (starts with gsk_... from console.groq.com)'
-      case 'openai':
-        return 'Enter OpenAI API key (starts with sk-...)'
-      default:
-        return `Enter ${provider.toUpperCase()}_API_KEY...`
-    }
-  }
+  const keyWarning = getByokKeyWarning(provider, apiKey)
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -144,6 +83,7 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
       domain,
       memoryEnabled,
       provider,
+      model: activeModel,
       apiKey: apiKey.trim() || undefined,
       simulateFailure,
     })
@@ -184,7 +124,7 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
                 type="password"
                 value={apiKey}
                 onChange={(e) => setApiKey(e.target.value)}
-                placeholder={getKeyPlaceholder()}
+                placeholder={getByokKeyPlaceholder(provider)}
                 className="w-full text-xs font-mono bg-transparent outline-none text-[#EDECE8] placeholder-[#5A5955]"
               />
               {apiKey && (
@@ -226,88 +166,25 @@ export default function PromptConsole({ onRunTask, isRunning }: PromptConsolePro
             </div>
 
             {/* Model Provider Picker with Logos */}
-            <div className="relative" ref={modelDropdownRef}>
-              <div className="flex items-center gap-2">
-                <span className="font-mono text-[#7E7D77] text-[11px]">MODEL:</span>
-                <button
-                  type="button"
-                  onClick={() => setIsModelOpen(!isModelOpen)}
-                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border font-mono text-xs outline-none transition-colors cursor-pointer
-                    bg-[#141412] border-[#2E2E2A] text-[#EDECE8] hover:bg-[#1E1E1B]"
-                >
-                  <div className="w-3.5 h-3.5 rounded-sm flex items-center justify-center shrink-0 overflow-hidden">
-                    {currentModel.logo ? (
-                      <img
-                        src={currentModel.logo}
-                        alt={currentModel.name}
-                        className="w-full h-full object-contain"
-                      />
-                    ) : (
-                      <Cpu size={13} className="text-[#7E7D77]" />
-                    )}
-                  </div>
-                  <span className="truncate max-w-[170px] text-[11px] font-medium">
-                    {currentModel.name}
-                  </span>
-                  <ChevronDown
-                    size={11}
-                    className={`text-[#7E7D77] transition-transform duration-200 shrink-0 ${
-                      isModelOpen ? 'rotate-180' : ''
-                    }`}
-                  />
-                </button>
-              </div>
-
-              {/* Dropdown Menu */}
-              {isModelOpen && (
-                <div
-                  className="absolute left-0 mt-1.5 w-60 rounded-lg border py-1.5 z-50 shadow-xl
-                    bg-[#1A1A17] border-[#2E2E2A] text-[#EDECE8]"
-                >
-                  {MODEL_OPTIONS.map((opt) => {
-                    const isSelected = opt.id === provider
-                    return (
-                      <button
-                        key={opt.id}
-                        type="button"
-                        onClick={() => {
-                          setProvider(opt.id)
-                          setIsModelOpen(false)
-                        }}
-                        className={`w-full flex items-center justify-between px-3 py-2 text-left text-xs font-mono transition-colors cursor-pointer ${
-                          isSelected
-                            ? 'bg-[#22221E] text-white font-medium border-l-2 border-[#4EAA79]'
-                            : 'hover:bg-[#20201D] text-[#9E9D96]'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <div className="w-4 h-4 rounded flex items-center justify-center shrink-0 bg-[#242422] p-0.5 overflow-hidden">
-                            {opt.logo ? (
-                              <img
-                                src={opt.logo}
-                                alt={opt.name}
-                                className="w-full h-full object-contain"
-                              />
-                            ) : (
-                              <Cpu size={12} className="text-[#7E7D77]" />
-                            )}
-                          </div>
-                          <div className="truncate">
-                            <span className="font-medium">{opt.name}</span>
-                            <span className="text-[10px] text-[#7E7D77] ml-1.5">
-                              ({opt.subname})
-                            </span>
-                          </div>
-                        </div>
-                        {isSelected && (
-                          <Check size={13} className="text-[#4EAA79] shrink-0 ml-2" />
-                        )}
-                      </button>
-                    )
-                  })}
-                </div>
-              )}
+            <div className="flex items-center gap-2">
+              <span className="font-mono text-[#7E7D77] text-[11px]">MODEL:</span>
+              <ProviderSelect
+                value={provider}
+                onChange={(nextProv) => {
+                  setProvider(nextProv)
+                  saveProviderPreference(nextProv)
+                }}
+                align="left"
+              />
             </div>
+
+            {/* Provider Model Variant Selector */}
+            <ProviderModelSelect
+              provider={provider}
+              value={activeModel}
+              onChange={(modelId) => setSelectedModels(saveSelectedModel(provider, modelId))}
+              align="left"
+            />
 
             {/* BYOK Key Toggle */}
             {provider !== 'mock' && provider !== 'ollama' && (

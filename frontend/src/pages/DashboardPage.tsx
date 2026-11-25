@@ -31,6 +31,7 @@ import {
   fetchTelemetry,
   clearExecutionsApi,
   getTelemetryMetrics,
+  shouldUseOfflineDemo,
   INITIAL_EXPERIENCES,
   INITIAL_DEMO_EXECUTIONS,
 } from '../services/api'
@@ -151,11 +152,18 @@ export default function DashboardPage() {
     domain: TaskDomain
     memoryEnabled: boolean
     provider?: string
+    model?: string
     apiKey?: string
     simulateFailure?: boolean
   }) => {
     setIsExecuting(true)
     setExecutionError(null)
+
+    const shouldRunOfflineDemo = shouldUseOfflineDemo(
+      isDemo,
+      params.provider || 'groq',
+      params.apiKey
+    )
 
     try {
       const exec = await executeAgentTask({
@@ -163,9 +171,10 @@ export default function DashboardPage() {
         taskDomain: params.domain,
         memoryEnabled: params.memoryEnabled,
         provider: params.provider,
+        model: params.model,
         apiKey: params.apiKey,
         simulateFailure: params.simulateFailure,
-        isExplicitDemo: isDemo,
+        isExplicitDemo: shouldRunOfflineDemo,
       })
 
       setSelectedExecution(exec)
@@ -310,6 +319,7 @@ export default function DashboardPage() {
         {activeTab === 'studio' ? (
           <div className="flex-1 h-[calc(100vh-64px)] w-full overflow-hidden flex flex-col">
             <ConversationStudio
+              isDemo={isDemo}
               onExecutionComplete={(exec) => {
                 setSelectedExecution(exec)
                 setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])

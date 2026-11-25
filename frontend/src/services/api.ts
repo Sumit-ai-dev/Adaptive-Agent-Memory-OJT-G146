@@ -25,6 +25,214 @@ export const PROVIDER_DEFAULT_MODELS: Record<string, string> = {
   mock: 'mock-deterministic-v1',
 }
 
+export interface ProviderModelOption {
+  id: string
+  label: string
+  note: string
+  tier: 'free' | 'paid'
+}
+
+export type GeminiModelOption = ProviderModelOption
+
+export const GEMINI_MODEL_OPTIONS: ProviderModelOption[] = [
+  { id: 'gemini-3.8-flash', label: 'gemini-3.8-flash', note: 'Free tier · Best all-rounder', tier: 'free' },
+  { id: 'gemini-3.5-flash-lite', label: 'gemini-3.5-flash-lite', note: 'Free tier · High quota / Lite', tier: 'free' },
+  { id: 'gemini-4-hydrogen', label: 'gemini-4-hydrogen', note: 'Free (5 RPM/20 RPD) · Gemini 4', tier: 'free' },
+  { id: 'gemini-4-argon', label: 'gemini-4-argon', note: 'Paid · Frontier reasoning', tier: 'paid' },
+  { id: 'gemini-4-carbon', label: 'gemini-4-carbon', note: 'Paid · Flagship heavy tasks', tier: 'paid' },
+]
+
+export const PROVIDER_MODEL_OPTIONS: Record<string, ProviderModelOption[]> = {
+  gemini: GEMINI_MODEL_OPTIONS,
+  groq: [
+    { id: 'openai/gpt-oss-120b', label: 'openai/gpt-oss-120b', note: 'Default · Fast ~500 tok/s', tier: 'free' },
+    { id: 'llama-3.3-70b-versatile', label: 'llama-3.3-70b-versatile', note: 'Multilingual 70B', tier: 'free' },
+    { id: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant', note: 'Ultra-fast 8B', tier: 'free' },
+  ],
+  openai: [
+    { id: 'gpt-6.2-sol', label: 'gpt-6.2-sol', note: 'Paid · Everyday coding & agents', tier: 'paid' },
+    { id: 'gpt-6-luna', label: 'gpt-6-luna', note: 'Paid · Low-cost high-volume', tier: 'paid' },
+    { id: 'gpt-6.1-terra', label: 'gpt-6.1-terra', note: 'Paid · Fast visual & computer use', tier: 'paid' },
+    { id: 'gpt-6.2-astra', label: 'gpt-6.2-astra', note: 'Paid · Flagship reasoning', tier: 'paid' },
+  ],
+  anthropic: [
+    { id: 'claude-sonnet-5-5', label: 'claude-sonnet-5-5', note: 'Paid · Balanced daily driver', tier: 'paid' },
+    { id: 'claude-haiku-5-5', label: 'claude-haiku-5-5', note: 'Paid · Fast & low-cost', tier: 'paid' },
+    { id: 'claude-opus-5-5', label: 'claude-opus-5-5', note: 'Paid · Complex agentic coding', tier: 'paid' },
+    { id: 'claude-fable-5-2', label: 'claude-fable-5-2', note: 'Paid · Flagship long-horizon', tier: 'paid' },
+  ],
+  ollama: [
+    { id: 'llama3.2:3b', label: 'llama3.2:3b', note: 'Local default (3B)', tier: 'free' },
+    { id: 'llama3.1:8b', label: 'llama3.1:8b', note: 'Local benchmark model (8B)', tier: 'free' },
+    { id: 'qwen2.5-coder:7b', label: 'qwen2.5-coder:7b', note: 'Local coding (7B)', tier: 'free' },
+  ],
+}
+
+export interface ProviderUiOption {
+  id: SupportedProvider
+  name: string
+  subname: string
+  logo?: string
+  isIcon?: boolean
+}
+
+export const PROVIDER_UI_OPTIONS: ProviderUiOption[] = [
+  { id: 'groq', name: 'Groq Cloud', subname: 'GPT-OSS 120B / Llama 3.3', logo: '/images/models/groq.webp' },
+  { id: 'gemini', name: 'Google Gemini', subname: 'Gemini 4 / 3.x', logo: '/images/models/gemini.webp' },
+  { id: 'openai', name: 'OpenAI', subname: 'GPT-6.2 / 6.1 / 6 Luna', logo: '/images/models/openai.webp' },
+  { id: 'anthropic', name: 'Anthropic Claude', subname: 'Claude 5.5 / Fable 5.2', isIcon: true },
+  { id: 'ollama', name: 'Ollama Local', subname: 'Llama 3.2 / 3.1 / Qwen', logo: '/images/models/ollama.webp' },
+  { id: 'mock', name: 'Deterministic Mock', subname: 'Offline', isIcon: true },
+]
+
+export const BYOK_UPDATED_EVENT = 'aema-byok-updated'
+
+export function loadByokKeys(): Record<string, string> {
+  if (typeof window === 'undefined') return {}
+  try {
+    const parsed = JSON.parse(localStorage.getItem('aema_byok_keys') || '{}')
+    const merged: Record<string, string> = typeof parsed === 'object' && parsed !== null ? { ...parsed } : {}
+    const legacyMap: Record<string, string> = {
+      groq: 'aema_byok_groq',
+      gemini: 'aema_byok_gemini',
+      openai: 'aema_byok_openai',
+      anthropic: 'aema_byok_anthropic',
+      ollama: 'aema_byok_ollama',
+    }
+    for (const [prov, lsKey] of Object.entries(legacyMap)) {
+      if (!merged[prov]) {
+        const legacyVal = localStorage.getItem(lsKey)
+        if (legacyVal) merged[prov] = legacyVal
+      }
+    }
+    return merged
+  } catch {
+    return {}
+  }
+}
+
+export function saveAllByokKeys(keys: Record<string, string>): Record<string, string> {
+  const normalized: Record<string, string> = {}
+  for (const [k, v] of Object.entries(keys)) {
+    normalized[k] = (v || '').trim()
+  }
+  try {
+    localStorage.setItem('aema_byok_keys', JSON.stringify(normalized))
+    for (const prov of ['groq', 'gemini', 'openai', 'anthropic', 'ollama']) {
+      if (normalized[prov] !== undefined) {
+        localStorage.setItem(`aema_byok_${prov}`, normalized[prov])
+      }
+    }
+    window.dispatchEvent(new CustomEvent(BYOK_UPDATED_EVENT))
+  } catch {}
+  return normalized
+}
+
+export function saveByokKey(provider: string, value: string): Record<string, string> {
+  const current = loadByokKeys()
+  return saveAllByokKeys({ ...current, [provider]: value })
+}
+
+export function getProviderApiKey(keys: Record<string, string>, provider: string): string | undefined {
+  if (provider === 'ollama' || provider === 'mock') return undefined
+  const val = (keys[provider] || '').trim()
+  return val || undefined
+}
+
+export function shouldUseOfflineDemo(isDemo: boolean | undefined, provider: string, apiKey?: string): boolean {
+  return Boolean(isDemo && !apiKey && provider !== 'mock' && provider !== 'ollama')
+}
+
+export const MODEL_PREFS_UPDATED_EVENT = 'aema-model-prefs-updated'
+
+export type SupportedProvider = 'gemini' | 'groq' | 'ollama' | 'openai' | 'anthropic' | 'mock'
+
+const VALID_PROVIDERS: SupportedProvider[] = ['groq', 'gemini', 'openai', 'anthropic', 'ollama', 'mock']
+
+export const DEFAULT_SELECTED_MODELS: Record<string, string> = {
+  ...PROVIDER_DEFAULT_MODELS,
+  gemini: GEMINI_MODEL_OPTIONS[0].id,
+  openai: 'gpt-6.2-sol',
+  anthropic: 'claude-sonnet-5-5',
+}
+
+export function loadProviderPreference(): SupportedProvider {
+  if (typeof window === 'undefined') return 'groq'
+  try {
+    const raw = localStorage.getItem('aema_selected_provider') as SupportedProvider | null
+    if (raw && VALID_PROVIDERS.includes(raw)) return raw
+  } catch {}
+  return 'groq'
+}
+
+export function saveProviderPreference(provider: SupportedProvider): void {
+  try {
+    localStorage.setItem('aema_selected_provider', provider)
+    window.dispatchEvent(new CustomEvent(MODEL_PREFS_UPDATED_EVENT))
+  } catch {}
+}
+
+export function loadSelectedModels(): Record<string, string> {
+  const base: Record<string, string> = { ...DEFAULT_SELECTED_MODELS }
+  if (typeof window === 'undefined') return base
+  try {
+    const parsed = JSON.parse(localStorage.getItem('aema_selected_models') || '{}')
+    if (typeof parsed === 'object' && parsed !== null) {
+      for (const [prov, modelId] of Object.entries(parsed)) {
+        if (typeof modelId !== 'string' || !modelId) continue
+        const opts = PROVIDER_MODEL_OPTIONS[prov]
+        if (!opts || opts.some((m) => m.id === modelId)) {
+          base[prov] = modelId
+        }
+      }
+    }
+  } catch {}
+  return base
+}
+
+export function saveSelectedModel(provider: string, modelId: string): Record<string, string> {
+  const next = { ...loadSelectedModels(), [provider]: modelId }
+  try {
+    localStorage.setItem('aema_selected_models', JSON.stringify(next))
+    window.dispatchEvent(new CustomEvent(MODEL_PREFS_UPDATED_EVENT))
+  } catch {}
+  return next
+}
+
+export function getByokKeyPlaceholder(provider: string): string {
+  switch (provider) {
+    case 'gemini':
+      return 'Enter Gemini API key (starts with AIza... from aistudio.google.com)'
+    case 'groq':
+      return 'Enter Groq API key (starts with gsk_... from console.groq.com)'
+    case 'openai':
+      return 'Enter OpenAI API key (starts with sk-... from platform.openai.com)'
+    case 'anthropic':
+      return 'Enter Anthropic API key (starts with sk-ant-... from console.anthropic.com)'
+    default:
+      return `Enter ${provider.toUpperCase()}_API_KEY...`
+  }
+}
+
+export function getByokKeyWarning(provider: string, apiKey: string): string | null {
+  if (!apiKey) return null
+  if (provider === 'groq' && apiKey.startsWith('AIza')) {
+    return 'Warning: This looks like a Google Gemini key (AIza...). Groq keys start with "gsk_".'
+  }
+  if (provider === 'gemini' && apiKey.startsWith('gsk_')) {
+    return 'Warning: This looks like a Groq key (gsk_...). Gemini keys start with "AIza...".'
+  }
+  if (provider === 'anthropic' && !apiKey.startsWith('sk-ant-')) {
+    return 'Note: Anthropic API keys typically start with "sk-ant-".'
+  }
+  if (provider === 'openai' && (!apiKey.startsWith('sk-') || apiKey.startsWith('sk-ant-'))) {
+    return apiKey.startsWith('sk-ant-')
+      ? 'Warning: This looks like an Anthropic key (sk-ant-...). Select Anthropic Claude instead.'
+      : 'Note: OpenAI API keys typically start with "sk-".'
+  }
+  return null
+}
+
 // ─── Initial Seed Operative Experiences (7-Tuple Structure) ─────────────────
 export const INITIAL_EXPERIENCES: Experience[] = [
   {
@@ -474,6 +682,8 @@ export async function executeAgentTask({
   onStageChange?.('retrieval')
 
   // Prepare live backend payload with centralized provider default models
+  const sanitizedApiKey =
+    provider === 'ollama' || provider === 'mock' ? undefined : apiKey || undefined
   const payload = {
     taskInput: simulateFailure
       ? `${taskInput}\n[CRITICAL FAILURE DIRECTIVE: Purposely trigger negative transfer trap to test quarantine]`
@@ -482,7 +692,7 @@ export async function executeAgentTask({
     memoryEnabled,
     provider,
     model: model || PROVIDER_DEFAULT_MODELS[provider] || undefined,
-    apiKey: apiKey || undefined,
+    apiKey: sanitizedApiKey,
     sessionId: sessionId || undefined,
     messages: messages && messages.length > 0 ? messages : undefined,
     maxTokens: maxTokens || 800,

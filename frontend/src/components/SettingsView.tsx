@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import {
   User,
   Key,
@@ -19,7 +19,11 @@ import { useAuth } from '../context/AuthContext'
 import {
   ALPHA_SUCCESS,
   BETA_FAILURE,
+  BYOK_UPDATED_EVENT,
   QUARANTINE_THRESHOLD,
+  getByokKeyWarning,
+  loadByokKeys,
+  saveAllByokKeys,
 } from '../services/api'
 
 interface SettingsViewProps {
@@ -43,42 +47,33 @@ export default function SettingsView({
   const [copiedTenantId, setCopiedTenantId] = useState(false)
 
   // BYOK API Keys state (persisted in localStorage and synced with Studio)
-  const [groqKey, setGroqKey] = useState(() => {
-    try {
-      const keys = JSON.parse(localStorage.getItem('aema_byok_keys') || '{}')
-      return keys.groq || localStorage.getItem('aema_byok_groq') || ''
-    } catch {
-      return localStorage.getItem('aema_byok_groq') || ''
+  const [groqKey, setGroqKey] = useState(() => loadByokKeys().groq || '')
+  const [geminiKey, setGeminiKey] = useState(() => loadByokKeys().gemini || '')
+  const [openaiKey, setOpenaiKey] = useState(() => loadByokKeys().openai || '')
+  const [anthropicKey, setAnthropicKey] = useState(() => loadByokKeys().anthropic || '')
+  const [ollamaUrl, setOllamaUrl] = useState(() => loadByokKeys().ollama || 'http://localhost:11434')
+
+  useEffect(() => {
+    const syncKeys = () => {
+      const next = loadByokKeys()
+      setGroqKey(next.groq || '')
+      setGeminiKey(next.gemini || '')
+      setOpenaiKey(next.openai || '')
+      setAnthropicKey(next.anthropic || '')
+      setOllamaUrl(next.ollama || 'http://localhost:11434')
     }
-  })
-  const [geminiKey, setGeminiKey] = useState(() => {
-    try {
-      const keys = JSON.parse(localStorage.getItem('aema_byok_keys') || '{}')
-      return keys.gemini || localStorage.getItem('aema_byok_gemini') || ''
-    } catch {
-      return localStorage.getItem('aema_byok_gemini') || ''
+    window.addEventListener(BYOK_UPDATED_EVENT, syncKeys)
+    window.addEventListener('storage', syncKeys)
+    return () => {
+      window.removeEventListener(BYOK_UPDATED_EVENT, syncKeys)
+      window.removeEventListener('storage', syncKeys)
     }
-  })
-  const [openaiKey, setOpenaiKey] = useState(() => {
-    try {
-      const keys = JSON.parse(localStorage.getItem('aema_byok_keys') || '{}')
-      return keys.openai || localStorage.getItem('aema_byok_openai') || ''
-    } catch {
-      return localStorage.getItem('aema_byok_openai') || ''
-    }
-  })
-  const [ollamaUrl, setOllamaUrl] = useState(() => {
-    try {
-      const keys = JSON.parse(localStorage.getItem('aema_byok_keys') || '{}')
-      return keys.ollama || localStorage.getItem('aema_byok_ollama') || 'http://localhost:11434'
-    } catch {
-      return localStorage.getItem('aema_byok_ollama') || 'http://localhost:11434'
-    }
-  })
+  }, [])
 
   const [showGroq, setShowGroq] = useState(false)
   const [showGemini, setShowGemini] = useState(false)
   const [showOpenai, setShowOpenai] = useState(false)
+  const [showAnthropic, setShowAnthropic] = useState(false)
   const [keysSaved, setKeysSaved] = useState(false)
 
   // Hyperparameters
@@ -107,17 +102,13 @@ export default function SettingsView({
 
   const handleSaveKeys = (e: React.FormEvent) => {
     e.preventDefault()
-    const combinedKeys = {
-      groq: groqKey.trim(),
-      gemini: geminiKey.trim(),
-      openai: openaiKey.trim(),
-      ollama: ollamaUrl.trim(),
-    }
-    localStorage.setItem('aema_byok_keys', JSON.stringify(combinedKeys))
-    localStorage.setItem('aema_byok_groq', groqKey.trim())
-    localStorage.setItem('aema_byok_gemini', geminiKey.trim())
-    localStorage.setItem('aema_byok_openai', openaiKey.trim())
-    localStorage.setItem('aema_byok_ollama', ollamaUrl.trim())
+    saveAllByokKeys({
+      groq: groqKey,
+      gemini: geminiKey,
+      openai: openaiKey,
+      anthropic: anthropicKey,
+      ollama: ollamaUrl,
+    })
     setKeysSaved(true)
     setTimeout(() => setKeysSaved(false), 2500)
   }
@@ -239,7 +230,7 @@ export default function SettingsView({
             <div className="flex items-center justify-between">
               <label className="text-[#EDECE8] font-semibold flex items-center gap-2">
                 <span>Groq Cloud API Key</span>
-                <span className="text-[10px] text-[#7E7D77] font-normal">(Llama-3.3-70B, DeepSeek R1)</span>
+                <span className="text-[10px] text-[#7E7D77] font-normal">(openai/gpt-oss-120b, llama-3.3-70b-versatile, llama-3.1-8b-instant)</span>
               </label>
               <span className={`text-[10px] px-1.5 py-0.5 rounded ${groqKey ? 'bg-[#1E2E24] text-[#4EAA79]' : 'bg-[#1E1E1B] text-[#7E7D77]'}`}>
                 {groqKey ? 'Active' : 'Unset'}
@@ -261,6 +252,9 @@ export default function SettingsView({
                 {showGroq ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
+            {getByokKeyWarning('groq', groqKey) && (
+              <p className="text-[11px] text-[#E67E22]">{getByokKeyWarning('groq', groqKey)}</p>
+            )}
           </div>
 
           {/* Google Gemini */}
@@ -268,7 +262,7 @@ export default function SettingsView({
             <div className="flex items-center justify-between">
               <label className="text-[#EDECE8] font-semibold flex items-center gap-2">
                 <span>Google Gemini API Key</span>
-                <span className="text-[10px] text-[#7E7D77] font-normal">(gemini-2.5-flash)</span>
+                <span className="text-[10px] text-[#7E7D77] font-normal">(Free: gemini-3.8-flash, 3.5-flash-lite, 4-hydrogen · Paid: 4-argon, 4-carbon)</span>
               </label>
               <span className={`text-[10px] px-1.5 py-0.5 rounded ${geminiKey ? 'bg-[#1E2E24] text-[#4EAA79]' : 'bg-[#1E1E1B] text-[#7E7D77]'}`}>
                 {geminiKey ? 'Active' : 'Unset'}
@@ -290,6 +284,9 @@ export default function SettingsView({
                 {showGemini ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
+            {getByokKeyWarning('gemini', geminiKey) && (
+              <p className="text-[11px] text-[#E67E22]">{getByokKeyWarning('gemini', geminiKey)}</p>
+            )}
           </div>
 
           {/* OpenAI */}
@@ -297,7 +294,7 @@ export default function SettingsView({
             <div className="flex items-center justify-between">
               <label className="text-[#EDECE8] font-semibold flex items-center gap-2">
                 <span>OpenAI API Key</span>
-                <span className="text-[10px] text-[#7E7D77] font-normal">(GPT-4o, GPT-4o-mini)</span>
+                <span className="text-[10px] text-[#7E7D77] font-normal">(Paid: gpt-6.2-sol, gpt-6-luna, gpt-6.1-terra, gpt-6.2-astra)</span>
               </label>
               <span className={`text-[10px] px-1.5 py-0.5 rounded ${openaiKey ? 'bg-[#1E2E24] text-[#4EAA79]' : 'bg-[#1E1E1B] text-[#7E7D77]'}`}>
                 {openaiKey ? 'Active' : 'Unset'}
@@ -319,6 +316,41 @@ export default function SettingsView({
                 {showOpenai ? <EyeOff size={14} /> : <Eye size={14} />}
               </button>
             </div>
+            {getByokKeyWarning('openai', openaiKey) && (
+              <p className="text-[11px] text-[#E67E22]">{getByokKeyWarning('openai', openaiKey)}</p>
+            )}
+          </div>
+
+          {/* Anthropic Claude */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-[#EDECE8] font-semibold flex items-center gap-2">
+                <span>Anthropic Claude API Key</span>
+                <span className="text-[10px] text-[#7E7D77] font-normal">(Paid: claude-sonnet-5-5, claude-haiku-5-5, claude-opus-5-5, claude-fable-5-2)</span>
+              </label>
+              <span className={`text-[10px] px-1.5 py-0.5 rounded ${anthropicKey ? 'bg-[#1E2E24] text-[#4EAA79]' : 'bg-[#1E1E1B] text-[#7E7D77]'}`}>
+                {anthropicKey ? 'Active' : 'Unset'}
+              </span>
+            </div>
+            <div className="relative">
+              <input
+                type={showAnthropic ? 'text' : 'password'}
+                value={anthropicKey}
+                onChange={(e) => setAnthropicKey(e.target.value)}
+                placeholder="sk-ant-..."
+                className="w-full px-3 py-2 rounded bg-[#141412] border border-[#242422] text-[#EDECE8] placeholder-[#7E7D77] focus:outline-none focus:border-[#4EAA79] transition-colors pr-10 font-mono text-xs"
+              />
+              <button
+                type="button"
+                onClick={() => setShowAnthropic(!showAnthropic)}
+                className="absolute right-3 top-2.5 text-[#7E7D77] hover:text-[#EDECE8]"
+              >
+                {showAnthropic ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+            {getByokKeyWarning('anthropic', anthropicKey) && (
+              <p className="text-[11px] text-[#E67E22]">{getByokKeyWarning('anthropic', anthropicKey)}</p>
+            )}
           </div>
 
           {/* Local Ollama */}

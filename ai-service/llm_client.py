@@ -188,6 +188,16 @@ class UniversalLLMClient:
                 max_tokens=max_tokens,
             )
 
+        # 1b. Native Anthropic Messages API integration
+        if provider == ModelProvider.ANTHROPIC:
+            return await self._generate_anthropic_native(
+                messages=messages,
+                cfg=cfg,
+                json_mode=json_mode,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            )
+
         # 2. Try litellm if installed
         if litellm is not None:
             try:
@@ -287,15 +297,9 @@ class UniversalLLMClient:
                         err_msg = str(fallback_e)
 
                 if provider != ModelProvider.MOCK:
-                    clean_msg = err_msg
-                    if "401" in err_msg or "invalid_api_key" in err_msg:
-                        clean_msg = "Invalid API key. Please check the key in BYOK."
-                    elif "429" in err_msg:
-                        clean_msg = "Rate limit reached. Please wait a moment."
-                    elif "404" in err_msg:
-                        clean_msg = f"Model '{model}' not accessible on this account tier."
+                    clean_msg = self._format_openai_compat_error(provider, model, err_msg)
                     logger.error(f"Provider '{provider.value}' execution failed ({model}): {clean_msg}")
-                    raise RuntimeError(f"Provider '{provider.value}' execution failed ({model}): {clean_msg}")
+                    raise RuntimeError(clean_msg)
 
                 logger.warning(f"AsyncOpenAI call failed for {provider.value} ({model}): {err_msg}. Falling back to deterministic response.")
                 raw_ans, tokens = self._generate_mock_response(messages, json_mode)
@@ -346,6 +350,17 @@ class UniversalLLMClient:
                 return
             except Exception as ge:
                 logger.warning(f"Gemini native streaming failed: {ge}. Trying litellm/OpenAI fallback.")
+
+        # 1b. Native Anthropic Messages API streaming integration
+        if provider == ModelProvider.ANTHROPIC:
+            async for chunk in self._generate_anthropic_native_stream(
+                messages=messages,
+                cfg=cfg,
+                temperature=temperature,
+                max_tokens=max_tokens,
+            ):
+                yield chunk
+            return
 
         # 2. Try litellm with stream=True
         if litellm is not None:
@@ -404,8 +419,9 @@ class UniversalLLMClient:
                         yield delta
                 return
             except Exception as e:
-                logger.error(f"AsyncOpenAI streaming failed: {e}")
-                raise
+                clean_msg = self._format_openai_compat_error(provider, model, str(e))
+                logger.error(f"AsyncOpenAI streaming failed: {clean_msg}")
+                raise RuntimeError(clean_msg) from e
         elif provider != ModelProvider.MOCK:
             raise ProviderConfigurationError(
                 f"No API key configured for provider '{provider.value}'. "
@@ -413,17 +429,192 @@ class UniversalLLMClient:
                 f"{provider.value.upper()}_API_KEY in the backend environment."
             )
 
-    async def _generate_gemini_native_stream(
+    def _format_openai_compat_error(self, provider: ModelProvider, model: str, err_msg: str) -> str:
+        """Formats OpenAI-compatible HTTP/SDK errors consistently for generate and generate_stream."""
+        clean_msg = err_msg
+        if "401" in err_msg or "invalid_api_key" in err_msg.lower() or "incorrect api key" in err_msg.lower():
+            clean_msg = "Invalid API key. Please check the key in BYOK."
+        elif "429" in err_msg or "rate_limit" in err_msg.lower() or "quota" in err_msg.lower():
+            clean_msg = "Rate limit or billing quota reached. Please check your provider account or wait a moment."
+        elif "404" in err_msg or "model_not_found" in err_msg.lower() or "does not exist" in err_msg.lower():
+            clean_msg = f"Model '{model}' not accessible on this account tier."
+        return f"Provider '{provider.value}' execution failed ({model}): {clean_msg}"
+
+    def _build_anthropic_request(
+        self,
+        messages: List[Dict[str, str]],
+        cfg: ProviderConfig,
+        json_mode: bool = False,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        stream: bool = False,
+    ) -> Tuple[Dict[str, str], Dict[str, Any]]:
+        """Resolves Anthropic API key, headers, and Messages API payload."""
+        api_key = (cfg.api_key or "").strip() or getattr(settings, "ANTHROPIC_API_KEY", None)
+        if not api_key:
+            raise ProviderConfigurationError(
+                "No ANTHROPIC API key configured. "
+                "Provide an API key via BYOK or set ANTHROPIC_API_KEY in the backend environment."
+            )
+
+        model = cfg.model or ProviderConfig.default_for(ModelProvider.ANTHROPIC).model
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+            "content-type": "application/json",
+        }
+
+        system_parts: List[str] = []
+        convo_messages: List[Dict[str, str]] = []
+        for m in messages:
+            role = m.get("role", "user")
+            text = m.get("content", "")
+            if role == "system":
+                if text:
+                    system_parts.append(text)
+            else:
+                anthropic_role = "assistant" if role in ("assistant", "model") else "user"
+                convo_messages.append({"role": anthropic_role, "content": text})
+
+        if json_mode:
+            system_parts.append("Respond ONLY with a valid JSON object matching the requested keys, with no markdown fences.")
+
+        if not convo_messages:
+            convo_messages.append({"role": "user", "content": "Hello"})
+
+        payload: Dict[str, Any] = {
+            "model": model,
+            "messages": convo_messages,
+            "max_tokens": int(max_tokens or cfg.max_tokens or 1024),
+        }
+        if system_parts:
+            payload["system"] = "\n\n".join(system_parts)
+        effective_temp = cfg.temperature if temperature is None else float(temperature)
+        if effective_temp is not None:
+            payload["temperature"] = min(1.0, max(0.0, float(effective_temp)))
+        if stream:
+            payload["stream"] = True
+
+        return headers, payload
+
+    def _format_anthropic_http_error(self, status_code: int, err_text: str) -> str:
+        """Formats Anthropic Messages API error responses into concise actionable diagnostics."""
+        try:
+            err_json = json.loads(err_text)
+            err_msg = err_json.get("error", {}).get("message", err_text)
+        except Exception:
+            err_msg = err_text[:160]
+
+        if status_code == 401 or "authentication_error" in err_text or "invalid x-api-key" in err_msg.lower():
+            return "Invalid Anthropic API key. Please verify your Claude key (sk-ant-...) in BYOK."
+        if status_code == 403:
+            return f"Access denied by Anthropic API ({err_msg[:120]})."
+        if status_code == 404:
+            return f"Claude model not accessible on this account ({err_msg[:120]})."
+        if status_code == 429:
+            return "Anthropic rate limit or credit balance reached. Check your console.anthropic.com billing/limits."
+        return err_msg
+
+    async def _generate_anthropic_native_stream(
         self,
         messages: List[Dict[str, str]],
         cfg: ProviderConfig,
         temperature: Optional[float] = None,
         max_tokens: Optional[int] = None,
     ) -> AsyncGenerator[str, None]:
-        """
-        Direct, native Google Gemini REST SSE streaming integration.
-        Streams text chunks live using the :streamGenerateContent?alt=sse endpoint.
-        """
+        """Direct Anthropic Messages API SSE streaming integration."""
+        headers, payload = self._build_anthropic_request(
+            messages=messages,
+            cfg=cfg,
+            json_mode=False,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=True,
+        )
+        base_url = (cfg.base_url or ProviderConfig.default_for(ModelProvider.ANTHROPIC).base_url or "https://api.anthropic.com/v1").rstrip("/")
+        url = f"{base_url}/messages"
+        timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 45.0))
+
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
+            async with client.stream("POST", url, json=payload, headers=headers) as res:
+                if res.status_code != 200:
+                    error_bytes = await res.aread()
+                    err_text = error_bytes.decode("utf-8", errors="replace")
+                    clean_msg = self._format_anthropic_http_error(res.status_code, err_text)
+                    logger.error(f"Anthropic streaming API error ({res.status_code}): {clean_msg}")
+                    raise RuntimeError(f"Anthropic provider execution failed ({res.status_code}): {clean_msg}")
+
+                async for line in res.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    raw_data = line[6:].strip()
+                    if not raw_data or raw_data == "[DONE]":
+                        continue
+                    try:
+                        parsed = json.loads(raw_data)
+                        if parsed.get("type") == "content_block_delta":
+                            text_chunk = parsed.get("delta", {}).get("text", "")
+                            if text_chunk:
+                                yield text_chunk
+                    except Exception:
+                        continue
+
+    async def _generate_anthropic_native(
+        self,
+        messages: List[Dict[str, str]],
+        cfg: ProviderConfig,
+        json_mode: bool = False,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> Tuple[str, int]:
+        """Direct Anthropic Messages API REST integration."""
+        headers, payload = self._build_anthropic_request(
+            messages=messages,
+            cfg=cfg,
+            json_mode=json_mode,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            stream=False,
+        )
+        base_url = (cfg.base_url or ProviderConfig.default_for(ModelProvider.ANTHROPIC).base_url or "https://api.anthropic.com/v1").rstrip("/")
+        url = f"{base_url}/messages"
+        timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 45.0))
+
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
+                res = await client.post(url, json=payload, headers=headers)
+                if res.status_code == 200:
+                    data = res.json()
+                    blocks = data.get("content", [])
+                    text = "".join(b.get("text", "") for b in blocks if isinstance(b, dict) and b.get("type") == "text").strip()
+                    if json_mode and text.startswith("```"):
+                        text = text.strip("`").lstrip()
+                        if text.lower().startswith("json"):
+                            text = text[4:].lstrip()
+                    usage = data.get("usage", {})
+                    tokens = int(usage.get("input_tokens", 0) or 0) + int(usage.get("output_tokens", 0) or 0)
+                    if tokens <= 0:
+                        tokens = len(text.split()) * 2
+                    return text, tokens
+
+                clean_msg = self._format_anthropic_http_error(res.status_code, res.text)
+                logger.error(f"Anthropic native API error ({res.status_code}): {clean_msg}")
+                raise RuntimeError(f"Anthropic provider execution failed ({res.status_code}): {clean_msg}")
+        except Exception as e:
+            if isinstance(e, (RuntimeError, ProviderConfigurationError)):
+                raise
+            logger.error(f"Anthropic native API connection error: {e}")
+            raise RuntimeError(f"Anthropic provider execution failed: {e}") from e
+
+    def _build_gemini_request(
+        self,
+        messages: List[Dict[str, str]],
+        cfg: ProviderConfig,
+        json_mode: bool = False,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> Tuple[str, Dict[str, str], Dict[str, Any]]:
+        """Resolves Gemini API key, model, headers, and REST payload cleanly."""
         api_key = (cfg.api_key or "").strip() or getattr(settings, "GEMINI_API_KEY", None)
         if not api_key:
             raise ProviderConfigurationError(
@@ -432,83 +623,6 @@ class UniversalLLMClient:
             )
 
         model = (cfg.model or ProviderConfig.default_for(ModelProvider.GEMINI).model).replace("models/", "")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:streamGenerateContent?alt=sse"
-        headers = {
-            "x-goog-api-key": api_key,
-            "Content-Type": "application/json",
-        }
-
-        contents = []
-        system_instruction = None
-        for m in messages:
-            role = m.get("role", "user")
-            text = m.get("content", "")
-            if role == "system":
-                system_instruction = {"parts": [{"text": text}]}
-            else:
-                gemini_role = "user" if role == "user" else "model"
-                contents.append({"role": gemini_role, "parts": [{"text": text}]})
-
-        if not contents:
-            contents.append({"role": "user", "parts": [{"text": "Hello"}]})
-
-        payload: Dict[str, Any] = {"contents": contents}
-        if system_instruction:
-            payload["systemInstruction"] = system_instruction
-
-        gen_config: Dict[str, Any] = {}
-        if temperature is not None:
-            gen_config["temperature"] = float(temperature)
-        if max_tokens:
-            gen_config["maxOutputTokens"] = int(max_tokens)
-        if gen_config:
-            payload["generationConfig"] = gen_config
-
-        timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
-        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
-            async with client.stream("POST", url, json=payload, headers=headers) as res:
-                if res.status_code != 200:
-                    error_bytes = await res.aread()
-                    raise RuntimeError(
-                        f"Gemini streaming API returned HTTP {res.status_code}: {error_bytes.decode('utf-8', errors='replace')}"
-                    )
-
-                async for line in res.aiter_lines():
-                    if line.startswith("data: "):
-                        raw_data = line[6:].strip()
-                        if not raw_data:
-                            continue
-                        try:
-                            parsed = json.loads(raw_data)
-                            for cand in parsed.get("candidates", []):
-                                for part in cand.get("content", {}).get("parts", []):
-                                    text_chunk = part.get("text", "")
-                                    if text_chunk:
-                                        yield text_chunk
-                        except Exception:
-                            continue
-
-    async def _generate_gemini_native(
-        self,
-        messages: List[Dict[str, str]],
-        cfg: ProviderConfig,
-        json_mode: bool = False,
-        temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None,
-    ) -> Tuple[str, int]:
-        """
-        Direct, native Google Gemini REST API integration.
-        Bypasses OpenAI-compatible proxy routing issues.
-        """
-        api_key = (cfg.api_key or "").strip() or getattr(settings, "GEMINI_API_KEY", None)
-        if not api_key:
-            raise RuntimeError(
-                "No GEMINI API key configured. "
-                "Provide an API key via BYOK or set GEMINI_API_KEY in the backend environment."
-            )
-
-        model = (cfg.model or ProviderConfig.default_for(ModelProvider.GEMINI).model).replace("models/", "")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         headers = {
             "x-goog-api-key": api_key,
             "Content-Type": "application/json",
@@ -542,56 +656,141 @@ class UniversalLLMClient:
         if gen_config:
             payload["generationConfig"] = gen_config
 
+        return model, headers, payload
+
+    def _format_gemini_http_error(self, status_code: int, err_text: str) -> str:
+        """Formats Gemini REST error responses into concise actionable diagnostics."""
+        try:
+            err_json = json.loads(err_text)
+            err_msg = err_json.get("error", {}).get("message", err_text)
+        except Exception:
+            err_msg = err_text[:160]
+
+        clean_msg = err_msg
+        if status_code == 400 and ("API key not valid" in err_msg or "INVALID_ARGUMENT" in err_msg):
+            clean_msg = "API key not valid. Please verify your Google AI Studio key in BYOK."
+        elif status_code == 403:
+            clean_msg = f"Access denied by Gemini API or network policy ({err_msg[:120]})."
+        elif status_code == 429:
+            clean_msg = (
+                "Rate limit / quota exceeded (or selected Paid model requires Cloud billing). "
+                "Wait a moment or select a Free API Tier model like gemini-3.5-flash-lite."
+            )
+        elif status_code == 503:
+            clean_msg = "Google Gemini is temporarily experiencing high traffic. Please retry in a few seconds."
+        return clean_msg
+
+    def _gemini_candidate_models(self, primary_model: str) -> List[str]:
+        candidates = [primary_model]
+        # Only fall back across Flash aliases; never silently downgrade Pro or Gemini 4 models.
+        lower = (primary_model or "").lower()
+        if "pro" not in lower and not lower.startswith("gemini-4"):
+            for fallback in ("gemini-3.5-flash-lite", "gemini-flash-latest"):
+                if fallback not in candidates:
+                    candidates.append(fallback)
+        return candidates
+
+    async def _generate_gemini_native_stream(
+        self,
+        messages: List[Dict[str, str]],
+        cfg: ProviderConfig,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Direct, native Google Gemini REST SSE streaming integration.
+        Streams text chunks live using the :streamGenerateContent?alt=sse endpoint.
+        """
+        model, headers, payload = self._build_gemini_request(
+            messages=messages,
+            cfg=cfg,
+            json_mode=False,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        candidate_models = self._gemini_candidate_models(model)
+
+        timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
+        async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
+            for idx, active_model in enumerate(candidate_models):
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{active_model}:streamGenerateContent?alt=sse"
+                async with client.stream("POST", url, json=payload, headers=headers) as res:
+                    if res.status_code != 200:
+                        error_bytes = await res.aread()
+                        err_text = error_bytes.decode("utf-8", errors="replace")
+                        if res.status_code == 404 and idx + 1 < len(candidate_models):
+                            logger.info(f"Gemini streaming model '{active_model}' not found, retrying with {candidate_models[idx + 1]}...")
+                            continue
+                        clean_msg = self._format_gemini_http_error(res.status_code, err_text)
+                        logger.error(f"Google Gemini streaming API error ({res.status_code}): {clean_msg}")
+                        raise RuntimeError(f"Google Gemini provider execution failed ({res.status_code}): {clean_msg}")
+
+                    async for line in res.aiter_lines():
+                        if line.startswith("data: "):
+                            raw_data = line[6:].strip()
+                            if not raw_data:
+                                continue
+                            try:
+                                parsed = json.loads(raw_data)
+                                for cand in parsed.get("candidates", []):
+                                    for part in cand.get("content", {}).get("parts", []):
+                                        text_chunk = part.get("text", "")
+                                        if text_chunk:
+                                            yield text_chunk
+                            except Exception:
+                                continue
+                    return
+
+    async def _generate_gemini_native(
+        self,
+        messages: List[Dict[str, str]],
+        cfg: ProviderConfig,
+        json_mode: bool = False,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+    ) -> Tuple[str, int]:
+        """
+        Direct, native Google Gemini REST API integration.
+        Bypasses OpenAI-compatible proxy routing issues.
+        """
+        model, headers, payload = self._build_gemini_request(
+            messages=messages,
+            cfg=cfg,
+            json_mode=json_mode,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+        candidate_models = self._gemini_candidate_models(model)
+
         timeout_sec = float(getattr(settings, "REQUEST_TIMEOUT_SECONDS", 15.0))
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_sec, connect=5.0)) as client:
-                res = await client.post(url, json=payload, headers=headers)
-                if res.status_code == 200:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        text = "".join(p.get("text", "") for p in parts)
-                        tokens = data.get("usageMetadata", {}).get("totalTokenCount", len(text.split()) * 2)
-                        return text, tokens
+                res = None
+                for idx, active_model in enumerate(candidate_models):
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{active_model}:generateContent"
+                    res = await client.post(url, json=payload, headers=headers)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            text = "".join(p.get("text", "") for p in parts)
+                            tokens = data.get("usageMetadata", {}).get("totalTokenCount", len(text.split()) * 2)
+                            return text, tokens
+                        break
 
-                # If requested model not found (404), retry with gemini-flash-latest
-                if res.status_code == 404 and model != "gemini-flash-latest":
-                    try:
-                        logger.info(f"Gemini model '{model}' not found, retrying with gemini-flash-latest...")
-                        fallback_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
-                        fallback_res = await client.post(fallback_url, json=payload, headers=headers)
-                        if fallback_res.status_code == 200:
-                            data = fallback_res.json()
-                            candidates = data.get("candidates", [])
-                            if candidates:
-                                parts = candidates[0].get("content", {}).get("parts", [])
-                                text = "".join(p.get("text", "") for p in parts)
-                                tokens = data.get("usageMetadata", {}).get("totalTokenCount", len(text.split()) * 2)
-                                return text, tokens
-                        res = fallback_res
-                    except Exception:
-                        pass
+                    if res.status_code == 404 and idx + 1 < len(candidate_models):
+                        logger.info(
+                            f"Gemini model '{active_model}' not found, retrying with {candidate_models[idx + 1]}..."
+                        )
+                        continue
+                    break
 
-                # Handle HTTP errors with clean explanations
-                err_text = res.text
-                try:
-                    err_json = res.json()
-                    err_msg = err_json.get("error", {}).get("message", err_text)
-                except Exception:
-                    err_msg = err_text[:120]
-
-                clean_msg = err_msg
-                if res.status_code == 400 and ("API key not valid" in err_msg or "INVALID_ARGUMENT" in err_msg):
-                    clean_msg = "API key not valid. Please verify your Google AI Studio key in BYOK."
-                elif res.status_code == 429:
-                    clean_msg = "Rate limit / quota exceeded. Please wait a moment."
-                elif res.status_code == 503:
-                    clean_msg = "Google Gemini is temporarily experiencing high traffic. Please retry in a few seconds."
+                clean_msg = self._format_gemini_http_error(res.status_code, res.text)
                 logger.error(f"Google Gemini native API error ({res.status_code}): {clean_msg}")
                 raise RuntimeError(f"Google Gemini provider execution failed ({res.status_code}): {clean_msg}")
         except Exception as e:
-            if isinstance(e, RuntimeError):
+            if isinstance(e, (RuntimeError, ProviderConfigurationError)):
                 raise
             err_msg = str(e)
             logger.error(f"Google Gemini call failed: {err_msg}")

@@ -541,9 +541,14 @@ async def _finalize_execution(
         or final_state.get("tokens_used", 0) >= settings.MAX_TASK_TOKENS
     )
 
+    is_provider_error = bool(
+        (terminal_details or final_state.get("evaluator_details") or {}).get("error") == "provider_error"
+        or str(final_state.get("final_answer") or "").startswith("Execution encountered a model provider error:")
+    )
+
     exec_status = (
         ExecutionStatus.FAILED
-        if (is_budget_breached or final_state.get("status") == "failed")
+        if (is_budget_breached or is_provider_error or final_state.get("status") == "failed")
         else ExecutionStatus.COMPLETED
     )
 
