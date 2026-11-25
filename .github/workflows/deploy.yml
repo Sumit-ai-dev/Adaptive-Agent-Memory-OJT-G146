@@ -59,11 +59,11 @@ jobs:
 
             docker run -d --name aema-app --restart unless-stopped \
               $ENV_FLAG \
-              -p 80:80 -p 8000:8000 \
+              -p 127.0.0.1:8080:80 \
               -v aema_data:/data \
               aema:latest
 
             echo "==> [AEMA CI/CD] Verifying local health endpoint..."
             sleep 5
-            curl -fsS http://127.0.0.1/api/health || curl -fsS http://127.0.0.1:8000/api/health || exit 1
+            curl -fsS http://127.0.0.1:8080/api/health || curl -fsS http://127.0.0.1/api/health || exit 1
             echo "==> [AEMA CI/CD] Deployment successfully verified and healthy!"

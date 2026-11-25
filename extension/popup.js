@@ -4,7 +4,7 @@
  * updates the 5-node cognitive stepper, and handles page clip queries.
  */
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'https://aema.live';
 
 const els = {
   statusDot: document.getElementById('statusDot'),

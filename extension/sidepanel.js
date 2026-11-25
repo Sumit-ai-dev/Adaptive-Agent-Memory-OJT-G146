@@ -7,7 +7,7 @@
  */
 
 (() => {
-  let API_BASE = 'http://localhost:8000';
+  let API_BASE = 'https://aema.live';
   let API_KEY = '';
   let USER_NAME = 'Sakshi';
   let currentResponseMode = 'balanced';
