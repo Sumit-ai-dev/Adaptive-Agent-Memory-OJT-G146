@@ -34,10 +34,18 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            # Read Supabase keys from GitHub Secrets or fallback to local frontend/.env on the host
+            SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL }}"
+            SUPABASE_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY }}"
+            if [ -f /opt/aema/frontend/.env ]; then
+              [ -z "$SUPABASE_URL" ] && SUPABASE_URL=$(grep "^VITE_SUPABASE_URL=" /opt/aema/frontend/.env | cut -d '=' -f2-)
+              [ -z "$SUPABASE_KEY" ] && SUPABASE_KEY=$(grep "^VITE_SUPABASE_ANON_KEY=" /opt/aema/frontend/.env | cut -d '=' -f2-)
+            fi
+
             echo "==> [AEMA CI/CD] Building standalone unified production container..."
             docker build \
-              --build-arg VITE_SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL || 'https://kgbxowdxbpvphzomivkg.supabase.co' }}" \
-              --build-arg VITE_SUPABASE_ANON_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnYnhvd2R4YnB2cGh6b21pdmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0OTM0ODQsImV4cCI6MjExMTA2OTQ4NH0.0D3AAAJPu2qBvKDLxQ7FB35lQwhmEw65oQSKgqn4INo' }}" \
+              --build-arg VITE_SUPABASE_URL="$SUPABASE_URL" \
+              --build-arg VITE_SUPABASE_ANON_KEY="$SUPABASE_KEY" \
               -f Dockerfile.standalone -t aema:latest .
 
             echo "==> [AEMA CI/CD] Restarting aema-app container..."
