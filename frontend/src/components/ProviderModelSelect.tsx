@@ -19,7 +19,7 @@ export default function ProviderModelSelect({
   compact = false,
 }: ProviderModelSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({ position: 'fixed' })
   const triggerRef = useRef<HTMLButtonElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -191,7 +191,7 @@ export default function ProviderModelSelect({
         />
       </button>
 
-      {createPortal(dropdown, document.body)}
+      {isOpen && createPortal(dropdown, document.body)}
     </div>
   )
 }

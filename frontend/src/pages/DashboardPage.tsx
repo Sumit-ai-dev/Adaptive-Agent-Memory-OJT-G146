@@ -88,9 +88,13 @@ export default function DashboardPage() {
     document.documentElement.classList.add('dark')
     document.documentElement.style.backgroundColor = '#141412'
     document.body.style.backgroundColor = '#141412'
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
     return () => {
       document.documentElement.style.backgroundColor = ''
       document.body.style.backgroundColor = ''
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
     }
   }, [])
 
@@ -211,7 +215,7 @@ export default function DashboardPage() {
   if (!user && !isDemo) return null
 
   return (
-    <div className="min-h-screen flex bg-[#141412] text-[#EDECE8] transition-colors selection:bg-[#2E2E2A]">
+    <div className="h-screen w-screen overflow-hidden flex bg-[#141412] text-[#EDECE8] transition-colors selection:bg-[#2E2E2A]">
       {/* Desktop Sidebar (Pure Obsidian Theme) */}
       <div className="hidden lg:block shrink-0 transition-all duration-200">
         <Sidebar
