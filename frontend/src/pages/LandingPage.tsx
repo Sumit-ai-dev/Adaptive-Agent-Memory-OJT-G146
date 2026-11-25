@@ -698,7 +698,7 @@ curl -X POST https://api.aema.dev/api/agent/execute \\
               Benchmarked against negative transfer
             </h2>
             <p className="mt-3 text-xs sm:text-sm text-[#6B6A65] leading-relaxed">
-              When exposed to contradictory evidence and deprecated tool parameters, naive memory agents experience severe performance degradation. AEMA isolates the failures and recovers accuracy.
+              When exposed to contradictory facts and breaking API changes, naive memory agents suffer from negative transfer and prompt bloat. AEMA actively suppresses outdated memories and maintains efficient token economy.
             </p>
           </div>
 
@@ -711,47 +711,47 @@ curl -X POST https://api.aema.dev/api/agent/execute \\
                   <th className="py-3 px-5 font-medium">Stateless Baseline</th>
                   <th className="py-3 px-5 font-medium">Naive Vector RAG</th>
                   <th className="py-3 px-5 font-medium text-[#141413]">AEMA Engine</th>
-                  <th className="py-3 px-5 font-medium">p-value (McNemar)</th>
+                  <th className="py-3 px-5 font-medium">Key Advantage</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#EAE8E3] text-[#6B6A65] font-mono text-[11px]">
                 <tr>
-                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Python API Evolution & Deprecation Shield</td>
-                  <td className="py-3.5 px-5">Software Engineering</td>
-                  <td className="py-3.5 px-5">20.0%</td>
-                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">20.0% (Toxic Re-use)</td>
-                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">100.0% Quarantine</td>
-                  <td className="py-3.5 px-5">p &lt; 0.001</td>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Conflict Resolution (MemoryAgentBench)</td>
+                  <td className="py-3.5 px-5">Factual Updates & Memory Drift</td>
+                  <td className="py-3.5 px-5">16.0% EM</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">32.0% EM (10 intrusions)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">40.0% EM (3 intrusions)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79]">70% fewer intrusions, top EM</td>
                 </tr>
                 <tr>
-                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Epistemic Conflict Resolution</td>
-                  <td className="py-3.5 px-5">Factual Drift & Updates</td>
-                  <td className="py-3.5 px-5">32.0%</td>
-                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">32.0% (24% Obsolete)</td>
-                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">0.0% Obsolete Intrusions</td>
-                  <td className="py-3.5 px-5">p &lt; 0.001</td>
+                  <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Python API Evolution & Deprecation Shield</td>
+                  <td className="py-3.5 px-5">Software Engineering</td>
+                  <td className="py-3.5 px-5">20.0% (1/5)</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">20.0% (toxic dict reuse)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">40.0% (uses model_dump)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79]">2x baseline pass rate</td>
                 </tr>
                 <tr>
                   <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Long-Range Understanding & Token Economy</td>
                   <td className="py-3.5 px-5">Multi-Document Reasoning</td>
-                  <td className="py-3.5 px-5">40.0%</td>
-                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">36.0% (Context Bloat)</td>
-                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">40.0% (70% Token Cut)</td>
-                  <td className="py-3.5 px-5">p = 0.021</td>
+                  <td className="py-3.5 px-5">40.0% (389 tokens)</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">32.0% (2,044 tokens)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">40.0% (384 tokens)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79]">Tied top accuracy, 81% token cut</td>
                 </tr>
                 <tr>
                   <td className="py-3.5 px-5 font-sans text-xs text-[#141413] font-medium">Theorem 1 Deterministic Quarantine Bound</td>
                   <td className="py-3.5 px-5">Operational Safety</td>
                   <td className="py-3.5 px-5">N/A</td>
-                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">0.0% (Unbounded Drift)</td>
-                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">100.0% (k* &le; 3 Bound)</td>
-                  <td className="py-3.5 px-5">Deterministic</td>
+                  <td className="py-3.5 px-5 text-[#D9534F] font-semibold">0.0% (unbounded drift)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79] font-semibold">100.0% (k* &le; 3 bound)</td>
+                  <td className="py-3.5 px-5 text-[#4EAA79]">Deterministic bound</td>
                 </tr>
               </tbody>
             </table>
             <div className="px-5 py-3 border-t border-[#EAE8E3] bg-[#FAF9F5] text-[11px] text-[#7E7D77] flex items-center justify-between">
-              <span>*Statistically significant across repeated trials (p &lt; 0.001)</span>
-              <span className="font-mono text-[#141413]">525 Evaluation Trials Verified</span>
+              <span>*Evaluated across 525 pilot records on Llama 3.1 8B (RTX 3060 12GB)</span>
+              <span className="font-mono text-[#141413]">525 Evaluation Records Verified</span>
             </div>
           </div>
         </section>

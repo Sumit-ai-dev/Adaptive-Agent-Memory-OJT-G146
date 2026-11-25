@@ -32,61 +32,61 @@ const BENCHMARK_SECTIONS: BenchmarkSection[] = [
     id: 'executive-summary',
     title: 'Executive Summary',
     group: 'Protocol & Suites',
-    label: '1. Executive Summary & Protocol',
+    label: '1. Executive Summary & Setup',
   },
   {
     id: 'comparative-matrix',
     title: 'Comparative Matrix',
     group: 'Protocol & Suites',
-    label: '2. Comparative Accuracy Matrix',
+    label: '2. Comparative Benchmark Matrix',
   },
   {
     id: 'confirmatory-traps',
-    title: 'Confirmatory Traps',
+    title: 'Conflict Resolution',
     group: 'Protocol & Suites',
-    label: '3. Confirmatory Trap Suite',
+    label: '3. MemoryAgentBench: Conflict Resolution',
   },
   {
     id: 'hotpotqa-contradiction',
-    title: 'HotpotQA Contradiction',
+    title: 'Accurate Retrieval',
     group: 'Protocol & Suites',
-    label: '4. HotpotQA Multi-Hop Contradiction',
+    label: '4. MemoryAgentBench: Accurate Retrieval',
   },
   {
     id: 'toolbench-deprecation',
-    title: 'ToolBench Deprecation',
+    title: 'API Evolution',
     group: 'Performance & Rigor',
-    label: '5. ToolBench API Deprecation',
+    label: '5. Python API Evolution & Quarantine',
   },
   {
     id: 'alfworld-planning',
-    title: 'API Evolution',
+    title: 'Long-Range Understanding',
     group: 'Performance & Rigor',
-    label: '6. Python API Evolution & Quarantine',
+    label: '6. MemoryAgentBench: Long-Range Understanding',
   },
   {
     id: 'latency-efficiency',
-    title: 'Latency & Efficiency',
+    title: 'Latency & Tokens',
     group: 'Performance & Rigor',
-    label: '7. Latency & Token Overhead',
+    label: '7. Latency & Token Economy',
   },
   {
     id: 'statistical-rigor',
-    title: 'Statistical Rigor',
+    title: 'AEMA-v2 Roadmap',
     group: 'Performance & Rigor',
-    label: '8. Statistical Significance (McNemar)',
+    label: '8. Analysis & AEMA-v2 Research Roadmap',
   },
 ]
 
 const BENCHMARK_KEYWORDS: Record<string, string> = {
-  'executive-summary': 'executive summary evaluation protocol primary vulnerability negative transfer stateless baseline naive vector rag aema engine protocol-frozen n=100 trials deterministic test harness',
-  'comparative-matrix': 'comparative accuracy matrix suites benchmark table python api evolution deprecation quarantine memoryagentbench epistemic conflict long-range token economy theorem 1 deterministic bound recovery trial mcnemar p-value kaggle dataset hugging face space',
-  'confirmatory-traps': 'confirmatory trap suite negative transfer resilience exponential decay penalty beta=0.70 theta <= 0.35 threshold k* <= 3 consecutive failures memory isolation',
-  'hotpotqa-contradiction': 'hotpotqa multi-hop contradiction epistemic conflict resolution memoryagentbench reasoning outdated premise truth update multi-hop resilience',
-  'toolbench-deprecation': 'toolbench api deprecation recovery parameter deprecation auth token rotation error recovery strategy pruning dynamic updates',
-  'alfworld-planning': 'python api evolution quarantine dynamic signature shifts breaking change isolation theorem 1 probation backward compatibility',
-  'latency-efficiency': 'latency efficiency token overhead token savings cache hit rate computational efficiency amortized distillation fast retrieval ms overhead',
-  'statistical-rigor': 'statistical rigor significance mcnemar test contingency table p < 0.001 reject null hypothesis statistical power protocol-frozen empirical validation confirmatory proof'
+  'executive-summary': 'executive summary pilot evaluation llama 3.1 8b ollama 525 records 105 tasks 5 conditions vanilla naive rag recency symmetric aema',
+  'comparative-matrix': 'comparative benchmark matrix table conflict resolution accurate retrieval python api evolution long-range test-time learning',
+  'confirmatory-traps': 'memoryagentbench conflict resolution factconsolidation obsolete intrusions exact match token f1 moscow france malaysia quarantine',
+  'hotpotqa-contradiction': 'memoryagentbench accurate retrieval ruler ruler_qa1 semantic metric prompt tokens similarity threshold 0.60',
+  'toolbench-deprecation': 'python api evolution pydantic model_dump dict pandas sqlalchemy pytest subprocess deprecation',
+  'alfworld-planning': 'memoryagentbench long-range understanding detective_qa 4 books 311 chunks token economy prompt reduction',
+  'latency-efficiency': 'latency token overhead token savings prompt tokens milliseconds efficiency execution overhead',
+  'statistical-rigor': 'analysis roadmap aema-v2 adaptive retrieval threshold test-time learning demonstration buffer research limitations'
 }
 
 export default function BenchmarksPage() {
@@ -575,21 +575,45 @@ export default function BenchmarksPage() {
                   isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                 }`}
               >
-                1. Executive Summary & Evaluation Protocol
+                1. Executive Summary & Experimental Setup
               </h2>
               <p
                 className={`text-sm leading-relaxed ${
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                The primary vulnerability of memory-augmented autonomous agents is negative transfer: the uncritical injection of past memories into tasks where the environment, API contracts, or real-world facts have changed.
+                The objective of this evaluation was to investigate whether an Adaptive AI Agent with Persistent Experience Memory (AEMA) can improve an AI agent's ability to use past experiences while avoiding the negative effects of unreliable, outdated, or conflicting memories.
               </p>
+              <div
+                className={`p-4 rounded-lg border font-mono text-xs space-y-2.5 ${
+                  isLight ? 'bg-white border-[#EAE8E3]' : 'bg-[#161614] border-[#242422]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>Evaluation Phase:</span>
+                  <span className="font-semibold">Pilot Benchmark Evaluation</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>Model Backend:</span>
+                  <span className="font-semibold">Ollama (Llama 3.1 8B, Temp: 0, Seed: 42)</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>Hardware Platform:</span>
+                  <span className="font-semibold">Windows 11 PC, NVIDIA RTX 3060 12GB, 16GB RAM</span>
+                </div>
+                <div className="flex items-center justify-between border-t pt-2 border-[#EAE8E3] dark:border-[#242422]">
+                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>Evaluation Coverage:</span>
+                  <span className={`font-semibold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
+                    105 Distinct Tasks &times; 5 Conditions = 525 Evaluation Records
+                  </span>
+                </div>
+              </div>
               <p
                 className={`text-sm leading-relaxed ${
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                To evaluate AEMA rigorously against this failure mode, experiments were conducted under a protocol-frozen setting (N=100 trials per suite, temperature=0.0, deterministic test harness). AEMA was benchmarked against two baseline configurations:
+                Five comparative conditions were evaluated across identical task inputs:
               </p>
               <ul
                 className={`list-disc list-inside text-xs font-mono space-y-2 pl-2 ${
@@ -598,20 +622,26 @@ export default function BenchmarksPage() {
               >
                 <li>
                   <span className={`font-semibold ${isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'}`}>
-                    Stateless Baseline:
+                    Vanilla:
                   </span>{' '}
-                  The agent operates without memory. It avoids poisoned memories but cannot reuse verified operational strategies.
+                  LLM operating without external persistent memory.
                 </li>
                 <li>
-                  <span className="text-[#D9534F] font-semibold">Naive Vector RAG:</span> Past execution traces are embedded and retrieved solely by cosine similarity. In non-stationary environments, broken heuristics are repeatedly retrieved.
+                  <span className="text-[#D9534F] font-semibold">Naive RAG:</span> Retrieves relevant memories solely by cosine similarity without adaptive trust management.
+                </li>
+                <li>
+                  <span className="font-semibold text-amber-500">Recency:</span> Uses recency-oriented memory retrieval and selection.
+                </li>
+                <li>
+                  <span className="font-semibold text-sky-500">Symmetric:</span> Uses symmetric memory-based retrieval and selection.
                 </li>
                 <li>
                   <span
                     className={`font-semibold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}
                   >
-                    AEMA Engine:
+                    Adaptive (AEMA):
                   </span>{' '}
-                  Asymmetric Exponential Moving Average trust scoring with Theorem 1 deterministic quarantine bounds.
+                  Reliability-aware experiential memory with Asymmetric EMA calibration and Theorem 1 deterministic quarantine.
                 </li>
               </ul>
             </section>
@@ -626,7 +656,7 @@ export default function BenchmarksPage() {
                     isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                   }`}
                 >
-                  2. Comparative Accuracy Matrix (4 Suites)
+                  2. Comparative Benchmark Matrix (5 Suites)
                 </h2>
                 <span
                   className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
@@ -635,7 +665,7 @@ export default function BenchmarksPage() {
                       : 'bg-[#1E2E24] text-[#4EAA79] border-[#2E4234]'
                   }`}
                 >
-                  FROZEN PROTOCOL
+                  525 EVALUATIONS
                 </span>
               </div>
               <p
@@ -643,7 +673,7 @@ export default function BenchmarksPage() {
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                Summary across all four empirical evaluation suites:
+                Summary across all five empirical pilot evaluation suites:
               </p>
 
               {/* Live Interactive Benchmark Matrix Component */}
@@ -651,7 +681,7 @@ export default function BenchmarksPage() {
             </section>
             )}
 
-            {/* Section 3: Confirmatory Trap Suite */}
+            {/* Section 3: Conflict Resolution */}
             {isSectionVisible('confirmatory-traps') && (
             <section id="confirmatory-traps" className="space-y-4 scroll-mt-20">
               <h2
@@ -659,83 +689,14 @@ export default function BenchmarksPage() {
                   isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                 }`}
               >
-                3. Confirmatory Trap Suite (Negative Transfer Resilience)
+                3. MemoryAgentBench: Conflict Resolution
               </h2>
               <p
                 className={`text-sm leading-relaxed ${
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                In the Confirmatory Trap suite, tasks are designed such that a naive vector similarity search retrieves a previously successful solution that is fatal to the current task (e.g. using a deprecated function signature or recursive traversal instead of iterative stacks).
-              </p>
-              <div
-                className={`p-4 rounded-lg border font-mono text-xs space-y-3 ${
-                  isLight
-                    ? 'border-[#EAE8E3] bg-[#FFFFFF]'
-                    : 'border-[#242422] bg-[#161614]'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Naive Vector RAG Accuracy:
-                  </span>
-                  <span className="text-[#D9534F] font-bold">0.0% (Poisoned)</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Stateless Agent Accuracy:
-                  </span>
-                  <span className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>60.0%</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>
-                    AEMA Engine Accuracy:
-                  </span>
-                  <span
-                    className={`font-bold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}
-                  >
-                    100.0%
-                  </span>
-                </div>
-                <div
-                  className={`flex items-center justify-between border-t pt-2 ${
-                    isLight ? 'border-[#EAE8E3]' : 'border-[#242422]'
-                  }`}
-                >
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Recovery Trial Bound:
-                  </span>
-                  <span className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>
-                    k* &le; 3 runs (Deterministic Isolation)
-                  </span>
-                </div>
-              </div>
-              <p
-                className={`text-xs leading-relaxed ${
-                  isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'
-                }`}
-              >
-                Result: While Naive Vector RAG drops to 0.0% accuracy due to memory poisoning, AEMA isolates the trap within 3 consecutive trials under Theorem 1 and recovers to 100% operational success.
-              </p>
-            </section>
-            )}
-
-            {/* Section 4: HotpotQA Multi-Hop Contradiction */}
-            {isSectionVisible('hotpotqa-contradiction') && (
-            <section id="hotpotqa-contradiction" className="space-y-4 scroll-mt-20">
-              <h2
-                className={`text-xl font-serif tracking-tight ${
-                  isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                }`}
-              >
-                4. HotpotQA Multi-Hop Contradiction Suite
-              </h2>
-              <p
-                className={`text-sm leading-relaxed ${
-                  isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
-                }`}
-              >
-                Multi-hop reasoning tasks where an initial premise is contradicted by a newly established fact in later documents. Evaluates whether the memory store propagates obsolete premises across reasoning chains.
+                Benchmark: MemoryAgentBench (Competency: Conflict Resolution, Split: factconsolidation_sh_6k, 25 tasks, 125 evaluation records). Evaluates whether an agent can handle conflicting information stored in memory (e.g. an earlier memory stating location is France, updated by a later memory to Malaysia).
               </p>
               <div
                 className={`overflow-x-auto rounded-lg border ${
@@ -751,10 +712,12 @@ export default function BenchmarksPage() {
                     }`}
                   >
                     <tr>
-                      <th className="p-3">Architecture</th>
-                      <th className="p-3">Accuracy</th>
-                      <th className="p-3">Negative Transfer Rate</th>
-                      <th className="p-3">Avg Recovery Steps</th>
+                      <th className="p-3">Condition</th>
+                      <th className="p-3">Semantic (SEM)</th>
+                      <th className="p-3">Exact Match</th>
+                      <th className="p-3">Token F1</th>
+                      <th className="p-3 text-[#D9534F]">Obsolete Intrusions</th>
+                      <th className="p-3">Mean Latency</th>
                     </tr>
                   </thead>
                   <tbody
@@ -765,16 +728,36 @@ export default function BenchmarksPage() {
                     }`}
                   >
                     <tr>
-                      <td className="p-3">Stateless Baseline</td>
-                      <td className="p-3">52.4%</td>
-                      <td className="p-3">0.0% (N/A)</td>
-                      <td className="p-3">--</td>
+                      <td className="p-3">Vanilla</td>
+                      <td className="p-3">20.0%</td>
+                      <td className="p-3">16.0%</td>
+                      <td className="p-3">16.4%</td>
+                      <td className="p-3">0</td>
+                      <td className="p-3">436.9 ms</td>
                     </tr>
                     <tr>
-                      <td className="p-3 text-[#D9534F]">Naive Vector RAG</td>
-                      <td className="p-3 text-[#D9534F]">14.8%</td>
-                      <td className="p-3 text-[#D9534F]">85.2%</td>
-                      <td className="p-3 text-[#D9534F]">&gt; 10 (Loop)</td>
+                      <td className="p-3 text-[#D9534F]">Naive RAG</td>
+                      <td className="p-3">40.0%</td>
+                      <td className="p-3">32.0%</td>
+                      <td className="p-3">35.6%</td>
+                      <td className="p-3 text-[#D9534F] font-bold">10</td>
+                      <td className="p-3">1113.6 ms</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3">Recency</td>
+                      <td className="p-3">40.0%</td>
+                      <td className="p-3">28.0%</td>
+                      <td className="p-3">32.9%</td>
+                      <td className="p-3 text-[#D9534F]">9</td>
+                      <td className="p-3">1117.9 ms</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3">Symmetric</td>
+                      <td className="p-3 font-semibold">44.0%</td>
+                      <td className="p-3">28.0%</td>
+                      <td className="p-3">33.4%</td>
+                      <td className="p-3 text-[#D9534F]">9</td>
+                      <td className="p-3">1209.2 ms</td>
                     </tr>
                     <tr className={isLight ? 'bg-[#ECFDF5]/50' : 'bg-[#18201A]'}>
                       <td
@@ -782,29 +765,151 @@ export default function BenchmarksPage() {
                           isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
                         }`}
                       >
-                        AEMA Engine
+                        AEMA (Adaptive)
+                      </td>
+                      <td className="p-3">40.0%</td>
+                      <td
+                        className={`p-3 font-bold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        40.0% (Top)
                       </td>
                       <td
                         className={`p-3 font-bold ${
                           isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
                         }`}
                       >
-                        88.6%
+                        40.9% (Top)
                       </td>
-                      <td className={`p-3 ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
-                        11.4%
+                      <td
+                        className={`p-3 font-bold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        3 (Lowest)
                       </td>
-                      <td className={`p-3 ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
-                        2.4 steps
+                      <td className="p-3">1039.1 ms</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p
+                className={`text-xs leading-relaxed ${
+                  isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'
+                }`}
+              >
+                Key Finding: AEMA achieved the highest Exact Match (40.0%) and Token F1 (40.9%), with only 3 obsolete-memory intrusions compared to 9-10 for the retrieval baselines. In Task 24, AEMA successfully quarantined older Moscow location memories and retrieved the updated United States information.
+              </p>
+            </section>
+            )}
+
+            {/* Section 4: Accurate Retrieval */}
+            {isSectionVisible('hotpotqa-contradiction') && (
+            <section id="hotpotqa-contradiction" className="space-y-4 scroll-mt-20">
+              <h2
+                className={`text-xl font-serif tracking-tight ${
+                  isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                }`}
+              >
+                4. MemoryAgentBench: Accurate Retrieval
+              </h2>
+              <p
+                className={`text-sm leading-relaxed ${
+                  isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
+                }`}
+              >
+                Benchmark: MemoryAgentBench (Competency: Accurate Retrieval, Split: ruler_qa1_197K, 25 tasks, 125 evaluation records). Evaluates an agent's ability to locate and retrieve correct factual answers from memory.
+              </p>
+              <div
+                className={`overflow-x-auto rounded-lg border ${
+                  isLight ? 'border-[#EAE8E3]' : 'border-[#242422]'
+                }`}
+              >
+                <table className="w-full text-left text-xs font-mono">
+                  <thead
+                    className={`border-b ${
+                      isLight
+                        ? 'bg-[#F5F4EF] border-[#EAE8E3] text-[#6B7280]'
+                        : 'bg-[#181816] border-[#242422] text-[#7E7D77]'
+                    }`}
+                  >
+                    <tr>
+                      <th className="p-3">Condition</th>
+                      <th className="p-3">Semantic (SEM)</th>
+                      <th className="p-3">Exact Match</th>
+                      <th className="p-3">Token F1</th>
+                      <th className="p-3">Mean Prompt Tokens</th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    className={`divide-y ${
+                      isLight
+                        ? 'divide-[#EAE8E3] bg-[#FFFFFF] text-[#141413]'
+                        : 'divide-[#242422] bg-[#161614] text-[#EDECE8]'
+                    }`}
+                  >
+                    <tr>
+                      <td className="p-3">Vanilla</td>
+                      <td className="p-3">20.0%</td>
+                      <td className="p-3">8.0%</td>
+                      <td className="p-3">16.1%</td>
+                      <td className="p-3">84.8 tokens</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3">Naive RAG</td>
+                      <td className="p-3">56.0%</td>
+                      <td className="p-3">44.0%</td>
+                      <td className="p-3">54.8%</td>
+                      <td className="p-3">537.4 tokens</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3">Recency</td>
+                      <td className="p-3">60.0%</td>
+                      <td className="p-3">48.0%</td>
+                      <td className="p-3">59.5%</td>
+                      <td className="p-3">598.2 tokens</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3">Symmetric</td>
+                      <td className="p-3 font-semibold">68.0%</td>
+                      <td className="p-3 font-semibold">52.0%</td>
+                      <td className="p-3 font-semibold">66.4%</td>
+                      <td className="p-3">603.6 tokens</td>
+                    </tr>
+                    <tr className={isLight ? 'bg-[#ECFDF5]/50' : 'bg-[#18201A]'}>
+                      <td
+                        className={`p-3 font-semibold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        AEMA (Adaptive)
+                      </td>
+                      <td className="p-3">40.0%</td>
+                      <td className="p-3">32.0%</td>
+                      <td className="p-3">39.5%</td>
+                      <td
+                        className={`p-3 font-bold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        233.4 tokens (61% lower)
                       </td>
                     </tr>
                   </tbody>
                 </table>
               </div>
+              <p
+                className={`text-xs leading-relaxed ${
+                  isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'
+                }`}
+              >
+                Audit Observation: AEMA supplied substantially fewer prompt tokens (233.4 vs 603.6). Investigation showed the hardcoded 0.60 similarity threshold excluded some relevant memories, establishing an adaptive retrieval threshold as a priority for AEMA-v2.
+              </p>
             </section>
             )}
 
-            {/* Section 5: ToolBench Dynamic API Deprecation */}
+            {/* Section 5: Python API Evolution */}
             {isSectionVisible('toolbench-deprecation') && (
             <section id="toolbench-deprecation" className="space-y-4 scroll-mt-20">
               <h2
@@ -812,14 +917,14 @@ export default function BenchmarksPage() {
                   isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                 }`}
               >
-                5. ToolBench Dynamic API Deprecation Suite
+                5. Python API Evolution & Deprecation Quarantine
               </h2>
               <p
                 className={`text-sm leading-relaxed ${
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                Simulating software engineering agent pipelines where third-party API endpoints undergo schema breaking changes (404/410 response codes, changed argument names).
+                Supplementary custom benchmark (5 tasks, 25 records) evaluated with real pytest subprocess executions. Tests whether an agent avoids deprecated APIs (pandas append &rarr; concat, Pydantic dict &rarr; model_dump, SQLAlchemy engine.execute &rarr; conn.execute, inspect.getargspec &rarr; signature).
               </p>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
                 <div
@@ -830,17 +935,17 @@ export default function BenchmarksPage() {
                   }`}
                 >
                   <span className={`text-[10px] ${isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}`}>
-                    Stateless Agent
+                    Vanilla Baseline
                   </span>
                   <div
                     className={`text-xl font-bold ${
                       isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                     }`}
                   >
-                    64.2%
+                    20.0% (1/5)
                   </div>
                   <span className={`text-[10px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
-                    Re-solves from scratch
+                    Fails deprecated calls
                   </span>
                 </div>
                 <div
@@ -850,9 +955,9 @@ export default function BenchmarksPage() {
                       : 'bg-[#161614] border-[#242422]'
                   }`}
                 >
-                  <span className="text-[#D9534F] text-[10px]">Naive Vector RAG</span>
-                  <div className="text-xl font-bold text-[#D9534F]">22.0%</div>
-                  <span className="text-[10px] text-[#D9534F]">Re-invokes broken API</span>
+                  <span className="text-[#D9534F] text-[10px]">Naive RAG & Recency</span>
+                  <div className="text-xl font-bold text-[#D9534F]">20.0% (1/5)</div>
+                  <span className="text-[10px] text-[#D9534F]">Re-injects model.dict()</span>
                 </div>
                 <div
                   className={`p-4 rounded-lg border space-y-1 ${
@@ -864,26 +969,33 @@ export default function BenchmarksPage() {
                   <span
                     className={`text-[10px] ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}
                   >
-                    AEMA Engine
+                    AEMA (Adaptive)
                   </span>
                   <div
                     className={`text-xl font-bold ${
                       isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
                     }`}
                   >
-                    91.4%
+                    40.0% (2/5)
                   </div>
                   <span
                     className={`text-[10px] ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}
                   >
-                    Deprecates API memory
+                    Quarantined dict() &rarr; model_dump()
                   </span>
                 </div>
               </div>
+              <p
+                className={`text-xs leading-relaxed ${
+                  isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'
+                }`}
+              >
+                Key Finding: While Naive RAG and Recency repeatedly retrieved outdated memories recommending model.dict() and failed, AEMA downgraded low-trust legacy memories, allowing the model to generate model.model_dump() and pass verification.
+              </p>
             </section>
             )}
 
-            {/* Section 6: Python API Evolution & Deprecation Quarantine */}
+            {/* Section 6: Long-Range Understanding */}
             {isSectionVisible('alfworld-planning') && (
             <section id="alfworld-planning" className="space-y-4 scroll-mt-20">
               <h2
@@ -891,49 +1003,124 @@ export default function BenchmarksPage() {
                   isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                 }`}
               >
-                6. Python API Evolution & Deprecation Quarantine Suite
+                6. MemoryAgentBench: Long-Range Understanding
               </h2>
               <p
                 className={`text-sm leading-relaxed ${
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                Evaluated against real software engineering library migrations (Pydantic v1 to v2, SQLAlchemy 1.4 to 2.0, LangChain core updates). Tests whether AEMA isolates failing patterns upon encountering deprecated parameters or syntax changes.
+                Benchmark: MemoryAgentBench (Competency: Long-Range Understanding, Split: detective_qa, 4 books, 311 chunks, 25 tasks, 125 evaluation records). Evaluates information retrieval and answer quality across long multi-chapter texts.
               </p>
               <div
-                className={`p-4 rounded-lg border text-xs font-mono space-y-2 ${
-                  isLight
-                    ? 'border-[#EAE8E3] bg-[#FFFFFF]'
-                    : 'border-[#242422] bg-[#161614]'
+                className={`overflow-x-auto rounded-lg border ${
+                  isLight ? 'border-[#EAE8E3]' : 'border-[#242422]'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Deprecated API Quarantine Precision:
-                  </span>
-                  <span
-                    className={`font-bold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}
+                <table className="w-full text-left text-xs font-mono">
+                  <thead
+                    className={`border-b ${
+                      isLight
+                        ? 'bg-[#F5F4EF] border-[#EAE8E3] text-[#6B7280]'
+                        : 'bg-[#181816] border-[#242422] text-[#7E7D77]'
+                    }`}
                   >
-                    100.0% (1.00 Quarantine Rate)
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Task Pass Rate:
-                  </span>
-                  <span className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>
-                    40.0% AEMA (vs 20.0% Naive RAG, Recency & Vanilla)
-                  </span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Broken Code Recurrence:
-                  </span>
-                  <span className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>
-                    0.0% Recurrence (Theorem 1 Isolation)
-                  </span>
-                </div>
+                    <tr>
+                      <th className="p-3">Condition</th>
+                      <th className="p-3">Accuracy</th>
+                      <th className="p-3">Exact Match</th>
+                      <th className="p-3">Token F1</th>
+                      <th className="p-3">Prompt Tokens</th>
+                      <th className="p-3">Mean Latency</th>
+                    </tr>
+                  </thead>
+                  <tbody
+                    className={`divide-y ${
+                      isLight
+                        ? 'divide-[#EAE8E3] bg-[#FFFFFF] text-[#141413]'
+                        : 'divide-[#242422] bg-[#161614] text-[#EDECE8]'
+                    }`}
+                  >
+                    <tr>
+                      <td className="p-3">Vanilla</td>
+                      <td className="p-3 font-semibold">40.0% (10/25)</td>
+                      <td className="p-3">0.28</td>
+                      <td className="p-3">0.3594</td>
+                      <td className="p-3">389.4</td>
+                      <td className="p-3">1907.0 ms</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3 text-[#D9534F]">Naive RAG</td>
+                      <td className="p-3">32.0% (8/25)</td>
+                      <td className="p-3">0.32</td>
+                      <td className="p-3">0.4462</td>
+                      <td className="p-3 text-[#D9534F]">2044.1</td>
+                      <td className="p-3">9274.5 ms</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3">Recency</td>
+                      <td className="p-3">32.0% (8/25)</td>
+                      <td className="p-3">0.32</td>
+                      <td className="p-3">0.4622</td>
+                      <td className="p-3 text-[#D9534F]">2050.0</td>
+                      <td className="p-3">8619.9 ms</td>
+                    </tr>
+                    <tr>
+                      <td className="p-3">Symmetric</td>
+                      <td className="p-3">28.0% (7/25)</td>
+                      <td className="p-3">0.24</td>
+                      <td className="p-3">0.3476</td>
+                      <td className="p-3 text-[#D9534F]">2050.0</td>
+                      <td className="p-3">9199.2 ms</td>
+                    </tr>
+                    <tr className={isLight ? 'bg-[#ECFDF5]/50' : 'bg-[#18201A]'}>
+                      <td
+                        className={`p-3 font-semibold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        AEMA (Adaptive)
+                      </td>
+                      <td
+                        className={`p-3 font-bold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        40.0% (Tied Top)
+                      </td>
+                      <td
+                        className={`p-3 font-bold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        0.32
+                      </td>
+                      <td
+                        className={`p-3 font-bold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        0.4489
+                      </td>
+                      <td
+                        className={`p-3 font-bold ${
+                          isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                        }`}
+                      >
+                        384.4 (81% savings)
+                      </td>
+                      <td className="p-3">9512.8 ms</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
+              <p
+                className={`text-xs leading-relaxed ${
+                  isLight ? 'text-[#6B7280]' : 'text-[#9E9D96]'
+                }`}
+              >
+                Key Finding: AEMA tied top accuracy (40.0%) while using 384.4 prompt tokens compared to over 2,044 tokens for the retrieval baselines, demonstrating compact contextualization without sacrificing accuracy.
+              </p>
             </section>
             )}
 
@@ -952,7 +1139,7 @@ export default function BenchmarksPage() {
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                A common critique of cognitive memory systems is runtime latency. AEMA was designed for production latency constraints through asynchronous execution and compact strategy tuples:
+                Empirical token and latency characteristics measured across pilot runs:
               </p>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs font-mono">
@@ -968,12 +1155,66 @@ export default function BenchmarksPage() {
                       isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'
                     }`}
                   >
-                    <span className="text-[10px] uppercase">Retrieval Latency</span>
+                    <span className="text-[10px] uppercase">Conflict Latency</span>
                     <Clock size={13} className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'} />
                   </div>
                   <div
                     className={`text-xl font-bold ${
                       isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                    }`}
+                  >
+                    1,039 ms
+                  </div>
+                  <span className={`text-[10px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
+                    Faster than Symmetric (1209ms)
+                  </span>
+                </div>
+
+                <div
+                  className={`p-4 rounded-lg border space-y-1 ${
+                    isLight
+                      ? 'bg-[#FFFFFF] border-[#EAE8E3]'
+                      : 'bg-[#161614] border-[#242422]'
+                  }`}
+                >
+                  <div
+                    className={`flex items-center justify-between ${
+                      isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase">Prompt Compression</span>
+                    <Coins size={13} className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'} />
+                  </div>
+                  <div
+                    className={`text-xl font-bold ${
+                      isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
+                    }`}
+                  >
+                    81.2%
+                  </div>
+                  <span className={`text-[10px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
+                    384.4 vs 2,050 prompt tokens
+                  </span>
+                </div>
+
+                <div
+                  className={`p-4 rounded-lg border space-y-1 ${
+                    isLight
+                      ? 'bg-[#FFFFFF] border-[#EAE8E3]'
+                      : 'bg-[#161614] border-[#242422]'
+                  }`}
+                >
+                  <div
+                    className={`flex items-center justify-between ${
+                      isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'
+                    }`}
+                  >
+                    <span className="text-[10px] uppercase">Retrieval Lookup</span>
+                    <Zap size={13} className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'} />
+                  </div>
+                  <div
+                    className={`text-xl font-bold ${
+                      isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                     }`}
                   >
                     &lt; 25 ms
@@ -982,65 +1223,11 @@ export default function BenchmarksPage() {
                     Local SQLite / pgvector cosine
                   </span>
                 </div>
-
-                <div
-                  className={`p-4 rounded-lg border space-y-1 ${
-                    isLight
-                      ? 'bg-[#FFFFFF] border-[#EAE8E3]'
-                      : 'bg-[#161614] border-[#242422]'
-                  }`}
-                >
-                  <div
-                    className={`flex items-center justify-between ${
-                      isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase">Token Reduction</span>
-                    <Coins size={13} className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'} />
-                  </div>
-                  <div
-                    className={`text-xl font-bold ${
-                      isLight ? 'text-[#059669]' : 'text-[#4EAA79]'
-                    }`}
-                  >
-                    41.2%
-                  </div>
-                  <span className={`text-[10px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
-                    Compact strategy lessons vs raw logs
-                  </span>
-                </div>
-
-                <div
-                  className={`p-4 rounded-lg border space-y-1 ${
-                    isLight
-                      ? 'bg-[#FFFFFF] border-[#EAE8E3]'
-                      : 'bg-[#161614] border-[#242422]'
-                  }`}
-                >
-                  <div
-                    className={`flex items-center justify-between ${
-                      isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'
-                    }`}
-                  >
-                    <span className="text-[10px] uppercase">Background Overhead</span>
-                    <Zap size={13} className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'} />
-                  </div>
-                  <div
-                    className={`text-xl font-bold ${
-                      isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                    }`}
-                  >
-                    0 ms
-                  </div>
-                  <span className={`text-[10px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
-                    Async evaluation & trust updates
-                  </span>
-                </div>
               </div>
             </section>
             )}
 
-            {/* Section 8: Statistical Significance (McNemar Test) */}
+            {/* Section 8: Analysis & AEMA-v2 Research Roadmap */}
             {isSectionVisible('statistical-rigor') && (
             <section id="statistical-rigor" className="space-y-4 scroll-mt-20">
               <h2
@@ -1048,60 +1235,54 @@ export default function BenchmarksPage() {
                   isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                 }`}
               >
-                8. Statistical Significance: McNemar Paired Contingency Test
+                8. Evaluation Analysis & AEMA-v2 Research Roadmap
               </h2>
               <p
                 className={`text-sm leading-relaxed ${
                   isLight ? 'text-[#4A4945]' : 'text-[#9E9D96]'
                 }`}
               >
-                Because trials are matched pairs evaluated on identical problem inputs, the McNemar test with continuity correction was performed:
+                The pilot evaluation provides clear empirical evidence for reliability-aware memory management while establishing specific technical targets for the next development phase:
               </p>
 
               <div
-                className={`p-4 rounded-lg border font-mono text-xs space-y-2 ${
+                className={`p-4 rounded-lg border font-mono text-xs space-y-3 ${
                   isLight
                     ? 'border-[#EAE8E3] bg-[#FFFFFF]'
                     : 'border-[#242422] bg-[#161614]'
                 }`}
               >
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    McNemar Chi-Square (&chi;²):
+                <div className="space-y-1">
+                  <span className={`font-semibold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
+                    1. Adaptive Retrieval Threshold (AEMA-v2)
                   </span>
-                  <span
-                    className={`font-bold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}
-                  >
-                    98.01
-                  </span>
+                  <p className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
+                    Replace the static 0.60 threshold with a dynamic function factoring semantic similarity, memory reliability, age, and recency of verification to avoid excluding useful memories.
+                  </p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Degrees of Freedom:
+                <div className="space-y-1 border-t pt-2 border-[#EAE8E3] dark:border-[#242422]">
+                  <span className={`font-semibold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
+                    2. Decouple Relevance from Reliability
                   </span>
-                  <span className={isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}>1</span>
+                  <p className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
+                    Maintain dual-axis scoring so memory selection evaluates semantic match independently from operational track record.
+                  </p>
                 </div>
-                <div className="flex items-center justify-between">
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Two-Tailed p-value:
+                <div className="space-y-1 border-t pt-2 border-[#EAE8E3] dark:border-[#242422]">
+                  <span className={`font-semibold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
+                    3. Sequential Demonstration Buffering
                   </span>
-                  <span
-                    className={`font-bold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}
-                  >
-                    p = 1.192 × 10⁻⁷ (p &lt; 0.0001)
-                  </span>
+                  <p className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
+                    Introduce dedicated buffering for in-context demonstrations to enable effective test-time learning before promotion into long-term memory.
+                  </p>
                 </div>
-                <div
-                  className={`flex items-center justify-between border-t pt-2 ${
-                    isLight ? 'border-[#EAE8E3]' : 'border-[#242422]'
-                  }`}
-                >
-                  <span className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
-                    Conclusion:
+                <div className="space-y-1 border-t pt-2 border-[#EAE8E3] dark:border-[#242422]">
+                  <span className={`font-semibold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
+                    4. Explicit Parametric-Memory Conflict Handling
                   </span>
-                  <span className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>
-                    Statistically significant rejection of null hypothesis
-                  </span>
+                  <p className={isLight ? 'text-[#6B7280]' : 'text-[#7E7D77]'}>
+                    Explicitly distinguish pretrained parametric knowledge from task-specific counterfactuals to ensure the model adheres to verified retained memories.
+                  </p>
                 </div>
               </div>
             </section>
