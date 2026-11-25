@@ -261,7 +261,7 @@ export default function DashboardPage() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto bg-[#141412]">
+      <div className={`flex-1 flex flex-col min-w-0 h-screen ${activeTab === 'studio' ? 'overflow-hidden' : 'overflow-y-auto'} bg-[#141412]`}>
         {/* Top Header Rail with Airy Spacing & Clean Breadcrumb */}
         <header className="h-16 border-b border-[#242422] px-6 sm:px-8 flex items-center justify-between shrink-0 bg-[#161614]">
           <div className="flex items-center gap-3.5">
@@ -317,7 +317,7 @@ export default function DashboardPage() {
 
         {/* Tab Viewport: Studio is full-bleed workspace directly below header; other tabs use max-w-7xl container */}
         {activeTab === 'studio' ? (
-          <div className="flex-1 h-[calc(100vh-64px)] w-full overflow-hidden flex flex-col">
+          <div className="flex-1 w-full min-h-0 overflow-hidden flex flex-col">
             <ConversationStudio
               isDemo={isDemo}
               onExecutionComplete={(exec) => {

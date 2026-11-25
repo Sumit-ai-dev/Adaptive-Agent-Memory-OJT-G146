@@ -231,11 +231,14 @@ export default function ConversationStudio({ isDemo = false, onExecutionComplete
   const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => loadByokKeys())
   const [keyDraft, setKeyDraft] = useState('')
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }, [messages, isExecuting, runningExecution?.tokens])
 
   useEffect(() => {
@@ -692,7 +695,7 @@ export default function ConversationStudio({ isDemo = false, onExecutionComplete
         </div>
 
         {/* Chat / Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 && !runningExecution ? (
             /* Empty State Hero Banner */
             <div className="max-w-xl mx-auto my-12 text-center space-y-3">
