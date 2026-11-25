@@ -1,0 +1,51 @@
+name: CD / Deploy to Vultr
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to Vultr Cloud VPS
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Trigger Remote Deployment via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VULTR_HOST }}
+          username: root
+          password: ${{ secrets.VULTR_PASSWORD }}
+          port: 22
+          script_stop: true
+          script: |
+            echo "==> [AEMA CI/CD] Pulling latest main branch on Vultr VPS..."
+            cd /opt/aema
+            git fetch origin main
+            git reset --hard origin/main
+
+            echo "==> [AEMA CI/CD] Building standalone unified production container..."
+            docker build \
+              --build-arg VITE_SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL || 'https://kgbxowdxbpvphzomivkg.supabase.co' }}" \
+              --build-arg VITE_SUPABASE_ANON_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtnYnhvd2R4YnB2cGh6b21pdmtnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0OTM0ODQsImV4cCI6MjExMTA2OTQ4NH0.0D3AAAJPu2qBvKDLxQ7FB35lQwhmEw65oQSKgqn4INo' }}" \
+              -f Dockerfile.standalone -t aema:latest .
+
+            echo "==> [AEMA CI/CD] Restarting aema-app container..."
+            docker stop aema-app || true
+            docker rm aema-app || true
+            docker run -d --name aema-app --restart unless-stopped -p 80:80 -v aema_data:/data aema:latest
+
+            echo "==> [AEMA CI/CD] Verifying local health endpoint..."
+            sleep 3
+            curl -fsS http://127.0.0.1:8000/api/health || exit 1
+            echo "==> [AEMA CI/CD] Deployment successfully verified and healthy!"
