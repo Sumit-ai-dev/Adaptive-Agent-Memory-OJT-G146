@@ -77,12 +77,12 @@ export interface ProviderUiOption {
 }
 
 export const PROVIDER_UI_OPTIONS: ProviderUiOption[] = [
-  { id: 'groq', name: 'Groq Cloud', subname: 'GPT-OSS 120B / Llama 3.3', logo: '/images/models/groq.webp' },
-  { id: 'gemini', name: 'Google Gemini', subname: 'Gemini 4 / 3.x', logo: '/images/models/gemini.webp' },
-  { id: 'openai', name: 'OpenAI', subname: 'GPT-6.2 / 6.1 / 6 Luna', logo: '/images/models/openai.webp' },
-  { id: 'anthropic', name: 'Anthropic Claude', subname: 'Claude 5.5 / Fable 5.2', isIcon: true },
-  { id: 'ollama', name: 'Ollama Local', subname: 'Llama 3.2 / 3.1 / Qwen', logo: '/images/models/ollama.webp' },
-  { id: 'mock', name: 'Deterministic Mock', subname: 'Offline', isIcon: true },
+  { id: 'groq', name: 'Groq Cloud', subname: 'GPT-OSS 120B / Qwen 3.8', logo: '/images/models/groq.webp' },
+  { id: 'gemini', name: 'Google Gemini', subname: 'Gemini 3.8 Flash / 3.5 Lite', logo: '/images/models/gemini.webp' },
+  { id: 'openai', name: 'OpenAI', subname: 'GPT-6.2 Sol / Astra', logo: '/images/models/openai.webp' },
+  { id: 'anthropic', name: 'Anthropic Claude', subname: 'Sonnet 5.5 / Opus 5.5', isIcon: true },
+  { id: 'ollama', name: 'Ollama Local', subname: 'Llama 3.2 / Qwen 2.5', logo: '/images/models/ollama.webp' },
+  { id: 'mock', name: 'Deterministic Mock', subname: 'Offline · No key needed', isIcon: true },
 ]
 
 export const BYOK_UPDATED_EVENT = 'aema-byok-updated'

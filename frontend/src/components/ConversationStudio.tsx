@@ -565,7 +565,7 @@ export default function ConversationStudio({ isDemo = false, onExecutionComplete
       {/* ─── 2. MAIN CONVERSATION WORKSPACE ───────────────────────────────── */}
       <div className="flex-1 flex flex-col h-full bg-[#0E0E0D] overflow-hidden">
         {/* Workspace Top Toolbar: Slim & Minimalist (Antigravity Style) */}
-        <div className="px-4 py-2 border-b border-[#1C1C1A] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs bg-[#0D0D0C]">
+        <div className="px-4 py-2 border-b border-[#1C1C1A] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs bg-[#0D0D0C] overflow-visible relative z-10">
           {/* Thread Title Header */}
           <div className="flex items-center gap-2 min-w-0 max-w-xs sm:max-w-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-[#555550] shrink-0" />

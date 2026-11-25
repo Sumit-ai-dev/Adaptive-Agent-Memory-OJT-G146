@@ -119,7 +119,7 @@ export default function ProviderModelSelect({
       <div
         role="listbox"
         aria-label="Available Models"
-        className={`absolute top-full mt-1.5 w-72 max-h-80 overflow-y-auto rounded-lg border border-[#2E2E2A] bg-[#161614] py-1.5 z-50 shadow-2xl font-mono transition-all duration-150 ease-out ${
+        className={`absolute top-full mt-1.5 w-72 max-h-80 overflow-y-auto rounded-lg border border-[#2E2E2A] bg-[#161614] py-1.5 z-[100] shadow-2xl font-mono transition-all duration-150 ease-out ${
           align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'
         } ${
           isOpen
