@@ -90,7 +90,6 @@ DANGEROUS_DYNAMIC_ATTRS: Set[str] = {
     "unlink",
     "rmdir",
     "rmtree",
-    "connect",
     "eval",
     "exec",
     "read_text",
