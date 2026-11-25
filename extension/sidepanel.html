@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AEMA Copilot</title>
+  <style>
+    :root {
+      /* Obsidian Theme Palette */
+      --canvas: #0E0E0D;
+      --surface-island: #131311;
+      --surface-elevated: #1A1A17;
+      --surface-pill: #1D1D1A;
+      --user-bubble: #20201E;
+
+      --border-subtle: #1C1C1A;
+      --border-island: #20201E;
+      --border-muted: #262624;
+      --border-active: #2E2E2A;
+
+      --text-primary: #EDECE8;
+      --text-secondary: #9E9D96;
+      --text-muted: #7E7D77;
+      --text-faint: #555550;
+
+      --accent-emerald: #4EAA79;
+      --accent-emerald-subtle: rgba(78, 170, 121, 0.12);
+      --accent-crimson: #D9534F;
+      --accent-crimson-subtle: rgba(217, 83, 79, 0.12);
+      --accent-amber: #E6803C;
+
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 16px;
+      --radius-pill: 9999px;
+
+      --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      width: 100%;
+      height: 100vh;
+      overflow: hidden;
+      background: var(--canvas);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 13px;
+      line-height: 1.5;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    /* Scrollbars */
+    ::-webkit-scrollbar {
+      width: 4px;
+      height: 4px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-island);
+      border-radius: 2px;
+    }
+
+    /* ─── 1. TOP BAR (Clean, no redundant Chrome close button) ─── */
+    .top-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px 6px;
+      background: transparent;
+      z-index: 20;
+    }
+
+    .top-left {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .icon-link {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 5px;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+
+    .icon-link:hover {
+      color: var(--text-primary);
+      background: var(--surface-island);
+    }
+
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent-emerald);
+      box-shadow: 0 0 6px var(--accent-emerald);
+    }
+
+    .status-dot.offline {
+      background: var(--accent-crimson);
+      box-shadow: 0 0 6px var(--accent-crimson);
+    }
+
+    .top-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    /* ─── 2. MAIN VIEWPORT (CANVAS) ─── */
+    .chat-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    /* Welcome / Empty State (Clean Native Center) */
+    .empty-state {
+      margin: auto 0 8px 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      width: 100%;
+    }
+
+    /* AEMA Proprietary Memory Nexus Icon */
+    .aema-nexus-symbol {
+      width: 44px;
+      height: 44px;
+      margin-bottom: 12px;
+      color: var(--accent-emerald);
+      filter: drop-shadow(0 0 12px rgba(78, 170, 121, 0.25));
+    }
+
+    .greeting-text {
+      font-size: 21px;
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      margin-bottom: 24px;
+    }
+
+    /* Bottom-anchored Prompt Suggestion Chips */
+    .starter-chips-container {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      width: 100%;
+      max-width: 340px;
+    }
+
+    .prompt-chip {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: #141412;
+      border: 1px solid var(--border-island);
+      border-radius: var(--radius-pill);
+      padding: 7px 12px;
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      text-align: left;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+
+    .prompt-chip:hover {
+      background: var(--surface-elevated);
+      color: var(--text-primary);
+      border-color: var(--border-muted);
+    }
+
+    .prompt-chip-icon {
+      font-size: 12px;
+      opacity: 0.7;
+    }
+
+    /* ─── 3. MESSAGES STREAM ─── */
+    .msg-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+
+    .msg-user {
+      align-self: flex-end;
+      max-width: 86%;
+      background: var(--user-bubble);
+      color: var(--text-primary);
+      border-radius: 16px 16px 3px 16px;
+      padding: 8px 12px;
+      font-size: 12.5px;
+      line-height: 1.45;
+      border: 1px solid rgba(42, 42, 38, 0.6);
+      word-break: break-word;
+    }
+
+    .msg-assistant {
+      width: 100%;
+      color: var(--text-primary);
+      font-size: 12.5px;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+
+    /* Minimalist Thinking Pill (Collapsed by default) */
+    .thinking-wrap {
+      padding: 2px 0 6px;
+      user-select: none;
+    }
+
+    .thinking-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      color: var(--text-muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      transition: color 0.15s ease;
+    }
+
+    .thinking-toggle:hover {
+      color: var(--text-secondary);
+    }
+
+    .thinking-time {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--text-faint);
+    }
+
+    .thinking-chevron {
+      font-size: 9px;
+      color: var(--text-faint);
+    }
+
+    .thinking-body {
+      margin-top: 5px;
+      margin-left: 2px;
+      padding-left: 8px;
+      border-left: 1px solid var(--border-island);
+      font-family: var(--font-mono);
+      font-size: 10.5px;
+      color: var(--text-muted);
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .thinking-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .thinking-item .dot {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--text-faint);
+    }
+
+    /* Markdown prose */
+    .prose p {
+      margin-bottom: 8px;
+    }
+    .prose p:last-child {
+      margin-bottom: 0;
+    }
+
+    .code-wrap {
+      margin: 8px 0;
+      background: #090908;
+      border: 1px solid var(--border-island);
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+    }
+
+    .code-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 4px 8px;
+      background: #0E0E0D;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 9.5px;
+      color: var(--text-faint);
+      font-family: var(--font-mono);
+    }
+
+    .code-copy {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 9.5px;
+      cursor: pointer;
+    }
+
+    .code-copy:hover {
+      color: var(--text-primary);
+    }
+
+    pre code {
+      display: block;
+      padding: 8px 10px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      line-height: 1.45;
+      color: #A3E635;
+      overflow-x: auto;
+      white-space: pre-wrap;
+    }
+
+    /* ─── 4. POST-ANSWER ACTION TOOLBAR ─── */
+    .answer-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      margin-top: 6px;
+      padding-top: 4px;
+    }
+
+    .action-btn {
+      background: none;
+      border: none;
+      color: var(--text-faint);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      font-size: 11px;
+      padding: 3px 6px;
+      border-radius: var(--radius-sm);
+      transition: all 0.15s ease;
+    }
+
+    .action-btn:hover {
+      background: var(--surface-island);
+      color: var(--text-secondary);
+    }
+
+    .action-btn.active-positive {
+      color: var(--accent-emerald);
+    }
+
+    .action-btn.active-negative {
+      color: var(--accent-crimson);
+    }
+
+    .feedback-toast {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      color: var(--accent-emerald);
+      margin-left: 4px;
+      display: none;
+    }
+
+    /* ─── 5. FLOATING INPUT ISLAND ─── */
+    .input-island-wrapper {
+      padding: 6px 14px 14px;
+      background: transparent;
+    }
+
+    .input-island {
+      background: var(--surface-island);
+      border: 1px solid var(--border-island);
+      border-radius: 18px;
+      padding: 8px 10px 8px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45);
+      transition: border-color 0.15s ease;
+    }
+
+    .input-island:focus-within {
+      border-color: var(--border-active);
+    }
+
+    /* "Sharing '<tab>' [x]" Pill */
+    .sharing-pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: space-between;
+      align-self: flex-start;
+      max-width: 100%;
+      background: var(--surface-pill);
+      border: 1px solid rgba(42, 42, 38, 0.6);
+      border-radius: var(--radius-pill);
+      padding: 2px 8px 2px 6px;
+      gap: 6px;
+      font-size: 10.5px;
+      font-family: var(--font-mono);
+      color: var(--text-secondary);
+      transition: opacity 0.15s ease;
+    }
+
+    .sharing-pill-left {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+
+    .sharing-icon {
+      font-size: 10px;
+      opacity: 0.8;
+    }
+
+    .sharing-label {
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      max-width: 210px;
+    }
+
+    .sharing-close {
+      background: none;
+      border: none;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 12px;
+      line-height: 1;
+      padding: 0 2px;
+      border-radius: 50%;
+    }
+
+    .sharing-close:hover {
+      color: var(--accent-crimson);
+    }
+
+    .task-textarea {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 12.5px;
+      min-height: 24px;
+      max-height: 100px;
+      resize: none;
+      outline: none;
+      padding: 2px 0 0 2px;
+    }
+
+    .task-textarea::placeholder {
+      color: var(--text-faint);
+    }
+
+    .island-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 3px;
+    }
+
+    .island-left {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-island-action {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 13px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s ease, color 0.15s ease;
+    }
+
+    .btn-island-action:hover {
+      background: var(--surface-elevated);
+      color: var(--text-primary);
+    }
+
+    .island-right {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      position: relative;
+    }
+
+    .mode-select-btn {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-island);
+      color: var(--text-muted);
+      border-radius: var(--radius-pill);
+      padding: 2px 7px;
+      font-size: 10px;
+      font-family: var(--font-mono);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.15s ease;
+    }
+
+    .mode-select-btn:hover {
+      border-color: var(--border-muted);
+      color: var(--text-primary);
+    }
+
+    .mode-popover {
+      display: none;
+      position: absolute;
+      bottom: calc(100% + 8px);
+      right: 32px;
+      background: #141412;
+      border: 1px solid var(--border-muted);
+      border-radius: var(--radius-md);
+      padding: 4px;
+      min-width: 140px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+      z-index: 50;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .mode-popover.open {
+      display: flex;
+    }
+
+    .popover-item {
+      background: transparent;
+      border: none;
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-family: var(--font-sans);
+      padding: 5px 8px;
+      border-radius: 4px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.12s ease;
+    }
+
+    .popover-item:hover {
+      background: var(--surface-elevated);
+      color: var(--text-primary);
+    }
+
+    .popover-item.active {
+      color: var(--accent-emerald);
+      font-weight: 500;
+    }
+
+    .btn-send {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #242422;
+      border: none;
+      color: var(--text-faint);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 11px;
+      transition: all 0.15s ease;
+    }
+
+    .btn-send.active {
+      background: var(--accent-emerald);
+      color: #0E2016;
+      box-shadow: 0 0 10px rgba(78, 170, 121, 0.35);
+    }
+
+    .btn-send:disabled {
+      cursor: not-allowed;
+      opacity: 0.5;
+    }
+
+    /* ─── 6. FULL-WIDTH NATIVE HISTORY VIEW (100% width, no peeking) ─── */
+    .history-drawer {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--canvas);
+      z-index: 70;
+      display: none;
+      flex-direction: column;
+      animation: fadeIn 0.15s ease-out;
+    }
+
+    .history-drawer.open {
+      display: flex;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .drawer-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .drawer-title-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .drawer-title {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .clear-history-link {
+      background: none;
+      border: none;
+      color: var(--text-faint);
+      font-size: 11px;
+      cursor: pointer;
+      transition: color 0.15s ease;
+    }
+
+    .clear-history-link:hover {
+      color: var(--accent-crimson);
+    }
+
+    .drawer-search-wrap {
+      padding: 8px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .drawer-search {
+      width: 100%;
+      background: var(--surface-island);
+      border: 1px solid var(--border-island);
+      color: var(--text-primary);
+      font-size: 11px;
+      border-radius: var(--radius-sm);
+      padding: 5px 8px;
+      outline: none;
+    }
+
+    .drawer-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .history-group-tag {
+      font-size: 9.5px;
+      font-family: var(--font-mono);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-faint);
+      margin: 8px 0 3px;
+    }
+
+    .history-row {
+      padding: 7px 10px;
+      background: var(--surface-island);
+      border: 1px solid var(--border-island);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      transition: all 0.12s ease;
+    }
+
+    .history-row:hover {
+      background: var(--surface-elevated);
+      border-color: var(--border-active);
+    }
+
+    .history-row-content {
+      overflow: hidden;
+      flex: 1;
+    }
+
+    .history-row-title {
+      font-size: 11.5px;
+      color: var(--text-primary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .history-row-time {
+      font-size: 9.5px;
+      font-family: var(--font-mono);
+      color: var(--text-faint);
+    }
+
+    .history-row-actions {
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      opacity: 0.7;
+    }
+
+    .history-row:hover .history-row-actions {
+      opacity: 1;
+    }
+
+    .history-action-btn {
+      background: none;
+      border: none;
+      color: var(--text-faint);
+      cursor: pointer;
+      padding: 3px;
+      border-radius: 3px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: color 0.15s ease, background 0.15s ease;
+    }
+
+    .history-action-btn:hover {
+      color: var(--text-primary);
+      background: var(--surface-elevated);
+    }
+
+    .history-action-btn.del:hover {
+      color: var(--accent-crimson);
+    }
+
+    .rename-input {
+      background: var(--surface-elevated);
+      border: 1px solid var(--border-active);
+      color: var(--text-primary);
+      font-size: 11.5px;
+      padding: 2px 4px;
+      border-radius: 3px;
+      width: 100%;
+      outline: none;
+    }
+
+    /* ─── 7. SETTINGS MODAL ─── */
+    .modal-backdrop {
+      display: none;
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.65);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .modal-backdrop.open {
+      display: flex;
+    }
+
+    .modal-box {
+      width: 100%;
+      max-width: 290px;
+      background: #121210;
+      border: 1px solid var(--border-island);
+      border-radius: var(--radius-md);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.7);
+    }
+
+    .modal-box-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-subtle);
+      padding-bottom: 6px;
+    }
+
+    .modal-box-title {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-primary);
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+    }
+
+    .form-field label {
+      font-size: 10.5px;
+      color: var(--text-muted);
+    }
+
+    .form-field input {
+      background: var(--surface-island);
+      border: 1px solid var(--border-island);
+      color: var(--text-primary);
+      font-size: 11px;
+      padding: 5px 7px;
+      border-radius: var(--radius-sm);
+      outline: none;
+    }
+
+    .form-field input:focus {
+      border-color: var(--border-active);
+    }
+
+    .btn-save {
+      background: var(--accent-emerald);
+      border: none;
+      color: #0E2016;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Minimal Top Navigation Bar (No redundant inner close button) -->
+  <header class="top-bar">
+    <div class="top-left">
+      <button id="historyDrawerBtn" class="icon-link" title="Session History">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <polyline points="12 6 12 12 16 14"></polyline>
+        </svg>
+      </button>
+      <span id="statusDot" class="status-dot" title="AEMA Core Online"></span>
+    </div>
+    <div class="top-right">
+      <button id="newChatBtn" class="icon-link" title="New Session">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"></line>
+          <line x1="5" y1="12" x2="19" y2="12"></line>
+        </svg>
+      </button>
+      <button id="settingsBtn" class="icon-link" title="Settings">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Main Viewport -->
+  <main id="chatContainer" class="chat-container">
+    <div id="emptyState" class="empty-state">
+      <!-- AEMA Proprietary Memory Nexus Symbol -->
+      <svg class="aema-nexus-symbol" viewBox="0 0 48 48" fill="none">
+        <polygon points="24,4 42,14 42,34 24,44 6,34 6,14" stroke="#4EAA79" stroke-width="1.8" stroke-opacity="0.5" fill="rgba(78, 170, 121, 0.05)"/>
+        <polygon points="24,12 34,18 34,30 24,36 14,30 14,18" stroke="#4EAA79" stroke-width="2" fill="rgba(78, 170, 121, 0.12)"/>
+        <circle cx="24" cy="24" r="3.5" fill="#4EAA79"/>
+      </svg>
+      <h2 id="greetingHeading" class="greeting-text">Ask away, Sakshi!</h2>
+
+      <!-- Subtle Bottom-Anchored Chips -->
+      <div class="starter-chips-container">
+        <button id="chip1" class="prompt-chip">
+          <span class="prompt-chip-icon">💬</span>
+          <span>Help me debug this Python code</span>
+        </button>
+        <button id="chip2" class="prompt-chip">
+          <span class="prompt-chip-icon">💬</span>
+          <span>Summarize key concepts on this page</span>
+        </button>
+        <button id="chip3" class="prompt-chip">
+          <span class="prompt-chip-icon">💬</span>
+          <span>Explain Theorem 1 deterministic quarantine</span>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- ─── FLOATING INPUT ISLAND ─── -->
+  <div class="input-island-wrapper">
+    <div class="input-island">
+      <!-- Tab Context Awareness Pill -->
+      <div id="sharingPill" class="sharing-pill">
+        <div class="sharing-pill-left">
+          <span class="sharing-icon">🌐</span>
+          <span id="sharingLabel" class="sharing-label">Sharing active tab</span>
+        </div>
+        <button id="detachTabBtn" class="sharing-close" title="Detach tab context">&times;</button>
+      </div>
+
+      <!-- Textarea -->
+      <textarea id="taskInput" class="task-textarea" placeholder="Ask AEMA anything..." rows="1"></textarea>
+
+      <!-- Bottom Action Row -->
+      <div class="island-bar">
+        <div class="island-left">
+          <button id="quickClipBtn" class="btn-island-action" title="Clip highlighted text">
+            <span>+</span>
+          </button>
+        </div>
+        <div class="island-right">
+          <!-- Response Mode Pill & Popover -->
+          <button id="modeSelectBtn" class="mode-select-btn" type="button">
+            <span id="activeModeLabel">Balanced</span>
+            <span style="font-size:8px;">▾</span>
+          </button>
+          <div id="modePopover" class="mode-popover">
+            <button class="popover-item" data-mode="concise">Concise (&le;150t)</button>
+            <button class="popover-item active" data-mode="balanced">Balanced</button>
+            <button class="popover-item" data-mode="deep">Deep Trace</button>
+          </div>
+
+          <button id="sendBtn" class="btn-send" title="Send (Enter)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+              <polyline points="12 5 19 12 12 19"></polyline>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── 6. FULL-WIDTH NATIVE HISTORY VIEW (100% width) ─── -->
+  <div id="historyDrawer" class="history-drawer">
+    <div class="drawer-head">
+      <div class="drawer-title-group">
+        <button id="closeDrawerBtn" class="icon-link" title="Back to Chat">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="19" y1="12" x2="5" y2="12"></line>
+            <polyline points="12 19 5 12 12 5"></polyline>
+          </svg>
+        </button>
+        <span class="drawer-title">History</span>
+      </div>
+      <button id="clearHistoryBtn" class="clear-history-link">Clear All</button>
+    </div>
+    <div class="drawer-search-wrap">
+      <input type="text" id="historySearchInput" class="drawer-search" placeholder="Search sessions...">
+    </div>
+    <div id="historyList" class="drawer-body">
+      <!-- Injected dynamically with Rename & Delete icons -->
+    </div>
+  </div>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal-backdrop">
+    <div class="modal-box">
+      <div class="modal-box-head">
+        <div class="modal-box-title">Settings</div>
+        <button id="closeSettingsBtn" class="icon-link">&times;</button>
+      </div>
+      <div class="form-field">
+        <label>Your Name (Display Greeting)</label>
+        <input type="text" id="userNameInput" placeholder="Sakshi">
+      </div>
+      <div class="form-field">
+        <label>Backend API URL</label>
+        <input type="text" id="apiUrlInput" placeholder="http://localhost:8000">
+        <span style="font-size:9.5px; font-family:var(--font-mono); color:var(--text-faint);">Vultr: http://&lt;vultr-ip&gt;:8000</span>
+      </div>
+      <div class="form-field">
+        <label>Admin API Key (Optional)</label>
+        <input type="password" id="apiKeyInput" placeholder="ci-smoke-admin-key">
+      </div>
+      <div style="display:flex; justify-content:flex-end; gap:6px; margin-top:4px;">
+        <button id="saveSettingsBtn" class="btn-save">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="sidepanel.js"></script>
+</body>
+</html>
