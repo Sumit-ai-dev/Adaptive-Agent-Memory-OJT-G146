@@ -194,6 +194,25 @@ def test_gemini_byok_request_and_error_formatting():
     err_429 = client._format_gemini_http_error(429, '{"error":{"message":"Quota exceeded"}}')
     assert "quota exceeded" in err_429.lower()
 
+    # High demand / policy block diagnostics
+    err_503 = client._format_gemini_http_error(503, '{"error":{"message":"High demand"}}', "gemini-3.8-flash")
+    assert "gemini-3.5-flash-lite" in err_503
+    assert "high demand" in err_503.lower()
+
+    err_403_policy = client._format_gemini_http_error(403, 'Request not allowed by policy', "gemini-3.8-flash")
+    assert "gemini-3.5-flash-lite" in err_403_policy
+
+    err_compat_timeout = client._format_openai_compat_error(ModelProvider.GEMINI, "gemini-3.8-flash", "Request timed out")
+    assert "gemini-3.5-flash-lite" in err_compat_timeout
+    assert "high demand" in err_compat_timeout.lower()
+
+    err_compat_policy = client._format_openai_compat_error(
+        ModelProvider.GEMINI,
+        "gemini-3.8-flash",
+        "Request to POST /v1beta/chat/completions on generativelanguage.googleapis.com not allowed by policy",
+    )
+    assert "gemini-3.5-flash-lite" in err_compat_policy
+
 
 def test_anthropic_byok_request_and_error_formatting():
     """Verify Anthropic BYOK request builder, json_mode instruction, and HTTP error formatting."""

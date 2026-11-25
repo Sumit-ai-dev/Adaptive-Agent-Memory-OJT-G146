@@ -438,6 +438,22 @@ class UniversalLLMClient:
             clean_msg = "Rate limit or billing quota reached. Please check your provider account or wait a moment."
         elif "404" in err_msg or "model_not_found" in err_msg.lower() or "does not exist" in err_msg.lower():
             clean_msg = f"Model '{model}' not accessible on this account tier."
+        elif "policy" in err_msg.lower() or "not allowed by policy" in err_msg.lower():
+            clean_msg = (
+                f"⚡ Model '{model}' is currently restricted or blocked by network policy "
+                "(high-demand preview models like gemini-3.8-flash are frequently restricted). "
+                "→ Switch to gemini-3.5-flash-lite for a stable, fast response."
+            )
+        elif "timed out" in err_msg.lower() or "timeout" in err_msg.lower():
+            clean_msg = (
+                f"⚡ Model '{model}' timed out — it is likely under very high demand. "
+                "→ Switch to gemini-3.5-flash-lite for a stable, fast response."
+            )
+        elif "503" in err_msg or "high traffic" in err_msg.lower() or "high demand" in err_msg.lower() or "overloaded" in err_msg.lower():
+            clean_msg = (
+                f"⚡ Model '{model}' is experiencing very high demand right now (HTTP 503). "
+                "→ Switch to gemini-3.5-flash-lite for a stable, fast response."
+            )
         return f"Provider '{provider.value}' execution failed ({model}): {clean_msg}"
 
     def _build_anthropic_request(
@@ -658,7 +674,7 @@ class UniversalLLMClient:
 
         return model, headers, payload
 
-    def _format_gemini_http_error(self, status_code: int, err_text: str) -> str:
+    def _format_gemini_http_error(self, status_code: int, err_text: str, model: str = "") -> str:
         """Formats Gemini REST error responses into concise actionable diagnostics."""
         try:
             err_json = json.loads(err_text)
@@ -666,18 +682,29 @@ class UniversalLLMClient:
         except Exception:
             err_msg = err_text[:160]
 
+        model_label = model or "the selected model"
         clean_msg = err_msg
         if status_code == 400 and ("API key not valid" in err_msg or "INVALID_ARGUMENT" in err_msg):
             clean_msg = "API key not valid. Please verify your Google AI Studio key in BYOK."
         elif status_code == 403:
-            clean_msg = f"Access denied by Gemini API or network policy ({err_msg[:120]})."
+            if "not allowed by policy" in err_msg or "policy" in err_msg.lower():
+                clean_msg = (
+                    f"⚡ '{model_label}' is currently blocked by network policy "
+                    "(high-demand preview models are frequently restricted). "
+                    "→ Switch to gemini-3.5-flash-lite for a stable, fast response."
+                )
+            else:
+                clean_msg = f"Access denied by Gemini API ({err_msg[:120]})."
         elif status_code == 429:
             clean_msg = (
                 "Rate limit / quota exceeded (or selected Paid model requires Cloud billing). "
                 "Wait a moment or select a Free API Tier model like gemini-3.5-flash-lite."
             )
         elif status_code == 503:
-            clean_msg = "Google Gemini is temporarily experiencing high traffic. Please retry in a few seconds."
+            clean_msg = (
+                f"⚡ '{model_label}' is experiencing very high demand right now (HTTP 503). "
+                "→ Switch to gemini-3.5-flash-lite for a stable, fast response."
+            )
         return clean_msg
 
     def _gemini_candidate_models(self, primary_model: str) -> List[str]:
@@ -721,7 +748,7 @@ class UniversalLLMClient:
                         if res.status_code == 404 and idx + 1 < len(candidate_models):
                             logger.info(f"Gemini streaming model '{active_model}' not found, retrying with {candidate_models[idx + 1]}...")
                             continue
-                        clean_msg = self._format_gemini_http_error(res.status_code, err_text)
+                        clean_msg = self._format_gemini_http_error(res.status_code, err_text, active_model)
                         logger.error(f"Google Gemini streaming API error ({res.status_code}): {clean_msg}")
                         raise RuntimeError(f"Google Gemini provider execution failed ({res.status_code}): {clean_msg}")
 
@@ -786,7 +813,7 @@ class UniversalLLMClient:
                         continue
                     break
 
-                clean_msg = self._format_gemini_http_error(res.status_code, res.text)
+                clean_msg = self._format_gemini_http_error(res.status_code, res.text, active_model)
                 logger.error(f"Google Gemini native API error ({res.status_code}): {clean_msg}")
                 raise RuntimeError(f"Google Gemini provider execution failed ({res.status_code}): {clean_msg}")
         except Exception as e:
@@ -794,7 +821,15 @@ class UniversalLLMClient:
                 raise
             err_msg = str(e)
             logger.error(f"Google Gemini call failed: {err_msg}")
-            clean_msg = "Request timed out" if "timed out" in err_msg.lower() else err_msg[:120]
+            if "timed out" in err_msg.lower() or "timeout" in err_msg.lower():
+                # cfg.model is the originally requested model (may differ from active_model in fallback chain)
+                requested = getattr(cfg, "model", "the selected model")
+                clean_msg = (
+                    f"⚡ '{requested}' timed out — it is likely under very high demand. "
+                    "→ Switch to gemini-3.5-flash-lite for a stable, fast response."
+                )
+            else:
+                clean_msg = err_msg[:200]
             raise RuntimeError(f"Google Gemini provider execution failed: {clean_msg}")
 
     def _generate_mock_response(

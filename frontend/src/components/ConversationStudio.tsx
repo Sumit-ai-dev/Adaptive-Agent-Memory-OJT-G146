@@ -77,6 +77,7 @@ interface ConversationMessage {
   content: string
   timestamp: string
   execution?: TaskExecution
+  isError?: boolean
 }
 
 interface RunningExecutionState {
@@ -408,11 +409,26 @@ export default function ConversationStudio({ isDemo = false, onExecutionComplete
       onExecutionComplete?.(exec)
       loadSessions()
     } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err)
+      // Parse the backend error into a user-friendly message
+      const isProviderError =
+        rawMsg.includes('provider') ||
+        rawMsg.includes('timed out') ||
+        rawMsg.includes('policy') ||
+        rawMsg.includes('high demand') ||
+        rawMsg.includes('503') ||
+        rawMsg.includes('403')
+      const displayContent = isProviderError
+        ? rawMsg
+            .replace(/^Execution encountered a model provider error:\s*/i, '')
+            .replace(/^Error executing task:\s*/i, '')
+        : `Error executing task: ${rawMsg}`
       const errorMsg: ConversationMessage = {
         id: `asst_err_${Date.now()}`,
         role: 'assistant',
-        content: `Error executing task: ${err instanceof Error ? err.message : String(err)}`,
+        content: displayContent,
         timestamp: new Date().toISOString(),
+        isError: true,
       }
       setMessages((prev) => [...prev, errorMsg])
     } finally {
@@ -731,7 +747,28 @@ export default function ConversationStudio({ isDemo = false, onExecutionComplete
                     ) : (
                       /* Assistant Message (Antigravity Style: Seamless Canvas) */
                       <div className="w-full text-xs sm:text-[13px] leading-relaxed text-[#EDECE8] space-y-2">
-                        {/* Antigravity Minimalist Thinking Block */}
+                        {/* Provider Error Banner */}
+                        {msg.isError ? (
+                          <div className="rounded-lg border border-[#4A2E1A] bg-[#1E140C] px-4 py-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-[#E6803C] shrink-0" />
+                              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#E6803C] font-mono">
+                                Model Provider Error
+                              </span>
+                            </div>
+                            <p className="text-[12px] text-[#D4C4B0] leading-relaxed font-mono whitespace-pre-wrap">
+                              {msg.content}
+                            </p>
+                            {(msg.content.includes('→') || msg.content.includes('Switch to')) && (
+                              <div className="pt-1 flex items-center gap-2 text-[11px] font-mono text-[#9E9D96]">
+                                <span className="text-[#4EAA79]">Tip:</span>
+                                <span>Use the model selector above to switch providers or models.</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {/* Antigravity Minimalist Thinking Block */}
                         {exec && (
                           <div className="py-0.5 select-none">
                             <button
@@ -805,13 +842,13 @@ export default function ConversationStudio({ isDemo = false, onExecutionComplete
                         )}
 
                         {/* Formatted Markdown Output directly on canvas */}
-                        <div className="pt-0.5">
-                          <MarkdownRenderer content={msg.content} />
-                        </div>
+                          <div className="pt-0.5">
+                            <MarkdownRenderer content={msg.content} />
+                          </div>
 
-                        {/* Interactive Trace Verification Action Bar */}
-                        {exec && (
-                          <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#1C1C1A]/80 text-[11px] font-mono select-none">
+                          {/* Interactive Trace Verification Action Bar */}
+                          {exec && (
+                            <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#1C1C1A]/80 text-[11px] font-mono select-none">
                             <div className="flex items-center gap-2 text-[#666660]">
                               <span>{(exec.latencyMs / 1000).toFixed(1)}s</span>
                               <span>•</span>
@@ -846,7 +883,9 @@ export default function ConversationStudio({ isDemo = false, onExecutionComplete
                               )}
                               <ChevronRight size={11} className="text-[#555550] group-hover:text-[#B0AFA8] group-hover:translate-x-0.5 transition-transform" />
                             </button>
-                          </div>
+                            </div>
+                          )}
+                        </>
                         )}
                       </div>
                     )}
