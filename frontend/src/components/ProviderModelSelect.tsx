@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Check, ChevronDown } from 'lucide-react'
 import { PROVIDER_MODEL_OPTIONS, ProviderModelOption } from '../services/api'
 
@@ -18,35 +19,76 @@ export default function ProviderModelSelect({
   compact = false,
 }: ProviderModelSelectProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const containerRef = useRef<HTMLDivElement>(null)
+  const [dropdownStyle, setDropdownStyle] = useState<React.CSSProperties>({})
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   const models: ProviderModelOption[] = PROVIDER_MODEL_OPTIONS[provider] || []
   const activeOption = models.find((m) => m.id === value) || models[0]
   const freeModels = models.filter((m) => m.tier === 'free')
   const paidModels = models.filter((m) => m.tier === 'paid')
 
+  // Recalculate dropdown position relative to trigger button
+  const updateDropdownPos = () => {
+    if (!triggerRef.current) return
+    const rect = triggerRef.current.getBoundingClientRect()
+    const dropdownWidth = 288 // w-72
+
+    let left = align === 'right' ? rect.right - dropdownWidth : rect.left
+    // Clamp to viewport
+    if (left + dropdownWidth > window.innerWidth - 8) {
+      left = window.innerWidth - dropdownWidth - 8
+    }
+    if (left < 8) left = 8
+
+    setDropdownStyle({
+      position: 'fixed',
+      top: rect.bottom + 6,
+      left,
+      width: dropdownWidth,
+      zIndex: 9999,
+    })
+  }
+
   useEffect(() => {
     setIsOpen(false)
   }, [provider])
 
+  const handleOpen = () => {
+    updateDropdownPos()
+    setIsOpen((prev) => !prev)
+  }
+
   useEffect(() => {
+    if (!isOpen) return
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(target) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(target)
+      ) {
         setIsOpen(false)
       }
     }
     function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === 'Escape') {
-        setIsOpen(false)
-      }
+      if (event.key === 'Escape') setIsOpen(false)
+    }
+    function handleScroll() {
+      updateDropdownPos()
     }
     document.addEventListener('mousedown', handleClickOutside)
     document.addEventListener('keydown', handleKeyDown)
+    window.addEventListener('scroll', handleScroll, true)
+    window.addEventListener('resize', updateDropdownPos)
     return () => {
       document.removeEventListener('mousedown', handleClickOutside)
       document.removeEventListener('keydown', handleKeyDown)
+      window.removeEventListener('scroll', handleScroll, true)
+      window.removeEventListener('resize', updateDropdownPos)
     }
-  }, [])
+  }, [isOpen])
 
   if (models.length === 0 || !activeOption) return null
 
@@ -92,11 +134,44 @@ export default function ProviderModelSelect({
     )
   }
 
+  const dropdown = (
+    <div
+      ref={dropdownRef}
+      role="listbox"
+      aria-label="Available Models"
+      style={dropdownStyle}
+      className={`max-h-80 overflow-y-auto rounded-lg border border-[#2E2E2A] bg-[#161614] py-1.5 shadow-2xl font-mono transition-all duration-150 ease-out ${
+        align === 'right' ? 'origin-top-right' : 'origin-top-left'
+      } ${
+        isOpen
+          ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
+          : 'opacity-0 -translate-y-1 scale-95 pointer-events-none'
+      }`}
+    >
+      {freeModels.length > 0 && paidModels.length > 0 ? (
+        <>
+          <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-[#4EAA79]/90">
+            Free API Tier Models
+          </div>
+          {freeModels.map(renderOption)}
+          <div className="my-1 border-t border-[#242422]" />
+          <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-[#E6A23C]/90">
+            Paid Tier (Billing Required)
+          </div>
+          {paidModels.map(renderOption)}
+        </>
+      ) : (
+        models.map(renderOption)
+      )}
+    </div>
+  )
+
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative">
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
+        onClick={handleOpen}
         aria-label="Select Provider Model"
         aria-haspopup="listbox"
         aria-expanded={isOpen}
@@ -116,33 +191,7 @@ export default function ProviderModelSelect({
         />
       </button>
 
-      <div
-        role="listbox"
-        aria-label="Available Models"
-        className={`absolute top-full mt-1.5 w-72 max-h-80 overflow-y-auto rounded-lg border border-[#2E2E2A] bg-[#161614] py-1.5 z-[100] shadow-2xl font-mono transition-all duration-150 ease-out ${
-          align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'
-        } ${
-          isOpen
-            ? 'opacity-100 translate-y-0 scale-100 pointer-events-auto'
-            : 'opacity-0 -translate-y-1 scale-95 pointer-events-none'
-        }`}
-      >
-        {freeModels.length > 0 && paidModels.length > 0 ? (
-          <>
-            <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-[#4EAA79]/90">
-              Free API Tier Models
-            </div>
-            {freeModels.map(renderOption)}
-            <div className="my-1 border-t border-[#242422]" />
-            <div className="px-3 py-1 text-[9px] font-bold uppercase tracking-wider text-[#E6A23C]/90">
-              Paid Tier (Billing Required)
-            </div>
-            {paidModels.map(renderOption)}
-          </>
-        ) : (
-          models.map(renderOption)
-        )}
-      </div>
+      {createPortal(dropdown, document.body)}
     </div>
   )
 }
