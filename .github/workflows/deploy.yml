@@ -33,9 +33,13 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Read Supabase keys from GitHub Secrets or fallback to local frontend/.env on the host
+            # Read Supabase keys from GitHub Secrets or fallback to /opt/aema/.env on the host
             SUPABASE_URL="${{ secrets.VITE_SUPABASE_URL }}"
             SUPABASE_KEY="${{ secrets.VITE_SUPABASE_ANON_KEY }}"
+            if [ -f /opt/aema/.env ]; then
+              [ -z "$SUPABASE_URL" ] && SUPABASE_URL=$(grep "^VITE_SUPABASE_URL=" /opt/aema/.env | cut -d '=' -f2-)
+              [ -z "$SUPABASE_KEY" ] && SUPABASE_KEY=$(grep "^VITE_SUPABASE_ANON_KEY=" /opt/aema/.env | cut -d '=' -f2-)
+            fi
             if [ -f /opt/aema/frontend/.env ]; then
               [ -z "$SUPABASE_URL" ] && SUPABASE_URL=$(grep "^VITE_SUPABASE_URL=" /opt/aema/frontend/.env | cut -d '=' -f2-)
               [ -z "$SUPABASE_KEY" ] && SUPABASE_KEY=$(grep "^VITE_SUPABASE_ANON_KEY=" /opt/aema/frontend/.env | cut -d '=' -f2-)
