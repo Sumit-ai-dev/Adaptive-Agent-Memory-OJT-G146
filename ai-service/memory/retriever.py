@@ -111,6 +111,9 @@ class MemoryRetriever:
 
             # Condition 3: Recency-Based Retrieval (similarity + recency decay, no trust filtering)
             elif mode == MemoryMode.RECENCY:
+                if sim < settings.SIMILARITY_THRESHOLD:
+                    gate_reasons[exp.id] = f"similarity below recency cutoff ({sim:.3f} < {settings.SIMILARITY_THRESHOLD})"
+                    continue
                 now_utc = datetime.now(timezone.utc)
                 exp_ts = exp.updated_at if getattr(exp, "updated_at", None) and exp.updated_at.tzinfo else (exp.updated_at.replace(tzinfo=timezone.utc) if getattr(exp, "updated_at", None) else now_utc)
                 age_hours = max(0.0, (now_utc - exp_ts).total_seconds() / 3600.0)
@@ -126,6 +129,9 @@ class MemoryRetriever:
 
             # Condition 4: Trust Scoring without Quarantine (Continuous trust, zero quarantine cutoff)
             elif mode in (MemoryMode.TRUST_NO_QUARANTINE, MemoryMode.SYMMETRIC):
+                if sim < settings.SIMILARITY_THRESHOLD:
+                    gate_reasons[exp.id] = f"similarity below symmetric cutoff ({sim:.3f} < {settings.SIMILARITY_THRESHOLD})"
+                    continue
                 composite = (settings.WEIGHT_SIMILARITY * sim) + (settings.WEIGHT_TRUST * trust)
                 results.append(
                     RetrievedMemory(
