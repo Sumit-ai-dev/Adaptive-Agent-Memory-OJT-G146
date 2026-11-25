@@ -1195,7 +1195,29 @@ export default function DocumentationPage() {
     }
   }, [location.hash])
 
-  const currentDoc = DOCS_DATA[activeDocId] || DOCS_DATA.introduction
+  // Full-content search across documentation
+  const q = searchQuery.toLowerCase().trim()
+  const allDocItems = Object.values(DOCS_DATA)
+  const filteredDocItems = allDocItems.filter((item) => {
+    if (!q) return true
+    if (item.title.toLowerCase().includes(q) || item.summary.toLowerCase().includes(q)) return true
+    return item.content.subsections.some(
+      (sub) =>
+        sub.heading.toLowerCase().includes(q) ||
+        sub.text.toLowerCase().includes(q) ||
+        sub.callout?.title?.toLowerCase().includes(q) ||
+        sub.callout?.text?.toLowerCase().includes(q) ||
+        sub.codeSnippet?.code?.toLowerCase().includes(q) ||
+        sub.table?.headers.some((h) => h.toLowerCase().includes(q)) ||
+        sub.table?.rows.some((r) => r.some((c) => c.toLowerCase().includes(q)))
+    )
+  })
+
+  // If query active and current doc doesn't match, auto-select first matching doc
+  const currentDoc =
+    (q && filteredDocItems.length > 0 && !filteredDocItems.some((d) => d.id === activeDocId)
+      ? filteredDocItems[0]
+      : DOCS_DATA[activeDocId]) || DOCS_DATA.introduction
 
   useEffect(() => {
     if (currentDoc.headings.length > 0) {
@@ -1263,14 +1285,6 @@ export default function DocumentationPage() {
     setTimeout(() => setCopiedSnippet(null), 2000)
   }
 
-  // Filtered sidebar items
-  const allDocItems = Object.values(DOCS_DATA)
-  const filteredDocItems = allDocItems.filter(
-    (item) =>
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.summary.toLowerCase().includes(searchQuery.toLowerCase())
-  )
-
   const groups: DocSection['group'][] = [
     'Get Started',
     'Core Concepts',
@@ -1282,7 +1296,7 @@ export default function DocumentationPage() {
 
   return (
     <div
-      className={`min-h-screen flex flex-col font-sans transition-colors ${
+      className={`min-h-screen flex flex-col font-sans ${
         isLight
           ? 'bg-[#FAFAF7] text-[#141413] selection:bg-[#059669]/20 selection:text-[#059669]'
           : 'bg-[#141412] text-[#EDECE8] selection:bg-[#4EAA79]/20 selection:text-[#4EAA79]'
@@ -1374,12 +1388,23 @@ export default function DocumentationPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search docs (e.g. theorem, mcp)..."
-                className={`w-full pl-8 pr-3 py-1.5 rounded-md text-xs font-mono transition-colors focus:outline-none ${
+                className={`w-full pl-8 pr-7 py-1.5 rounded-md text-xs font-mono transition-colors focus:outline-none ${
                   isLight
                     ? 'bg-[#F0EFEA] border border-[#E5E3DC] text-[#141413] placeholder-[#8A8985] focus:border-[#059669]'
                     : 'bg-[#181816] border border-[#262624] text-[#EDECE8] placeholder-[#7E7D77] focus:border-[#4EAA79]'
                 }`}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-2 text-[#7E7D77] hover:text-[#EDECE8] cursor-pointer"
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
             {/* Auth Profile */}
@@ -1446,18 +1471,29 @@ export default function DocumentationPage() {
           style={{ maxHeight: 'calc(100vh - 56px)' }}
         >
           {/* Mobile search bar if on small screen */}
-          <div className="sm:hidden mb-4">
+          <div className="sm:hidden mb-4 relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search docs..."
-              className={`w-full px-3 py-1.5 rounded text-xs font-mono border ${
+              className={`w-full pl-3 pr-7 py-1.5 rounded text-xs font-mono border ${
                 isLight
                   ? 'bg-white border-[#EAE8E3] text-[#141413] placeholder-[#8A8985]'
                   : 'bg-[#181816] border-[#262624] text-[#EDECE8] placeholder-[#7E7D77]'
               }`}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2 text-[#7E7D77] hover:text-[#EDECE8] cursor-pointer"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
 
           <div className="space-y-6">
@@ -1559,12 +1595,61 @@ export default function DocumentationPage() {
         {/* Column 2: Center Main Content Viewport */}
         <main
           ref={mainRef}
-          className={`flex-1 min-w-0 p-6 sm:p-10 lg:p-12 overflow-y-auto transition-colors ${
+          className={`flex-1 min-w-0 p-6 sm:p-10 lg:p-12 overflow-y-auto ${
             isLight ? 'bg-[#FAFAF7]' : 'bg-[#141412]'
           }`}
           style={{ maxHeight: 'calc(100vh - 56px)' }}
         >
           <div className="max-w-3xl space-y-12">
+            {/* Search Match Banner if query active */}
+            {q && (
+              <div
+                className={`p-3 rounded-lg border text-xs font-mono flex items-center justify-between ${
+                  isLight
+                    ? 'bg-[#EFECE6] border-[#DCD9D0] text-[#141413]'
+                    : 'bg-[#1A1A17] border-[#2A2A26] text-[#EDECE8]'
+                }`}
+              >
+                <span>
+                  Showing <strong className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>{filteredDocItems.length}</strong> of{' '}
+                  {allDocItems.length} documentation topics matching &ldquo;{searchQuery}&rdquo;
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className={`text-[11px] underline underline-offset-2 transition-colors cursor-pointer ${
+                    isLight ? 'text-[#059669] hover:text-[#047857]' : 'text-[#4EAA79] hover:text-[#5EBA89]'
+                  }`}
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+
+            {/* Empty Search State */}
+            {q && filteredDocItems.length === 0 ? (
+              <div className="py-16 text-center space-y-3 font-mono">
+                <Search size={24} className="mx-auto text-[#7E7D77]" />
+                <div className={`text-base font-semibold ${isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}`}>
+                  No documentation matches &ldquo;{searchQuery}&rdquo;
+                </div>
+                <p className={`text-xs ${isLight ? 'text-[#6B6A65]' : 'text-[#7E7D77]'}`}>
+                  Try searching for &ldquo;theorem&rdquo;, &ldquo;mcp&rdquo;, &ldquo;quarantine&rdquo;, &ldquo;docker&rdquo;, or &ldquo;python sdk&rdquo;.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors cursor-pointer ${
+                    isLight
+                      ? 'border-[#EAE8E3] bg-[#FFFFFF] text-[#141413] hover:bg-[#F5F4EF]'
+                      : 'border-[#2E2E2A] bg-[#1E1E1B] text-[#EDECE8] hover:bg-[#252522]'
+                  }`}
+                >
+                  Clear search
+                </button>
+              </div>
+            ) : (
+            <>
             {/* Header Block */}
             <div
               className={`space-y-3 pb-6 border-b ${
@@ -1824,6 +1909,8 @@ export default function DocumentationPage() {
                 Back to top &uarr;
               </button>
             </div>
+            </>
+            )}
           </div>
         </main>
 

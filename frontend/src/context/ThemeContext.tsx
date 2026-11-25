@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 
 type Theme = 'light' | 'dark'
 
@@ -34,11 +35,49 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   }, [theme])
 
   const toggleTheme = () => {
-    setThemeState((prev) => (prev === 'light' ? 'dark' : 'light'))
+    const nextTheme = theme === 'light' ? 'dark' : 'light'
+    const root = document.documentElement
+    if (nextTheme === 'dark') {
+      root.classList.add('dark')
+      root.classList.remove('light')
+    } else {
+      root.classList.add('light')
+      root.classList.remove('dark')
+    }
+    localStorage.setItem('aema_theme', nextTheme)
+
+    // If the browser supports View Transitions API, execute a synchronized single-shot crossfade
+    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
+      ;(document as any).startViewTransition(() => {
+        flushSync(() => {
+          setThemeState(nextTheme)
+        })
+      })
+    } else {
+      setThemeState(nextTheme)
+    }
   }
 
   const setTheme = (t: Theme) => {
-    setThemeState(t)
+    const root = document.documentElement
+    if (t === 'dark') {
+      root.classList.add('dark')
+      root.classList.remove('light')
+    } else {
+      root.classList.add('light')
+      root.classList.remove('dark')
+    }
+    localStorage.setItem('aema_theme', t)
+
+    if (typeof document !== 'undefined' && 'startViewTransition' in document) {
+      ;(document as any).startViewTransition(() => {
+        flushSync(() => {
+          setThemeState(t)
+        })
+      })
+    } else {
+      setThemeState(t)
+    }
   }
 
   return (

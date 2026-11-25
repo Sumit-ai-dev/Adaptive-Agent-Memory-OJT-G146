@@ -78,6 +78,17 @@ const BENCHMARK_SECTIONS: BenchmarkSection[] = [
   },
 ]
 
+const BENCHMARK_KEYWORDS: Record<string, string> = {
+  'executive-summary': 'executive summary evaluation protocol primary vulnerability negative transfer stateless baseline naive vector rag aema engine protocol-frozen n=100 trials deterministic test harness',
+  'comparative-matrix': 'comparative accuracy matrix suites benchmark table python api evolution deprecation quarantine memoryagentbench epistemic conflict long-range token economy theorem 1 deterministic bound recovery trial mcnemar p-value kaggle dataset hugging face space',
+  'confirmatory-traps': 'confirmatory trap suite negative transfer resilience exponential decay penalty beta=0.70 theta <= 0.35 threshold k* <= 3 consecutive failures memory isolation',
+  'hotpotqa-contradiction': 'hotpotqa multi-hop contradiction epistemic conflict resolution memoryagentbench reasoning outdated premise truth update multi-hop resilience',
+  'toolbench-deprecation': 'toolbench api deprecation recovery parameter deprecation auth token rotation error recovery strategy pruning dynamic updates',
+  'alfworld-planning': 'python api evolution quarantine dynamic signature shifts breaking change isolation theorem 1 probation backward compatibility',
+  'latency-efficiency': 'latency efficiency token overhead token savings cache hit rate computational efficiency amortized distillation fast retrieval ms overhead',
+  'statistical-rigor': 'statistical rigor significance mcnemar test contingency table p < 0.001 reject null hypothesis statistical power protocol-frozen empirical validation confirmatory proof'
+}
+
 export default function BenchmarksPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -157,15 +168,22 @@ export default function BenchmarksPage() {
     'Performance & Rigor',
   ]
 
-  const filteredSections = BENCHMARK_SECTIONS.filter(
-    (sec) =>
-      sec.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sec.label.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const q = searchQuery.toLowerCase().trim()
+  const filteredSections = BENCHMARK_SECTIONS.filter((sec) => {
+    if (!q) return true
+    const kw = BENCHMARK_KEYWORDS[sec.id] || ''
+    return (
+      sec.title.toLowerCase().includes(q) ||
+      sec.label.toLowerCase().includes(q) ||
+      kw.includes(q)
+    )
+  })
+
+  const isSectionVisible = (id: string) => !q || filteredSections.some((s) => s.id === id)
 
   return (
     <div
-      className={`min-h-screen flex flex-col font-sans transition-colors ${
+      className={`min-h-screen flex flex-col font-sans ${
         isLight
           ? 'bg-[#FAFAF7] text-[#141413] selection:bg-[#059669]/20 selection:text-[#059669]'
           : 'bg-[#141412] text-[#EDECE8] selection:bg-[#4EAA79]/20 selection:text-[#4EAA79]'
@@ -173,7 +191,7 @@ export default function BenchmarksPage() {
     >
       {/* Top Global Navigation Header */}
       <header
-        className={`sticky top-0 z-40 w-full border-b backdrop-blur-md transition-colors ${
+        className={`sticky top-0 z-40 w-full border-b backdrop-blur-md ${
           isLight
             ? 'border-[#EAE8E3] bg-[#FAFAF7]/95 text-[#141413]'
             : 'border-[#242422] bg-[#141412]/95 text-[#EDECE8]'
@@ -258,12 +276,23 @@ export default function BenchmarksPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search benchmarks (e.g. mcnemar)..."
-                className={`w-full pl-8 pr-3 py-1.5 rounded-md text-xs font-mono transition-colors focus:outline-none ${
+                className={`w-full pl-8 pr-7 py-1.5 rounded-md text-xs font-mono transition-colors focus:outline-none ${
                   isLight
                     ? 'bg-[#F0EFEA] border border-[#E5E3DC] text-[#141413] placeholder-[#8A8985] focus:border-[#059669]'
                     : 'bg-[#181816] border border-[#262624] text-[#EDECE8] placeholder-[#7E7D77] focus:border-[#4EAA79]'
                 }`}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-2 text-[#7E7D77] hover:text-[#EDECE8] cursor-pointer"
+                  title="Clear search"
+                  aria-label="Clear search"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
             {user && (
@@ -329,18 +358,29 @@ export default function BenchmarksPage() {
           style={{ maxHeight: 'calc(100vh - 56px)' }}
         >
           {/* Mobile search input */}
-          <div className="sm:hidden mb-4">
+          <div className="sm:hidden mb-4 relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search benchmarks..."
-              className={`w-full px-3 py-1.5 rounded text-xs font-mono border ${
+              className={`w-full pl-3 pr-7 py-1.5 rounded text-xs font-mono border ${
                 isLight
                   ? 'bg-white border-[#EAE8E3] text-[#141413] placeholder-[#8A8985]'
                   : 'bg-[#181816] border-[#262624] text-[#EDECE8] placeholder-[#7E7D77]'
               }`}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2 top-2 text-[#7E7D77] hover:text-[#EDECE8] cursor-pointer"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <X size={13} />
+              </button>
+            )}
           </div>
 
           <div className="space-y-6">
@@ -478,7 +518,57 @@ export default function BenchmarksPage() {
               </p>
             </div>
 
+            {/* Search Match Banner if query active */}
+            {q && (
+              <div
+                className={`p-3 rounded-lg border text-xs font-mono flex items-center justify-between ${
+                  isLight
+                    ? 'bg-[#EFECE6] border-[#DCD9D0] text-[#141413]'
+                    : 'bg-[#1A1A17] border-[#2A2A26] text-[#EDECE8]'
+                }`}
+              >
+                <span>
+                  Showing <strong className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>{filteredSections.length}</strong> of{' '}
+                  {BENCHMARK_SECTIONS.length} benchmark suites matching &ldquo;{searchQuery}&rdquo;
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className={`text-[11px] underline underline-offset-2 transition-colors cursor-pointer ${
+                    isLight ? 'text-[#059669] hover:text-[#047857]' : 'text-[#4EAA79] hover:text-[#5EBA89]'
+                  }`}
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+
+            {/* Empty Search State */}
+            {q && filteredSections.length === 0 && (
+              <div className="py-16 text-center space-y-3 font-mono">
+                <Search size={24} className="mx-auto text-[#7E7D77]" />
+                <div className={`text-base font-semibold ${isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}`}>
+                  No benchmark suites match &ldquo;{searchQuery}&rdquo;
+                </div>
+                <p className={`text-xs ${isLight ? 'text-[#6B6A65]' : 'text-[#7E7D77]'}`}>
+                  Try searching for &ldquo;mcnemar&rdquo;, &ldquo;quarantine&rdquo;, &ldquo;python&rdquo;, &ldquo;traps&rdquo;, or &ldquo;latency&rdquo;.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className={`px-3 py-1.5 rounded text-xs font-mono border transition-colors cursor-pointer ${
+                    isLight
+                      ? 'border-[#EAE8E3] bg-[#FFFFFF] text-[#141413] hover:bg-[#F5F4EF]'
+                      : 'border-[#2E2E2A] bg-[#1E1E1B] text-[#EDECE8] hover:bg-[#252522]'
+                  }`}
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+
             {/* Section 1: Executive Summary & Evaluation Protocol */}
+            {isSectionVisible('executive-summary') && (
             <section id="executive-summary" className="space-y-4 scroll-mt-20">
               <h2
                 className={`text-xl font-serif tracking-tight ${
@@ -525,8 +615,10 @@ export default function BenchmarksPage() {
                 </li>
               </ul>
             </section>
+            )}
 
             {/* Section 2: Comparative Matrix */}
+            {isSectionVisible('comparative-matrix') && (
             <section id="comparative-matrix" className="space-y-4 scroll-mt-20">
               <div className="flex items-center justify-between">
                 <h2
@@ -557,8 +649,10 @@ export default function BenchmarksPage() {
               {/* Live Interactive Benchmark Matrix Component */}
               <BenchmarkMatrix />
             </section>
+            )}
 
             {/* Section 3: Confirmatory Trap Suite */}
+            {isSectionVisible('confirmatory-traps') && (
             <section id="confirmatory-traps" className="space-y-4 scroll-mt-20">
               <h2
                 className={`text-xl font-serif tracking-tight ${
@@ -624,8 +718,10 @@ export default function BenchmarksPage() {
                 Result: While Naive Vector RAG drops to 0.0% accuracy due to memory poisoning, AEMA isolates the trap within 3 consecutive trials under Theorem 1 and recovers to 100% operational success.
               </p>
             </section>
+            )}
 
             {/* Section 4: HotpotQA Multi-Hop Contradiction */}
+            {isSectionVisible('hotpotqa-contradiction') && (
             <section id="hotpotqa-contradiction" className="space-y-4 scroll-mt-20">
               <h2
                 className={`text-xl font-serif tracking-tight ${
@@ -706,8 +802,10 @@ export default function BenchmarksPage() {
                 </table>
               </div>
             </section>
+            )}
 
             {/* Section 5: ToolBench Dynamic API Deprecation */}
+            {isSectionVisible('toolbench-deprecation') && (
             <section id="toolbench-deprecation" className="space-y-4 scroll-mt-20">
               <h2
                 className={`text-xl font-serif tracking-tight ${
@@ -783,8 +881,10 @@ export default function BenchmarksPage() {
                 </div>
               </div>
             </section>
+            )}
 
             {/* Section 6: Python API Evolution & Deprecation Quarantine */}
+            {isSectionVisible('alfworld-planning') && (
             <section id="alfworld-planning" className="space-y-4 scroll-mt-20">
               <h2
                 className={`text-xl font-serif tracking-tight ${
@@ -835,8 +935,10 @@ export default function BenchmarksPage() {
                 </div>
               </div>
             </section>
+            )}
 
             {/* Section 7: Latency, Token Overhead & Efficiency */}
+            {isSectionVisible('latency-efficiency') && (
             <section id="latency-efficiency" className="space-y-4 scroll-mt-20">
               <h2
                 className={`text-xl font-serif tracking-tight ${
@@ -936,8 +1038,10 @@ export default function BenchmarksPage() {
                 </div>
               </div>
             </section>
+            )}
 
             {/* Section 8: Statistical Significance (McNemar Test) */}
+            {isSectionVisible('statistical-rigor') && (
             <section id="statistical-rigor" className="space-y-4 scroll-mt-20">
               <h2
                 className={`text-xl font-serif tracking-tight ${
@@ -1001,6 +1105,7 @@ export default function BenchmarksPage() {
                 </div>
               </div>
             </section>
+            )}
 
             {/* Footer Navigation */}
             <div

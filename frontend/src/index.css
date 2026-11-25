@@ -56,6 +56,31 @@
   --studio-muted: #7E7D77;
 }
 
+/* ── Smooth Single-Shot View Transitions API for Instant Theme Switching ── */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 200ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::view-transition-old(root) {
+  animation-name: aema-fade-out;
+}
+
+::view-transition-new(root) {
+  animation-name: aema-fade-in;
+}
+
+@keyframes aema-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes aema-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 * {
   margin: 0;
   padding: 0;

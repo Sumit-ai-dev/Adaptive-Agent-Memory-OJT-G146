@@ -65,6 +65,21 @@ const RESEARCH_SECTIONS: ResearchSection[] = [
   },
 ]
 
+const RESEARCH_KEYWORDS: Record<string, string> = {
+  'problem-formulation':
+    'problem formulation naive rag hazard cognitive loop retrieval evaluation reflection procedural memory negative transfer cosine similarity failure trap poisoned strategy non-stationary environments api deprecation semantic proximity unrecoverable loop',
+  'asymmetric-ema':
+    'asymmetric exponential moving average a-ema formulation trust score alpha beta penalty reward calibration mathematical derivation equation theta update step r_t canonical parameters alpha 0.85 beta 0.70 theta 0.35 scalar dual-parameter',
+  'theorem-1-proof':
+    'theorem 1 proof deterministic quarantine bound inductive proof upper bound k* <= 3 consecutive failures mathematical proof lemma strict inequality convergence natural logarithm derivation q.e.d. s_0 ceiling',
+  'interactive-simulator':
+    'interactive theorem 1 simulator sandbox parameter tuning test trap simulation real-time visualizer decay curve slider calibration live sandbox step trial test',
+  'computational-complexity':
+    'computational complexity bounds time space complexity big-o o(1) trust update o(k log n) vector retrieval token overhead amortized performance scalar multiplication 1.2 microseconds memory footprint 240 bytes disk ieee 754 float',
+  'bibtex-citation':
+    'academic citation bibtex artifacts paper arxiv 2026 reliability-aware experiential memory sumit das sakshi kasat repository reference citation.bib copy bibtex',
+}
+
 export default function ResearchPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -158,23 +173,30 @@ export default function ResearchPage() {
     'Simulation & Rigor',
   ]
 
-  const filteredSections = RESEARCH_SECTIONS.filter(
-    (sec) =>
-      sec.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      sec.label.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const q = searchQuery.toLowerCase().trim()
+  const filteredSections = RESEARCH_SECTIONS.filter((sec) => {
+    if (!q) return true
+    const kw = RESEARCH_KEYWORDS[sec.id] || ''
+    return (
+      sec.title.toLowerCase().includes(q) ||
+      sec.label.toLowerCase().includes(q) ||
+      kw.includes(q)
+    )
+  })
+
+  const isSectionVisible = (id: string) => !q || filteredSections.some((s) => s.id === id)
 
   const isLight = theme === 'light'
 
   return (
     <div
-      className={`min-h-screen flex flex-col font-sans transition-colors duration-150 ${
+      className={`min-h-screen flex flex-col font-sans ${
         isLight ? 'bg-[#FAFAF7] text-[#141413]' : 'bg-[#141412] text-[#EDECE8]'
       }`}
     >
       {/* ─── Top Global Navigation Header ─── */}
       <header
-        className={`sticky top-0 z-40 w-full border-b backdrop-blur-md transition-colors ${
+        className={`sticky top-0 z-40 w-full border-b backdrop-blur-md ${
           isLight ? 'border-[#EAE8E3] bg-[#FAFAF7]/95' : 'border-[#242422] bg-[#141412]/95'
         }`}
       >
@@ -257,12 +279,24 @@ export default function ResearchPage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Search research (e.g. proof)..."
-                className={`w-full pl-8 pr-3 py-1.5 rounded-md text-xs font-mono transition-colors focus:outline-none ${
+                className={`w-full pl-8 pr-7 py-1.5 rounded-md text-xs font-mono transition-colors focus:outline-none ${
                   isLight
                     ? 'bg-white border border-[#EAE8E3] text-[#141413] placeholder-[#8C8B85] focus:border-[#059669]'
                     : 'bg-[#181816] border border-[#262624] text-[#EDECE8] placeholder-[#7E7D77] focus:border-[#4EAA79]'
                 }`}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className={`absolute right-2 top-2 p-0.5 rounded transition-colors ${
+                    isLight ? 'text-[#8C8B85] hover:text-[#141413]' : 'text-[#7E7D77] hover:text-[#EDECE8]'
+                  }`}
+                  aria-label="Clear search"
+                >
+                  <X size={12} />
+                </button>
+              )}
             </div>
 
             {/* Theme Toggle Button */}
@@ -326,18 +360,30 @@ export default function ResearchPage() {
           style={{ maxHeight: 'calc(100vh - 56px)' }}
         >
           {/* Mobile search bar if on small screen */}
-          <div className="sm:hidden mb-4">
+          <div className="sm:hidden mb-4 relative">
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search research..."
-              className={`w-full px-3 py-1.5 rounded border text-xs font-mono ${
+              className={`w-full pl-3 pr-7 py-1.5 rounded border text-xs font-mono ${
                 isLight
                   ? 'bg-white border-[#EAE8E3] text-[#141413] placeholder-[#8C8B85]'
                   : 'bg-[#181816] border-[#262624] text-[#EDECE8] placeholder-[#7E7D77]'
               }`}
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className={`absolute right-2 top-2 p-0.5 rounded transition-colors ${
+                  isLight ? 'text-[#8C8B85] hover:text-[#141413]' : 'text-[#7E7D77] hover:text-[#EDECE8]'
+                }`}
+                aria-label="Clear search"
+              >
+                <X size={12} />
+              </button>
+            )}
           </div>
 
           <div className="space-y-6">
@@ -474,267 +520,337 @@ export default function ResearchPage() {
               </p>
             </div>
 
+            {/* Active search filter feedback */}
+            {q && (
+              <div
+                className={`p-3 rounded-lg border text-xs font-mono flex items-center justify-between ${
+                  isLight
+                    ? 'bg-[#EFECE6] border-[#DCD9D0] text-[#141413]'
+                    : 'bg-[#1A1A17] border-[#2A2A26] text-[#EDECE8]'
+                }`}
+              >
+                <span>
+                  Showing <strong className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}>{filteredSections.length}</strong> of{' '}
+                  {RESEARCH_SECTIONS.length} research sections matching &ldquo;{searchQuery}&rdquo;
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className={`text-[11px] underline underline-offset-2 transition-colors ${
+                    isLight ? 'text-[#059669] hover:text-[#047857]' : 'text-[#4EAA79] hover:text-[#5EBA89]'
+                  }`}
+                >
+                  Clear search
+                </button>
+              </div>
+            )}
+
+            {/* Empty search results state */}
+            {q && filteredSections.length === 0 && (
+              <div
+                className={`p-8 rounded-xl border text-center space-y-3 ${
+                  isLight
+                    ? 'border-[#EAE8E3] bg-white text-[#6B6A65]'
+                    : 'border-[#242422] bg-[#161614] text-[#9E9D96]'
+                }`}
+              >
+                <p className="font-mono text-sm">
+                  No research sections match &ldquo;{searchQuery}&rdquo;
+                </p>
+                <p className="text-xs">
+                  Try searching for keywords like <code className="font-mono font-semibold">theorem</code>,{' '}
+                  <code className="font-mono font-semibold">proof</code>, <code className="font-mono font-semibold">a-ema</code>,{' '}
+                  <code className="font-mono font-semibold">simulator</code>, or <code className="font-mono font-semibold">complexity</code>.
+                </p>
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className={`px-3 py-1.5 rounded text-xs font-mono font-semibold transition-colors ${
+                      isLight
+                        ? 'bg-[#141413] text-[#FAFAF7] hover:bg-[#2B2B28]'
+                        : 'bg-[#4EAA79] text-[#141412] hover:bg-[#5EBA89]'
+                    }`}
+                  >
+                    Clear search filter
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Section 1: Problem Formulation */}
-            <section id="problem-formulation" className="space-y-4 scroll-mt-20">
-              <h2
-                className={`text-xl font-serif tracking-tight ${
-                  isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                }`}
-              >
-                1. Problem Formulation: The Naive RAG Hazard
-              </h2>
-              <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                Standard agentic architectures employ naive vector retrieval (RAG) to store past execution traces. When an agent succeeds, it indexes the prompt and solution. However, real-world operational environments are fundamentally non-stationary: APIs deprecate, schemas evolve, third-party libraries introduce breaking changes, and underlying environments shift.
-              </p>
-              <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                Under naive vector RAG, when an environment shifts, previously stored successful memories become toxic traps. The vector similarity between the new task and the deprecated memory remains high (often &gt; 0.90 cosine similarity). Consequently, the naive agent repeatedly retrieves and injects the broken strategy, suffering from catastrophic negative transfer: accuracy drops to 0.0% as the agent enters an unrecoverable failure loop.
-              </p>
-
-              <div
-                className={`p-4 rounded-lg border text-xs leading-relaxed space-y-1 ${
-                  isLight
-                    ? 'border-[#FECACA] bg-[#FEF2F2] text-[#991B1B]'
-                    : 'border-[#3E2020] bg-[#221616] text-[#D9534F]'
-                }`}
-              >
-                <div className="font-mono text-[11px] font-semibold flex items-center gap-1.5">
-                  <Shield size={13} className={isLight ? 'text-[#DC2626]' : 'text-[#D9534F]'} />
-                  <span>The Negative Transfer Trap in Naive Vector Stores</span>
-                </div>
-                <p className={isLight ? 'text-[#7F1D1D]' : 'text-[#EDECE8]'}>
-                  Cosine similarity measures linguistic and semantic proximity, not operational validity. Relying solely on vector embeddings for memory retrieval guarantees persistent failure when execution reality contradicts past experience.
-                </p>
-              </div>
-            </section>
-
-            {/* Section 2: Asymmetric Exponential Moving Average (A-EMA) */}
-            <section id="asymmetric-ema" className="space-y-4 scroll-mt-20">
-              <h2
-                className={`text-xl font-serif tracking-tight ${
-                  isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                }`}
-              >
-                2. Asymmetric Exponential Moving Average (A-EMA) Formulation
-              </h2>
-              <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                AEMA replaces unweighted vector retrieval with an asymmetric dual-parameter trust formulation. Every experiential memory m_i maintains an evolving reliability score S_t(m_i) in [0, 1]. Trust updates follow an asymmetric recurrence:
-              </p>
-
-              <div
-                className={`p-4 rounded-lg border font-mono text-xs space-y-2 ${
-                  isLight
-                    ? 'border-[#EAE8E3] bg-[#F5F4F0] text-[#141413]'
-                    : 'border-[#2E2E2A] bg-[#181816] text-[#EDECE8]'
-                }`}
-              >
-                <div className={`font-semibold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
-                  // Upon task success (r_t = 1):
-                </div>
-                <div className="pl-4">S_{`{t+1}`} = α · S_t + (1 - α) · 1.0</div>
-                <div className={`font-semibold pt-2 ${isLight ? 'text-[#DC2626]' : 'text-[#D9534F]'}`}>
-                  // Upon task failure (r_t = 0):
-                </div>
-                <div className="pl-4">S_{`{t+1}`} = β · S_t</div>
-                <div className={`pt-2 text-[11px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
-                  Canonical Parameter Setting: α = 0.85 (conservative reward rate), β = 0.70 (punitive penalty rate), θ = 0.35 (quarantine threshold).
-                </div>
-              </div>
-
-              <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                Because β &lt; α, trust decays much faster upon failure than it accumulates upon success. This asymmetric property guarantees that a failing strategy is penalized aggressively before it can poison subsequent agent operations.
-              </p>
-            </section>
-
-            {/* Section 3: Theorem 1 Proof */}
-            <section id="theorem-1-proof" className="space-y-4 scroll-mt-20">
-              <h2
-                className={`text-xl font-serif tracking-tight ${
-                  isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                }`}
-              >
-                3. Theorem 1: Deterministic Quarantine Bound
-              </h2>
-              <div
-                className={`p-4 rounded-lg border text-xs leading-relaxed space-y-2 ${
-                  isLight
-                    ? 'border-[#A7F3D0] bg-[#ECFDF5] text-[#065F46]'
-                    : 'border-[#2A3E30] bg-[#18201A] text-[#A3E0BA]'
-                }`}
-              >
-                <div className="font-mono text-[11px] font-semibold flex items-center gap-1.5">
-                  <Shield size={13} className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'} />
-                  <span>Theorem 1 (Deterministic Finite-Failure Quarantine)</span>
-                </div>
-                <p>
-                  Let S_0 in (θ, 1] be the initial trust score of an active memory. Let β in (0, 1) be the failure penalty parameter, and θ in (0, 1) be the quarantine threshold. Under consecutive execution failures, the memory is guaranteed to be quarantined in exactly:
-                </p>
-                <div
-                  className={`p-2.5 rounded font-mono text-center text-sm font-bold border ${
-                    isLight
-                      ? 'bg-white text-[#059669] border-[#A7F3D0]'
-                      : 'bg-[#141412] text-[#4EAA79] border-[#242422]'
-                  }`}
-                >
-                  k^* = ⌈(ln θ - ln S_0) / ln β⌉
-                </div>
-                <p className={`text-[11px] ${isLight ? 'text-[#047857]' : 'text-[#9E9D96]'}`}>
-                  failures, regardless of prior task success history, vector similarity, or context window size.
-                </p>
-              </div>
-
-              <div className="space-y-2">
-                <h3
-                  className={`text-sm font-serif font-semibold ${
-                    isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                  }`}
-                >
-                  Mathematical Derivation
-                </h3>
-                <p className={`text-xs leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                  After k consecutive failures, the trust score is given by S_k = S_0 · β^k. The memory breaches the admissible retrieval boundary when S_k &lt; θ:
-                </p>
-                <ol
-                  className={`list-decimal list-inside text-xs font-mono space-y-1.5 pl-2 ${
-                    isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                  }`}
-                >
-                  <li>S_0 · β^k &lt; θ</li>
-                  <li>β^k &lt; θ / S_0</li>
-                  <li>k · ln(β) &lt; ln(θ) - ln(S_0)</li>
-                  <li>Since 0 &lt; β &lt; 1, ln(β) &lt; 0. Dividing reverses the inequality:</li>
-                  <li className={`font-bold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
-                    k &gt; (ln(θ) - ln(S_0)) / ln(β)
-                  </li>
-                  <li>The minimal integer satisfying this condition is k^* = ⌈(ln θ - ln S_0) / ln β⌉. Q.E.D.</li>
-                </ol>
-              </div>
-
-              <div
-                className={`p-3.5 rounded-lg border text-xs font-mono ${
-                  isLight
-                    ? 'bg-[#F5F4F0] border-[#EAE8E3] text-[#6B6A65]'
-                    : 'bg-[#161614] border-[#242422] text-[#9E9D96]'
-                }`}
-              >
-                <span className={`font-semibold ${isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}`}>
-                  Canonical Evaluation Example:
-                </span>{' '}
-                With S_0 = 0.75, β = 0.70, θ = 0.35:
-                <br />
-                k^* = ⌈(ln(0.35) - ln(0.75)) / ln(0.70)⌉ = ⌈(-1.0498 - (-0.2877)) / -0.3567⌉ = ⌈2.136⌉ = 3.
-                <br />
-                The memory is quarantined deterministically on exactly the 3rd failure.
-              </div>
-            </section>
-
-            {/* Section 4: Interactive Simulator */}
-            <section id="interactive-simulator" className="space-y-4 scroll-mt-20">
-              <div className="flex items-center justify-between">
+            {isSectionVisible('problem-formulation') && (
+              <section id="problem-formulation" className="space-y-4 scroll-mt-20">
                 <h2
                   className={`text-xl font-serif tracking-tight ${
                     isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                   }`}
                 >
-                  4. Interactive Theorem 1 Simulator
+                  1. Problem Formulation: The Naive RAG Hazard
                 </h2>
-                <span
-                  className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
-                    isLight
-                      ? 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]'
-                      : 'bg-[#1E2E24] text-[#4EAA79] border-[#2E4234]'
-                  }`}
-                >
-                  LIVE SANDBOX
-                </span>
-              </div>
-              <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                Test Theorem 1 interactively. Adjust parameters α, β, θ, S_0 and simulate consecutive failure steps to observe the trust trajectory and quarantine trigger point in real time.
-              </p>
-              <TheoremSandbox />
-            </section>
-
-            {/* Section 5: Computational Complexity */}
-            <section id="computational-complexity" className="space-y-4 scroll-mt-20">
-              <h2
-                className={`text-xl font-serif tracking-tight ${
-                  isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                }`}
-              >
-                5. Computational Complexity Analysis
-              </h2>
-              
-              <div className="space-y-2">
-                <h3
-                  className={`text-sm font-serif font-semibold ${
-                    isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                  }`}
-                >
-                  O(1) Scalar Update Complexity
-                </h3>
                 <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                  Unlike parametric model retraining or continuous vector index re-clustering which scale as O(N) or O(N log N), A-EMA trust calibration operates in strictly O(1) time complexity. Updating a memory trust score involves two scalar multiplications and a clamp operation, consuming less than 1.2 microseconds per turn.
+                  Standard agentic architectures employ naive vector retrieval (RAG) to store past execution traces. When an agent succeeds, it indexes the prompt and solution. However, real-world operational environments are fundamentally non-stationary: APIs deprecate, schemas evolve, third-party libraries introduce breaking changes, and underlying environments shift.
                 </p>
-              </div>
-
-              <div className="space-y-2">
-                <h3
-                  className={`text-sm font-serif font-semibold ${
-                    isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                  }`}
-                >
-                  Space and Memory Footprint
-                </h3>
                 <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                  Each distilled procedural memory tuple (c, a, p) consumes approximately 240 bytes of disk storage and 4 bytes for the IEEE 754 floating-point trust score. A production bank of 100,000 verified experiences occupies less than 25MB of RAM.
+                  Under naive vector RAG, when an environment shifts, previously stored successful memories become toxic traps. The vector similarity between the new task and the deprecated memory remains high (often &gt; 0.90 cosine similarity). Consequently, the naive agent repeatedly retrieves and injects the broken strategy, suffering from catastrophic negative transfer: accuracy drops to 0.0% as the agent enters an unrecoverable failure loop.
                 </p>
-              </div>
-            </section>
 
-            {/* Section 6: Academic Citation & Artifacts */}
-            <section id="bibtex-citation" className="space-y-4 scroll-mt-20">
-              <h2
-                className={`text-xl font-serif tracking-tight ${
-                  isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
-                }`}
-              >
-                6. Academic Citation & Artifacts
-              </h2>
-              <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
-                If you cite AEMA in your research or use its algorithmic implementation in your agent framework, please use the following BibTeX citation:
-              </p>
-
-              <div
-                className={`rounded-lg border overflow-hidden ${
-                  isLight ? 'border-[#EAE8E3] bg-[#F5F4F0]' : 'border-[#242422] bg-[#161614]'
-                }`}
-              >
                 <div
-                  className={`flex items-center justify-between px-4 py-2.5 border-b text-xs font-mono ${
+                  className={`p-4 rounded-lg border text-xs leading-relaxed space-y-1 ${
                     isLight
-                      ? 'bg-[#EFECE6] border-[#EAE8E3] text-[#6B6A65]'
-                      : 'bg-[#1A1A17] border-[#242422] text-[#7E7D77]'
+                      ? 'border-[#FECACA] bg-[#FEF2F2] text-[#991B1B]'
+                      : 'border-[#3E2020] bg-[#221616] text-[#D9534F]'
                   }`}
                 >
-                  <span>citation.bib</span>
-                  <button
-                    onClick={copyBibtex}
-                    className={`flex items-center gap-1.5 text-[11px] transition-colors cursor-pointer ${
-                      isLight ? 'text-[#059669] hover:text-[#047857]' : 'text-[#4EAA79] hover:text-[#5EBA89]'
+                  <div className="font-mono text-[11px] font-semibold flex items-center gap-1.5">
+                    <Shield size={13} className={isLight ? 'text-[#DC2626]' : 'text-[#D9534F]'} />
+                    <span>The Negative Transfer Trap in Naive Vector Stores</span>
+                  </div>
+                  <p className={isLight ? 'text-[#7F1D1D]' : 'text-[#EDECE8]'}>
+                    Cosine similarity measures linguistic and semantic proximity, not operational validity. Relying solely on vector embeddings for memory retrieval guarantees persistent failure when execution reality contradicts past experience.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {/* Section 2: Asymmetric Exponential Moving Average (A-EMA) */}
+            {isSectionVisible('asymmetric-ema') && (
+              <section id="asymmetric-ema" className="space-y-4 scroll-mt-20">
+                <h2
+                  className={`text-xl font-serif tracking-tight ${
+                    isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                  }`}
+                >
+                  2. Asymmetric Exponential Moving Average (A-EMA) Formulation
+                </h2>
+                <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
+                  AEMA replaces unweighted vector retrieval with an asymmetric dual-parameter trust formulation. Every experiential memory m_i maintains an evolving reliability score S_t(m_i) in [0, 1]. Trust updates follow an asymmetric recurrence:
+                </p>
+
+                <div
+                  className={`p-4 rounded-lg border font-mono text-xs space-y-2 ${
+                    isLight
+                      ? 'border-[#EAE8E3] bg-[#F5F4F0] text-[#141413]'
+                      : 'border-[#2E2E2A] bg-[#181816] text-[#EDECE8]'
+                  }`}
+                >
+                  <div className={`font-semibold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
+                    // Upon task success (r_t = 1):
+                  </div>
+                  <div className="pl-4">S_{`{t+1}`} = α · S_t + (1 - α) · 1.0</div>
+                  <div className={`font-semibold pt-2 ${isLight ? 'text-[#DC2626]' : 'text-[#D9534F]'}`}>
+                    // Upon task failure (r_t = 0):
+                  </div>
+                  <div className="pl-4">S_{`{t+1}`} = β · S_t</div>
+                  <div className={`pt-2 text-[11px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
+                    Canonical Parameter Setting: α = 0.85 (conservative reward rate), β = 0.70 (punitive penalty rate), θ = 0.35 (quarantine threshold).
+                  </div>
+                </div>
+
+                <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
+                  Because β &lt; α, trust decays much faster upon failure than it accumulates upon success. This asymmetric property guarantees that a failing strategy is penalized aggressively before it can poison subsequent agent operations.
+                </p>
+              </section>
+            )}
+
+            {/* Section 3: Theorem 1 Proof */}
+            {isSectionVisible('theorem-1-proof') && (
+              <section id="theorem-1-proof" className="space-y-4 scroll-mt-20">
+                <h2
+                  className={`text-xl font-serif tracking-tight ${
+                    isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                  }`}
+                >
+                  3. Theorem 1: Deterministic Quarantine Bound
+                </h2>
+                <div
+                  className={`p-4 rounded-lg border text-xs leading-relaxed space-y-2 ${
+                    isLight
+                      ? 'border-[#A7F3D0] bg-[#ECFDF5] text-[#065F46]'
+                      : 'border-[#2A3E30] bg-[#18201A] text-[#A3E0BA]'
+                  }`}
+                >
+                  <div className="font-mono text-[11px] font-semibold flex items-center gap-1.5">
+                    <Shield size={13} className={isLight ? 'text-[#059669]' : 'text-[#4EAA79]'} />
+                    <span>Theorem 1 (Deterministic Finite-Failure Quarantine)</span>
+                  </div>
+                  <p>
+                    Let S_0 in (θ, 1] be the initial trust score of an active memory. Let β in (0, 1) be the failure penalty parameter, and θ in (0, 1) be the quarantine threshold. Under consecutive execution failures, the memory is guaranteed to be quarantined in exactly:
+                  </p>
+                  <div
+                    className={`p-2.5 rounded font-mono text-center text-sm font-bold border ${
+                      isLight
+                        ? 'bg-white text-[#059669] border-[#A7F3D0]'
+                        : 'bg-[#141412] text-[#4EAA79] border-[#242422]'
                     }`}
                   >
-                    {copiedBibtex ? <Check size={12} /> : <Copy size={12} />}
-                    <span>{copiedBibtex ? 'Copied' : 'Copy BibTeX'}</span>
-                  </button>
+                    k^* = ⌈(ln θ - ln S_0) / ln β⌉
+                  </div>
+                  <p className={`text-[11px] ${isLight ? 'text-[#047857]' : 'text-[#9E9D96]'}`}>
+                    failures, regardless of prior task success history, vector similarity, or context window size.
+                  </p>
                 </div>
-                <pre
-                  className={`p-4 text-xs font-mono overflow-x-auto leading-relaxed ${
+
+                <div className="space-y-2">
+                  <h3
+                    className={`text-sm font-serif font-semibold ${
+                      isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                    }`}
+                  >
+                    Mathematical Derivation
+                  </h3>
+                  <p className={`text-xs leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
+                    After k consecutive failures, the trust score is given by S_k = S_0 · β^k. The memory breaches the admissible retrieval boundary when S_k &lt; θ:
+                  </p>
+                  <ol
+                    className={`list-decimal list-inside text-xs font-mono space-y-1.5 pl-2 ${
+                      isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                    }`}
+                  >
+                    <li>S_0 · β^k &lt; θ</li>
+                    <li>β^k &lt; θ / S_0</li>
+                    <li>k · ln(β) &lt; ln(θ) - ln(S_0)</li>
+                    <li>Since 0 &lt; β &lt; 1, ln(β) &lt; 0. Dividing reverses the inequality:</li>
+                    <li className={`font-bold ${isLight ? 'text-[#059669]' : 'text-[#4EAA79]'}`}>
+                      k &gt; (ln(θ) - ln(S_0)) / ln(β)
+                    </li>
+                    <li>The minimal integer satisfying this condition is k^* = ⌈(ln θ - ln S_0) / ln β⌉. Q.E.D.</li>
+                  </ol>
+                </div>
+
+                <div
+                  className={`p-3.5 rounded-lg border text-xs font-mono ${
+                    isLight
+                      ? 'bg-[#F5F4F0] border-[#EAE8E3] text-[#6B6A65]'
+                      : 'bg-[#161614] border-[#242422] text-[#9E9D96]'
+                  }`}
+                >
+                  <span className={`font-semibold ${isLight ? 'text-[#141413]' : 'text-[#EDECE8]'}`}>
+                    Canonical Evaluation Example:
+                  </span>{' '}
+                  With S_0 = 0.75, β = 0.70, θ = 0.35:
+                  <br />
+                  k^* = ⌈(ln(0.35) - ln(0.75)) / ln(0.70)⌉ = ⌈(-1.0498 - (-0.2877)) / -0.3567⌉ = ⌈2.136⌉ = 3.
+                  <br />
+                  The memory is quarantined deterministically on exactly the 3rd failure.
+                </div>
+              </section>
+            )}
+
+            {/* Section 4: Interactive Simulator */}
+            {isSectionVisible('interactive-simulator') && (
+              <section id="interactive-simulator" className="space-y-4 scroll-mt-20">
+                <div className="flex items-center justify-between">
+                  <h2
+                    className={`text-xl font-serif tracking-tight ${
+                      isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                    }`}
+                  >
+                    4. Interactive Theorem 1 Simulator
+                  </h2>
+                  <span
+                    className={`text-[10px] font-mono px-2 py-0.5 rounded border ${
+                      isLight
+                        ? 'bg-[#ECFDF5] text-[#059669] border-[#A7F3D0]'
+                        : 'bg-[#1E2E24] text-[#4EAA79] border-[#2E4234]'
+                    }`}
+                  >
+                    LIVE SANDBOX
+                  </span>
+                </div>
+                <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
+                  Test Theorem 1 interactively. Adjust parameters α, β, θ, S_0 and simulate consecutive failure steps to observe the trust trajectory and quarantine trigger point in real time.
+                </p>
+                <TheoremSandbox />
+              </section>
+            )}
+
+            {/* Section 5: Computational Complexity */}
+            {isSectionVisible('computational-complexity') && (
+              <section id="computational-complexity" className="space-y-4 scroll-mt-20">
+                <h2
+                  className={`text-xl font-serif tracking-tight ${
                     isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
                   }`}
                 >
-                  <code>{bibtex}</code>
-                </pre>
-              </div>
-            </section>
+                  5. Computational Complexity Analysis
+                </h2>
+                
+                <div className="space-y-2">
+                  <h3
+                    className={`text-sm font-serif font-semibold ${
+                      isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                    }`}
+                  >
+                    O(1) Scalar Update Complexity
+                  </h3>
+                  <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
+                    Unlike parametric model retraining or continuous vector index re-clustering which scale as O(N) or O(N log N), A-EMA trust calibration operates in strictly O(1) time complexity. Updating a memory trust score involves two scalar multiplications and a clamp operation, consuming less than 1.2 microseconds per turn.
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <h3
+                    className={`text-sm font-serif font-semibold ${
+                      isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                    }`}
+                  >
+                    Space and Memory Footprint
+                  </h3>
+                  <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
+                    Each distilled procedural memory tuple (c, a, p) consumes approximately 240 bytes of disk storage and 4 bytes for the IEEE 754 floating-point trust score. A production bank of 100,000 verified experiences occupies less than 25MB of RAM.
+                  </p>
+                </div>
+              </section>
+            )}
+
+            {/* Section 6: Academic Citation & Artifacts */}
+            {isSectionVisible('bibtex-citation') && (
+              <section id="bibtex-citation" className="space-y-4 scroll-mt-20">
+                <h2
+                  className={`text-xl font-serif tracking-tight ${
+                    isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                  }`}
+                >
+                  6. Academic Citation & Artifacts
+                </h2>
+                <p className={`text-sm leading-relaxed ${isLight ? 'text-[#6B6A65]' : 'text-[#9E9D96]'}`}>
+                  If you cite AEMA in your research or use its algorithmic implementation in your agent framework, please use the following BibTeX citation:
+                </p>
+
+                <div
+                  className={`rounded-lg border overflow-hidden ${
+                    isLight ? 'border-[#EAE8E3] bg-[#F5F4F0]' : 'border-[#242422] bg-[#161614]'
+                  }`}
+                >
+                  <div
+                    className={`flex items-center justify-between px-4 py-2.5 border-b text-xs font-mono ${
+                      isLight
+                        ? 'bg-[#EFECE6] border-[#EAE8E3] text-[#6B6A65]'
+                        : 'bg-[#1A1A17] border-[#242422] text-[#7E7D77]'
+                    }`}
+                  >
+                    <span>citation.bib</span>
+                    <button
+                      onClick={copyBibtex}
+                      className={`flex items-center gap-1.5 text-[11px] transition-colors cursor-pointer ${
+                        isLight ? 'text-[#059669] hover:text-[#047857]' : 'text-[#4EAA79] hover:text-[#5EBA89]'
+                      }`}
+                    >
+                      {copiedBibtex ? <Check size={12} /> : <Copy size={12} />}
+                      <span>{copiedBibtex ? 'Copied' : 'Copy BibTeX'}</span>
+                    </button>
+                  </div>
+                  <pre
+                    className={`p-4 text-xs font-mono overflow-x-auto leading-relaxed ${
+                      isLight ? 'text-[#141413]' : 'text-[#EDECE8]'
+                    }`}
+                  >
+                    <code>{bibtex}</code>
+                  </pre>
+                </div>
+              </section>
+            )}
 
             {/* Footer Navigation */}
             <div
@@ -780,30 +896,36 @@ export default function ResearchPage() {
                 isLight ? 'border-[#EAE8E3]' : 'border-[#242422]'
               }`}
             >
-              {RESEARCH_SECTIONS.map((sec) => {
-                const isHeadingActive = activeHeadingId === sec.id
-                return (
-                  <a
-                    key={sec.id}
-                    href={`#${sec.id}`}
-                    onClick={(e) => {
-                      e.preventDefault()
-                      handleSelectSection(sec.id)
-                    }}
-                    className={`block text-[11px] transition-colors ${
-                      isHeadingActive
-                        ? isLight
-                          ? 'text-[#059669] font-medium border-l border-[#059669] -ml-[13px] pl-3'
-                          : 'text-[#4EAA79] font-medium border-l border-[#4EAA79] -ml-[13px] pl-3'
-                        : isLight
-                        ? 'text-[#6B6A65] hover:text-[#141413]'
-                        : 'text-[#7E7D77] hover:text-[#EDECE8]'
-                    }`}
-                  >
-                    {sec.label}
-                  </a>
-                )
-              })}
+              {filteredSections.length > 0 ? (
+                filteredSections.map((sec) => {
+                  const isHeadingActive = activeHeadingId === sec.id
+                  return (
+                    <a
+                      key={sec.id}
+                      href={`#${sec.id}`}
+                      onClick={(e) => {
+                        e.preventDefault()
+                        handleSelectSection(sec.id)
+                      }}
+                      className={`block text-[11px] transition-colors ${
+                        isHeadingActive
+                          ? isLight
+                            ? 'text-[#059669] font-medium border-l border-[#059669] -ml-[13px] pl-3'
+                            : 'text-[#4EAA79] font-medium border-l border-[#4EAA79] -ml-[13px] pl-3'
+                          : isLight
+                          ? 'text-[#6B6A65] hover:text-[#141413]'
+                          : 'text-[#7E7D77] hover:text-[#EDECE8]'
+                      }`}
+                    >
+                      {sec.label}
+                    </a>
+                  )
+                })
+              ) : (
+                <span className={`text-[11px] ${isLight ? 'text-[#8C8B85]' : 'text-[#7E7D77]'}`}>
+                  No matching sections
+                </span>
+              )}
             </div>
           </div>
         </aside>

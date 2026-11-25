@@ -262,14 +262,20 @@ export default function DashboardPage() {
             >
               <Menu size={16} />
             </button>
-            <button
-              onClick={handleToggleSidebar}
-              className="hidden lg:flex p-2 rounded border border-[#2E2E2A] text-[#7E7D77] hover:text-[#EDECE8] hover:bg-[#1E1E1B] transition-colors cursor-pointer"
-              title={sidebarCollapsed ? 'Expand main sidebar' : 'Collapse main sidebar'}
-              aria-label={sidebarCollapsed ? 'Expand main sidebar' : 'Collapse main sidebar'}
-            >
-              {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-            </button>
+            <div className="relative group/toggle hidden lg:flex items-center">
+              <button
+                onClick={handleToggleSidebar}
+                className="p-2 rounded border border-[#2E2E2A] text-[#7E7D77] hover:text-[#EDECE8] hover:bg-[#1E1E1B] transition-colors cursor-pointer"
+                aria-label={sidebarCollapsed ? 'Expand main sidebar' : 'Collapse main sidebar'}
+              >
+                {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+              </button>
+              <div className="pointer-events-none absolute left-full ml-2.5 top-1/2 -translate-y-1/2 opacity-0 group-hover/toggle:opacity-100 transition-opacity duration-100 z-50 whitespace-nowrap">
+                <div className="bg-[#1C1C1A] text-[#EDECE8] border border-[#2E2E2A] px-2.5 py-1 rounded text-xs font-mono shadow-xl">
+                  {sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+                </div>
+              </div>
+            </div>
 
             {/* Clean Breadcrumb with Generous Padding */}
             <div className="flex items-center gap-2.5 font-mono text-xs">
