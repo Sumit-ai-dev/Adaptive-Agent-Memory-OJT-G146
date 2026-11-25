@@ -1,28 +1,38 @@
 {
   "manifest_version": 3,
-  "name": "AEMA - Experiential Memory for AI Agents",
-  "version": "2.0.0",
-  "description": "Reliability-aware experiential memory and cognitive execution studio directly in your browser.",
+  "name": "AEMA - Experiential Memory Copilot",
+  "version": "2.1.0",
+  "description": "Reliability-aware experiential memory and cognitive copilot side panel for AI agents.",
   "author": "Sakshi Kasat & Sumit Das",
   "permissions": [
+    "sidePanel",
     "activeTab",
     "contextMenus",
     "storage",
     "scripting"
   ],
   "host_permissions": [
-    "http://localhost:8000/*",
-    "http://127.0.0.1:8000/*",
-    "http://localhost:5173/*"
+    "<all_urls>"
   ],
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
   "action": {
-    "default_popup": "popup.html",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     },
-    "default_title": "AEMA Autonomous Memory Studio"
+    "default_title": "AEMA Copilot (Cmd+Shift+E)"
+  },
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+E",
+        "mac": "Command+Shift+E"
+      },
+      "description": "Toggle AEMA Side Panel"
+    }
   },
   "background": {
     "service_worker": "background.js"

@@ -50,10 +50,11 @@ app = FastAPI(
     openapi_url="/api/openapi.json",
 )
 
-# CORS Configuration for React Frontend
+# CORS Configuration for React Frontend and Chrome Extension
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.CORS_ALLOWED_ORIGINS,
+    allow_origin_regex=r"^chrome-extension://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

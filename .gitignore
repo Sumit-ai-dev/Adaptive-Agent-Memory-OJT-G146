@@ -47,6 +47,7 @@ yarn-error.log*
 paper/
 paper.zip
 paper_bundle.zip
+*.zip
 scripts/generate_paper_plots.py
 scripts/verify_paper_compliance.py
 
