@@ -141,10 +141,21 @@ async def execute_node(
     tool_calls: List[Dict[str, Any]] = list(state.get("tool_calls", []))
     tools_called_names: List[str] = []
 
-    if search_tool is not None and (
-        "who" in task_input.lower()
-        or "which" in task_input.lower()
-        or "research" in str(state.get("task_domain", ""))
+    provider_raw = state.get("provider")
+    is_mock_provider = (
+        provider_raw is None
+        or str(provider_raw).lower() in ("mock", "mock-deterministic-v1", "none", "")
+        or provider_raw == ModelProvider.MOCK
+    )
+
+    if (
+        not is_mock_provider
+        and search_tool is not None
+        and (
+            "who" in task_input.lower()
+            or "which" in task_input.lower()
+            or "research" in str(state.get("task_domain", ""))
+        )
     ):
         try:
             search_res = await search_tool.execute(task_input)
