@@ -12,28 +12,38 @@ import {
   Code,
 } from 'lucide-react'
 import type { TaskDomain, TaskExecution, ChatMessage, SessionSummary } from '../types'
-import { executeAgentTask, fetchSessions, fetchExecutions, deleteSession, renameSession } from '../services/api'
+import {
+  BYOK_UPDATED_EVENT,
+  MODEL_PREFS_UPDATED_EVENT,
+  PROVIDER_DEFAULT_MODELS,
+  PROVIDER_UI_OPTIONS,
+  SupportedProvider,
+  executeAgentTask,
+  fetchSessions,
+  fetchExecutions,
+  deleteSession,
+  getByokKeyPlaceholder,
+  getByokKeyWarning,
+  getProviderApiKey,
+  loadByokKeys,
+  loadProviderPreference,
+  loadSelectedModels,
+  renameSession,
+  saveByokKey,
+  saveProviderPreference,
+  saveSelectedModel,
+  shouldUseOfflineDemo,
+} from '../services/api'
 import MarkdownRenderer from './MarkdownRenderer'
 import ExecutionStepper from './ExecutionStepper'
 import ContextInspector from './ContextInspector'
+import ProviderSelect from './ProviderSelect'
+import ProviderModelSelect from './ProviderModelSelect'
 import { useAuth } from '../context/AuthContext'
 
-type ProviderType = 'gemini' | 'groq' | 'ollama' | 'openai' | 'mock'
+type ProviderType = SupportedProvider
 
-interface ModelOption {
-  id: ProviderType
-  name: string
-  subname: string
-  logo?: string
-}
-
-const MODEL_OPTIONS: ModelOption[] = [
-  { id: 'groq', name: 'Llama-3.3-70B', subname: 'Groq Cloud (Fast)', logo: '/images/models/groq.webp' },
-  { id: 'gemini', name: 'Gemini 1.5 Flash', subname: 'Google Cloud', logo: '/images/models/gemini.webp' },
-  { id: 'openai', name: 'GPT-4o Mini', subname: 'OpenAI', logo: '/images/models/openai.webp' },
-  { id: 'ollama', name: 'Llama-3.2', subname: 'Ollama Local', logo: '/images/models/ollama.webp' },
-  { id: 'mock', name: 'Mock Engine', subname: 'Offline Test' },
-]
+const MODEL_OPTIONS = PROVIDER_UI_OPTIONS
 
 const DOMAIN_OPTIONS: { id: TaskDomain; label: string }[] = [
   { id: 'coding', label: 'Coding' },
@@ -67,6 +77,7 @@ interface ConversationMessage {
   content: string
   timestamp: string
   execution?: TaskExecution
+  isError?: boolean
 }
 
 interface RunningExecutionState {
@@ -79,10 +90,11 @@ interface RunningExecutionState {
 }
 
 interface ConversationStudioProps {
+  isDemo?: boolean
   onExecutionComplete?: (execution: TaskExecution) => void
 }
 
-export default function ConversationStudio({ onExecutionComplete }: ConversationStudioProps) {
+export default function ConversationStudio({ isDemo = false, onExecutionComplete }: ConversationStudioProps) {
   const { user } = useAuth()
   // Session States
   const [sessions, setSessions] = useState<SessionSummary[]>([])
@@ -210,36 +222,43 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
 
   // Configuration States
   const [domain, setDomain] = useState<TaskDomain>('coding')
-  const [provider, setProvider] = useState<ProviderType>('groq')
+  const [provider, setProvider] = useState<ProviderType>(() => loadProviderPreference())
+  const [selectedModels, setSelectedModels] = useState<Record<string, string>>(() => loadSelectedModels())
+  const activeModel = selectedModels[provider] || PROVIDER_DEFAULT_MODELS[provider]
   const [memoryEnabled, setMemoryEnabled] = useState(true)
   const [simulateFailure, setSimulateFailure] = useState(false)
-  const [isModelDropdownOpen, setIsModelDropdownOpen] = useState(false)
   const [showKeyModal, setShowKeyModal] = useState(false)
-  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => {
-    try {
-      const saved = localStorage.getItem('aema_byok_keys')
-      return saved ? JSON.parse(saved) : {}
-    } catch {
-      return {}
-    }
-  })
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>(() => loadByokKeys())
+  const [keyDraft, setKeyDraft] = useState('')
 
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const modelDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    if (messagesContainerRef.current) {
+      messagesContainerRef.current.scrollTop = messagesContainerRef.current.scrollHeight
+    }
   }, [messages, isExecuting, runningExecution?.tokens])
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (modelDropdownRef.current && !modelDropdownRef.current.contains(event.target as Node)) {
-        setIsModelDropdownOpen(false)
-      }
+    function handleByokSync() {
+      setApiKeys(loadByokKeys())
     }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    function handleModelPrefsSync() {
+      setProvider(loadProviderPreference())
+      setSelectedModels(loadSelectedModels())
+    }
+    window.addEventListener(BYOK_UPDATED_EVENT, handleByokSync)
+    window.addEventListener(MODEL_PREFS_UPDATED_EVENT, handleModelPrefsSync)
+    window.addEventListener('storage', handleByokSync)
+    window.addEventListener('storage', handleModelPrefsSync)
+    return () => {
+      window.removeEventListener(BYOK_UPDATED_EVENT, handleByokSync)
+      window.removeEventListener(MODEL_PREFS_UPDATED_EVENT, handleModelPrefsSync)
+      window.removeEventListener('storage', handleByokSync)
+      window.removeEventListener('storage', handleModelPrefsSync)
+    }
   }, [])
 
   useEffect(() => {
@@ -360,16 +379,18 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
     }, 1000)
 
     try {
-      const activeKey = apiKeys[provider] || undefined
+      const activeKey = getProviderApiKey(apiKeys, provider)
       const exec = await executeAgentTask({
         taskInput: promptToSend,
         taskDomain: effectiveDomain,
         memoryEnabled,
         provider,
+        model: activeModel,
         apiKey: activeKey,
         sessionId: currentSessionId,
         messages: historyPayload,
         simulateFailure,
+        isExplicitDemo: shouldUseOfflineDemo(isDemo, provider, activeKey),
         useStreaming: true,
         onStageChange: (stage) => {
           setRunningExecution((prev) => prev ? { ...prev, stage } : null)
@@ -391,11 +412,26 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
       onExecutionComplete?.(exec)
       loadSessions()
     } catch (err) {
+      const rawMsg = err instanceof Error ? err.message : String(err)
+      // Parse the backend error into a user-friendly message
+      const isProviderError =
+        rawMsg.includes('provider') ||
+        rawMsg.includes('timed out') ||
+        rawMsg.includes('policy') ||
+        rawMsg.includes('high demand') ||
+        rawMsg.includes('503') ||
+        rawMsg.includes('403')
+      const displayContent = isProviderError
+        ? rawMsg
+            .replace(/^Execution encountered a model provider error:\s*/i, '')
+            .replace(/^Error executing task:\s*/i, '')
+        : `Error executing task: ${rawMsg}`
       const errorMsg: ConversationMessage = {
         id: `asst_err_${Date.now()}`,
         role: 'assistant',
-        content: `Error executing task: ${err instanceof Error ? err.message : String(err)}`,
+        content: displayContent,
         timestamp: new Date().toISOString(),
+        isError: true,
       }
       setMessages((prev) => [...prev, errorMsg])
     } finally {
@@ -413,13 +449,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
   }
 
   const saveApiKey = (keyVal: string) => {
-    const updated = { ...apiKeys, [provider]: keyVal.trim() }
-    setApiKeys(updated)
-    try {
-      localStorage.setItem('aema_byok_keys', JSON.stringify(updated))
-    } catch (e) {
-      console.warn('Could not save BYOK key:', e)
-    }
+    setApiKeys(saveByokKey(provider, keyVal))
     setShowKeyModal(false)
   }
 
@@ -554,57 +584,28 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
       {/* ─── 2. MAIN CONVERSATION WORKSPACE ───────────────────────────────── */}
       <div className="flex-1 flex flex-col h-full bg-[#0E0E0D] overflow-hidden">
         {/* Workspace Top Toolbar: Slim & Minimalist (Antigravity Style) */}
-        <div className="px-4 py-2 border-b border-[#1C1C1A] flex items-center justify-between text-xs bg-[#0D0D0C]">
+        <div className="px-4 py-2 border-b border-[#1C1C1A] flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 text-xs bg-[#0D0D0C] overflow-visible relative z-10">
           {/* Thread Title Header */}
-          <div className="flex items-center gap-2 truncate max-w-sm">
+          <div className="flex items-center gap-2 min-w-0 max-w-xs sm:max-w-sm">
             <span className="w-1.5 h-1.5 rounded-full bg-[#555550] shrink-0" />
             <span className="font-medium text-[#EDECE8] truncate text-xs">{sessionTitle}</span>
-            <span className="text-[10px] font-mono text-[#555550]">
+            <span className="text-[10px] font-mono text-[#555550] shrink-0">
               {messages.length} msgs
             </span>
           </div>
 
           {/* Right Toolbar Controls (All Black, Small, Minimalist) */}
-          <div className="flex items-center gap-2">
-            {/* Model Selector Dropdown */}
-            <div className="relative" ref={modelDropdownRef}>
-              <button
-                onClick={() => setIsModelDropdownOpen(!isModelDropdownOpen)}
-                className="flex items-center gap-1.5 px-2 py-1 rounded border border-[#20201E] bg-[#141412] hover:bg-[#1A1A17] hover:border-[#2C2C28] text-[11px] font-mono transition-colors cursor-pointer text-[#B0AFA8] hover:text-[#EDECE8]"
-              >
-                {currentModel.logo && (
-                  <img src={currentModel.logo} alt="" className="w-3 h-3 object-contain rounded" />
-                )}
-                <span>{currentModel.name}</span>
-                <ChevronDown size={11} className="text-[#555550]" />
-              </button>
-
-              {isModelDropdownOpen && (
-                <div className="absolute top-full right-0 mt-1 w-52 rounded-lg border border-[#222220] bg-[#121210] shadow-2xl z-30 p-1 font-mono text-xs">
-                  {MODEL_OPTIONS.map((m) => (
-                    <div
-                      key={m.id}
-                      onClick={() => {
-                        setProvider(m.id)
-                        setIsModelDropdownOpen(false)
-                      }}
-                      className={`p-2 rounded flex items-center justify-between cursor-pointer transition-colors ${
-                        provider === m.id ? 'bg-[#1C1C18] text-white' : 'hover:bg-[#161614] text-[#8E8D88]'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        {m.logo && <img src={m.logo} alt="" className="w-3.5 h-3.5 object-contain rounded" />}
-                        <div>
-                          <div className="font-medium text-[#EDECE8] text-[11px]">{m.name}</div>
-                          <div className="text-[9px] text-[#555550]">{m.subname}</div>
-                        </div>
-                      </div>
-                      {provider === m.id && <Check size={11} className="text-[#4EAA79]" />}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* Provider Selector Dropdown */}
+            <ProviderSelect
+              value={provider}
+              onChange={(nextProv) => {
+                setProvider(nextProv)
+                saveProviderPreference(nextProv)
+              }}
+              align="right"
+              compact
+            />
 
             {/* Domain Selector */}
             <select
@@ -619,19 +620,33 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
               ))}
             </select>
 
+            {/* Provider Model Variant Selector */}
+            <ProviderModelSelect
+              provider={provider}
+              value={activeModel}
+              onChange={(modelId) => setSelectedModels(saveSelectedModel(provider, modelId))}
+              align="right"
+              compact
+            />
+
             {/* BYOK Button */}
-            <button
-              onClick={() => setShowKeyModal(true)}
-              className={`flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-mono transition-colors cursor-pointer ${
-                apiKeys[provider]
-                  ? 'border-[#2A3830] bg-[#121A15] text-[#4EAA79]'
-                  : 'border-[#20201E] bg-[#141412] text-[#666660] hover:text-[#EDECE8]'
-              }`}
-              title="API Key"
-            >
-              <KeyRound size={11} />
-              <span>{apiKeys[provider] ? 'Key' : 'Key'}</span>
-            </button>
+            {provider !== 'mock' && provider !== 'ollama' && (
+              <button
+                onClick={() => {
+                  setKeyDraft(apiKeys[provider] || '')
+                  setShowKeyModal(true)
+                }}
+                className={`flex items-center gap-1 px-2 py-1 rounded border text-[11px] font-mono transition-colors cursor-pointer ${
+                  apiKeys[provider]
+                    ? 'border-[#2A3830] bg-[#121A15] text-[#4EAA79]'
+                    : 'border-[#20201E] bg-[#141412] text-[#666660] hover:text-[#EDECE8]'
+                }`}
+                title="Configure API Key for this provider"
+              >
+                <KeyRound size={11} />
+                <span>{apiKeys[provider] ? 'Key Set' : 'BYOK'}</span>
+              </button>
+            )}
 
             <div className="w-px h-3.5 bg-[#1C1C1A]" />
 
@@ -680,7 +695,7 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
         </div>
 
         {/* Chat / Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 && !runningExecution ? (
             /* Empty State Hero Banner */
             <div className="max-w-xl mx-auto my-12 text-center space-y-3">
@@ -735,7 +750,28 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                     ) : (
                       /* Assistant Message (Antigravity Style: Seamless Canvas) */
                       <div className="w-full text-xs sm:text-[13px] leading-relaxed text-[#EDECE8] space-y-2">
-                        {/* Antigravity Minimalist Thinking Block */}
+                        {/* Provider Error Banner */}
+                        {msg.isError ? (
+                          <div className="rounded-lg border border-[#4A2E1A] bg-[#1E140C] px-4 py-3 space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="w-2 h-2 rounded-full bg-[#E6803C] shrink-0" />
+                              <span className="text-[11px] font-semibold uppercase tracking-wider text-[#E6803C] font-mono">
+                                Model Provider Error
+                              </span>
+                            </div>
+                            <p className="text-[12px] text-[#D4C4B0] leading-relaxed font-mono whitespace-pre-wrap">
+                              {msg.content}
+                            </p>
+                            {(msg.content.includes('→') || msg.content.includes('Switch to')) && (
+                              <div className="pt-1 flex items-center gap-2 text-[11px] font-mono text-[#9E9D96]">
+                                <span className="text-[#4EAA79]">Tip:</span>
+                                <span>Use the model selector above to switch providers or models.</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <>
+                            {/* Antigravity Minimalist Thinking Block */}
                         {exec && (
                           <div className="py-0.5 select-none">
                             <button
@@ -809,13 +845,13 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                         )}
 
                         {/* Formatted Markdown Output directly on canvas */}
-                        <div className="pt-0.5">
-                          <MarkdownRenderer content={msg.content} />
-                        </div>
+                          <div className="pt-0.5">
+                            <MarkdownRenderer content={msg.content} />
+                          </div>
 
-                        {/* Interactive Trace Verification Action Bar */}
-                        {exec && (
-                          <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#1C1C1A]/80 text-[11px] font-mono select-none">
+                          {/* Interactive Trace Verification Action Bar */}
+                          {exec && (
+                            <div className="pt-2 flex flex-wrap items-center justify-between gap-2 border-t border-[#1C1C1A]/80 text-[11px] font-mono select-none">
                             <div className="flex items-center gap-2 text-[#666660]">
                               <span>{(exec.latencyMs / 1000).toFixed(1)}s</span>
                               <span>•</span>
@@ -850,7 +886,9 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
                               )}
                               <ChevronRight size={11} className="text-[#555550] group-hover:text-[#B0AFA8] group-hover:translate-x-0.5 transition-transform" />
                             </button>
-                          </div>
+                            </div>
+                          )}
+                        </>
                         )}
                       </div>
                     )}
@@ -1084,37 +1122,56 @@ export default function ConversationStudio({ onExecutionComplete }: Conversation
               </span>
               <button
                 onClick={() => setShowKeyModal(false)}
-                className="text-[#7E7D77] hover:text-white"
+                className="text-[#7E7D77] hover:text-white cursor-pointer"
               >
                 <X size={15} />
               </button>
             </div>
 
             <p className="text-xs text-[#7E7D77] leading-relaxed">
-              Keys are stored strictly in your local browser cache and forwarded for this session. They are never retained on the server.
+              Keys are stored strictly in your local browser cache and forwarded per request. They are never persisted on the server.
             </p>
 
-            <input
-              type="password"
-              defaultValue={apiKeys[provider] || ''}
-              placeholder={`Enter ${currentModel.name} Key...`}
-              id="byok-input"
-              className="w-full px-3 py-2 text-xs rounded border border-[#2E2E2A] bg-[#141412] text-[#EDECE8] focus:outline-none font-mono"
-            />
+            <div className="space-y-2">
+              <input
+                type="password"
+                value={keyDraft}
+                onChange={(e) => setKeyDraft(e.target.value)}
+                placeholder={getByokKeyPlaceholder(provider)}
+                id="byok-input"
+                className="w-full px-3 py-2 text-xs rounded border border-[#2E2E2A] bg-[#141412] text-[#EDECE8] focus:outline-none focus:border-[#4EAA79] font-mono"
+              />
+              {getByokKeyWarning(provider, keyDraft) && (
+                <p className="text-[11px] font-mono text-[#E67E22]">
+                  {getByokKeyWarning(provider, keyDraft)}
+                </p>
+              )}
+            </div>
 
             <div className="flex justify-end gap-2 pt-2">
+              {apiKeys[provider] && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setKeyDraft('')
+                    saveApiKey('')
+                  }}
+                  className="mr-auto px-3 py-1.5 rounded border border-[#2E2E2A] text-xs font-medium text-[#D9534F] hover:bg-[#1E1414] cursor-pointer"
+                >
+                  Clear Key
+                </button>
+              )}
               <button
+                type="button"
                 onClick={() => setShowKeyModal(false)}
-                className="px-3 py-1.5 rounded border border-[#2E2E2A] text-xs font-medium text-[#7E7D77] hover:text-white"
+                className="px-3 py-1.5 rounded border border-[#2E2E2A] text-xs font-medium text-[#7E7D77] hover:text-white cursor-pointer"
               >
                 Cancel
               </button>
               <button
-                onClick={() => {
-                  const input = document.getElementById('byok-input') as HTMLInputElement
-                  saveApiKey(input?.value || '')
-                }}
-                className="px-4 py-1.5 rounded bg-[#EDECE8] text-[#141412] text-xs font-medium hover:bg-white"
+                type="button"
+                onClick={() => saveApiKey(keyDraft)}
+                className="px-4 py-1.5 rounded bg-[#EDECE8] text-[#141412] text-xs font-medium hover:bg-white cursor-pointer"
               >
                 Save Key
               </button>

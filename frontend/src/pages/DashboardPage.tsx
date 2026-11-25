@@ -31,6 +31,7 @@ import {
   fetchTelemetry,
   clearExecutionsApi,
   getTelemetryMetrics,
+  shouldUseOfflineDemo,
   INITIAL_EXPERIENCES,
   INITIAL_DEMO_EXECUTIONS,
 } from '../services/api'
@@ -87,9 +88,13 @@ export default function DashboardPage() {
     document.documentElement.classList.add('dark')
     document.documentElement.style.backgroundColor = '#141412'
     document.body.style.backgroundColor = '#141412'
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
     return () => {
       document.documentElement.style.backgroundColor = ''
       document.body.style.backgroundColor = ''
+      document.documentElement.style.overflow = ''
+      document.body.style.overflow = ''
     }
   }, [])
 
@@ -151,11 +156,18 @@ export default function DashboardPage() {
     domain: TaskDomain
     memoryEnabled: boolean
     provider?: string
+    model?: string
     apiKey?: string
     simulateFailure?: boolean
   }) => {
     setIsExecuting(true)
     setExecutionError(null)
+
+    const shouldRunOfflineDemo = shouldUseOfflineDemo(
+      isDemo,
+      params.provider || 'groq',
+      params.apiKey
+    )
 
     try {
       const exec = await executeAgentTask({
@@ -163,9 +175,10 @@ export default function DashboardPage() {
         taskDomain: params.domain,
         memoryEnabled: params.memoryEnabled,
         provider: params.provider,
+        model: params.model,
         apiKey: params.apiKey,
         simulateFailure: params.simulateFailure,
-        isExplicitDemo: isDemo,
+        isExplicitDemo: shouldRunOfflineDemo,
       })
 
       setSelectedExecution(exec)
@@ -202,7 +215,7 @@ export default function DashboardPage() {
   if (!user && !isDemo) return null
 
   return (
-    <div className="min-h-screen flex bg-[#141412] text-[#EDECE8] transition-colors selection:bg-[#2E2E2A]">
+    <div className="h-screen w-screen overflow-hidden flex bg-[#141412] text-[#EDECE8] transition-colors selection:bg-[#2E2E2A]">
       {/* Desktop Sidebar (Pure Obsidian Theme) */}
       <div className="hidden lg:block shrink-0 transition-all duration-200">
         <Sidebar
@@ -252,7 +265,7 @@ export default function DashboardPage() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-y-auto bg-[#141412]">
+      <div className={`flex-1 flex flex-col min-w-0 h-screen ${activeTab === 'studio' ? 'overflow-hidden' : 'overflow-y-auto'} bg-[#141412]`}>
         {/* Top Header Rail with Airy Spacing & Clean Breadcrumb */}
         <header className="h-16 border-b border-[#242422] px-6 sm:px-8 flex items-center justify-between shrink-0 bg-[#161614]">
           <div className="flex items-center gap-3.5">
@@ -308,8 +321,9 @@ export default function DashboardPage() {
 
         {/* Tab Viewport: Studio is full-bleed workspace directly below header; other tabs use max-w-7xl container */}
         {activeTab === 'studio' ? (
-          <div className="flex-1 h-[calc(100vh-64px)] w-full overflow-hidden flex flex-col">
+          <div className="flex-1 w-full min-h-0 overflow-hidden flex flex-col">
             <ConversationStudio
+              isDemo={isDemo}
               onExecutionComplete={(exec) => {
                 setSelectedExecution(exec)
                 setRecentExecutions((prev) => [exec, ...prev.filter((r) => r.id !== exec.id).slice(0, 14)])
