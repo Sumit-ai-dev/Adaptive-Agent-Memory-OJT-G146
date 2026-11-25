@@ -45,9 +45,9 @@ export const GEMINI_MODEL_OPTIONS: ProviderModelOption[] = [
 export const PROVIDER_MODEL_OPTIONS: Record<string, ProviderModelOption[]> = {
   gemini: GEMINI_MODEL_OPTIONS,
   groq: [
-    { id: 'openai/gpt-oss-120b', label: 'openai/gpt-oss-120b', note: 'Default · Fast ~500 tok/s', tier: 'free' },
-    { id: 'llama-3.3-70b-versatile', label: 'llama-3.3-70b-versatile', note: 'Multilingual 70B', tier: 'free' },
-    { id: 'llama-3.1-8b-instant', label: 'llama-3.1-8b-instant', note: 'Ultra-fast 8B', tier: 'free' },
+    { id: 'openai/gpt-oss-120b', label: 'openai/gpt-oss-120b', note: 'Default · Frontier 120B reasoning', tier: 'free' },
+    { id: 'openai/gpt-oss-20b', label: 'openai/gpt-oss-20b', note: 'Fast 20B · Everyday coding', tier: 'free' },
+    { id: 'qwen/qwen3.8-27b', label: 'qwen/qwen3.8-27b', note: 'Ultra-fast 27B · Instant ~0.1s', tier: 'free' },
   ],
   openai: [
     { id: 'gpt-6.2-sol', label: 'gpt-6.2-sol', note: 'Paid · Everyday coding & agents', tier: 'paid' },
