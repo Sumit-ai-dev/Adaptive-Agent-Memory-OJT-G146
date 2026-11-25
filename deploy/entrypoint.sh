@@ -54,6 +54,7 @@ echo "✅ [AEMA] Backend health verified: http://127.0.0.1:8000/api/health is UP
 
 # 3. Start Nginx in foreground
 echo "==> [AEMA] Launching Nginx reverse proxy & static asset server on port 80..."
+rm -f /etc/nginx/sites-enabled/default /etc/nginx/sites-available/default 2>/dev/null || true
 nginx -g "daemon off;" &
 NGINX_PID=$!
 
