@@ -6,7 +6,20 @@ import {
   getCurrentSession,
 } from '../lib/supabase'
 
-const API_BASE_URL = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) || 'http://localhost:8000'
+const resolveApiBaseUrl = (): string => {
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
+  }
+  if (typeof window !== 'undefined') {
+    // In production or deployed environments, route API calls through the same-origin reverse proxy (/api)
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      return ''
+    }
+  }
+  return 'http://localhost:8000'
+}
+
+const API_BASE_URL = resolveApiBaseUrl()
 
 // ─── Hyperparameters Matching Phase 8 Protocol & backend/ai-service ─────────
 export const ALPHA_SUCCESS = 0.85
