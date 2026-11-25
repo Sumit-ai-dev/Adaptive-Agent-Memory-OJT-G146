@@ -10,8 +10,7 @@ concurrency:
   group: production-deploy
   cancel-in-progress: false
 
-permissions:
-  contents: read
+permissions: read-all
 
 jobs:
   deploy:
@@ -20,8 +19,18 @@ jobs:
     timeout-minutes: 15
 
     steps:
+      - name: Verify Deployment Secrets
+        run: |
+          if [ -z "${{ secrets.VULTR_HOST }}" ]; then
+            echo "Notice: VULTR_HOST secret is not configured yet. Skipping SSH remote deployment."
+            echo "Configure VULTR_HOST and VULTR_PASSWORD in repository Settings -> Secrets to enable auto-deploy."
+          else
+            echo "VULTR_HOST secret is present. Proceeding with deployment."
+          fi
+
       - name: Trigger Remote Deployment via SSH
-        uses: appleboy/ssh-action@v1.2.0
+        if: ${{ secrets.VULTR_HOST != '' }}
+        uses: appleboy/ssh-action@7eaf76671a0d7eec5d98ee897acda4f968735a17 # v1.2.0
         with:
           host: ${{ secrets.VULTR_HOST }}
           username: root
