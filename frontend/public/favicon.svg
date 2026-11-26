@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="100%" height="100%">
+  <rect width="128" height="128" rx="34" fill="#1C1C1A" stroke="#2B2B28" stroke-width="4"/>
+  <rect x="6" y="6" width="116" height="116" rx="28" fill="#222220"/>
+  <text x="64" y="84" font-family="-apple-system, BlinkMacSystemFont, 'Inter', 'Geist', 'Segoe UI', sans-serif" font-weight="700" font-style="italic" font-size="64" fill="#FFFFFF" text-anchor="middle" letter-spacing="-1">Æ</text>
+</svg>
