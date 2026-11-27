@@ -31,7 +31,7 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "start": "node dist/mcp.js",
-    "test": "npx tsx --test src/trust.test.ts"
+    "test": "AEMA_API_URL=http://localhost:0 npx tsx --test src/trust.test.ts"
   },
   "keywords": [
     "aema",

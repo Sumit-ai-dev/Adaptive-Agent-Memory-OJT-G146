@@ -536,13 +536,14 @@ async def trust_update_endpoint(payload: TrustUpdateRequest):
             binary_outcome=bin_outcome,
         )
     except ValueError as ve:
-        if "probation quota not met" in str(ve):
-            # Candidate has not completed probation quota: retain in CANDIDATE status without crashing
+        err_msg = str(ve)
+        if "probation quota not met" in err_msg or "Cannot promote CANDIDATE" in err_msg:
+            # Candidate has not met promotion criteria: retain in CANDIDATE status without crashing
             updated_exp.status = ExperienceStatus.CANDIDATE
             await shared_store.update_trust(
                 experience_id=payload.experience_id,
                 new_trust=updated_exp.trust_score,
-                reason=f"{audit_record.reason} (Retained in CANDIDATE: probation quota pending)",
+                reason=f"{audit_record.reason} (Retained in CANDIDATE: promotion criteria pending)",
                 execution_id=payload.execution_id,
                 status=ExperienceStatus.CANDIDATE.value,
                 binary_outcome=bin_outcome,

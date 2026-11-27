@@ -1,3 +1,6 @@
+// Force hermetic offline mode for SDK unit tests to prevent hitting live production servers
+process.env.AEMA_API_URL = 'http://localhost:0';
+
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
