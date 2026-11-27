@@ -51,6 +51,7 @@ export interface TrustUpdateResult {
   outcome: OutcomeType;
   isQuarantined: boolean;
   decayDelta: number;
+  status?: string;
 }
 
 export interface RetrievalQuery {
