@@ -526,14 +526,29 @@ async def trust_update_endpoint(payload: TrustUpdateRequest):
 
     status_val = updated_exp.status.value if hasattr(updated_exp.status, "value") else str(updated_exp.status)
     bin_outcome = 1 if payload.outcome_score >= 0.80 else (0 if payload.outcome_score <= 0.30 else None)
-    await shared_store.update_trust(
-        experience_id=payload.experience_id,
-        new_trust=updated_exp.trust_score,
-        reason=audit_record.reason,
-        execution_id=payload.execution_id,
-        status=status_val,
-        binary_outcome=bin_outcome,
-    )
+    try:
+        await shared_store.update_trust(
+            experience_id=payload.experience_id,
+            new_trust=updated_exp.trust_score,
+            reason=audit_record.reason,
+            execution_id=payload.execution_id,
+            status=status_val,
+            binary_outcome=bin_outcome,
+        )
+    except ValueError as ve:
+        if "probation quota not met" in str(ve):
+            # Candidate has not completed probation quota: retain in CANDIDATE status without crashing
+            updated_exp.status = ExperienceStatus.CANDIDATE
+            await shared_store.update_trust(
+                experience_id=payload.experience_id,
+                new_trust=updated_exp.trust_score,
+                reason=f"{audit_record.reason} (Retained in CANDIDATE: probation quota pending)",
+                execution_id=payload.execution_id,
+                status=ExperienceStatus.CANDIDATE.value,
+                binary_outcome=bin_outcome,
+            )
+        else:
+            raise
 
     return {
         "experience": updated_exp,

@@ -23,7 +23,7 @@ const client = new AEMAClient();
 
 const server = new McpServer({
   name: 'aema-memory',
-  version: '0.1.1',
+  version: '2.0.1',
 });
 
 // Tool 1: Retrieve Reliable Memories
@@ -130,6 +130,8 @@ server.tool(
 
     if (result.isQuarantined) {
       message += `\n[QUARANTINE ALERT] Trust score dropped below threshold (${DEFAULT_QUARANTINE_THRESHOLD}). Experience is now QUARANTINED to prevent negative transfer.`;
+    } else if (result.status === 'candidate') {
+      message += `Status: CANDIDATE (Probationary validation recorded; awaiting probation quota graduation)`;
     } else {
       message += `Status: ACTIVE (Reliable)`;
     }

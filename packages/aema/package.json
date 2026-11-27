@@ -1,14 +1,14 @@
 {
   "name": "@sumitaidev/aema",
-  "version": "0.1.1",
+  "version": "2.0.1",
   "description": "Reliability-Aware Experiential Memory for Autonomous AI Agents: Asymmetric Exponential Moving Average (AEMA) SDK and MCP Server",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "aema": "./dist/cli.js",
-    "aema-mcp": "./dist/mcp.js"
+    "aema": "dist/cli.js",
+    "aema-mcp": "dist/mcp.js"
   },
   "exports": {
     ".": {
@@ -53,7 +53,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146.git"
+    "url": "git+https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146.git"
   },
   "bugs": {
     "url": "https://github.com/Sumit-ai-dev/Adaptive-Agent-Memory-OJT-G146/issues"

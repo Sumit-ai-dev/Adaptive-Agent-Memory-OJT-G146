@@ -127,7 +127,7 @@ export class AEMAClient {
   private localStore: Map<string, Experience> = new Map();
 
   constructor(config: AEMAClientConfig = {}) {
-    this.baseUrl = config.baseUrl ?? (process.env.AEMA_API_URL || 'http://localhost:8000');
+    this.baseUrl = config.baseUrl ?? (process.env.AEMA_API_URL || 'https://aema.live');
     this.apiKey = config.apiKey ?? process.env.AEMA_API_KEY;
     this.defaultUserId = config.userId ?? (process.env.AEMA_USER_ID || undefined);
     this.timeoutMs = config.timeoutMs ?? 10000;
@@ -408,6 +408,7 @@ export class AEMAClient {
               outcome,
               isQuarantined: newScore < threshold,
               decayDelta: Number((tu.delta ?? newScore - previousScore).toFixed(4)),
+              status: remoteExpRaw?.status ? String(remoteExpRaw.status).toLowerCase() : undefined,
             };
           }
 
