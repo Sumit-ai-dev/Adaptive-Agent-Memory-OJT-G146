@@ -397,3 +397,132 @@ describe('AEMAClient Persistence & FastAPI Remote Mapping', () => {
     }
   });
 });
+
+describe('Standalone Fallback Similarity Regression Suite', () => {
+  it('correctly scores exact keyword match with 1.0 relevance', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const client = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: false });
+    await client.store({
+      task: 'PostgreSQL async connection pool exhaustion',
+      solution: 'Use max_overflow with pool_pre_ping enabled',
+      metadata: { domain: 'coding' },
+    });
+
+    const hits = await client.retrieve('PostgreSQL async connection pool exhaustion');
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].relevanceScore, 1.0);
+    assert.ok(hits[0].effectiveScore > 0);
+    assert.equal(hits[0].isReliable, true);
+  });
+
+  it('correctly scores partial keyword overlap without arbitrary offset', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const client = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: false });
+    await client.store({
+      task: 'PostgreSQL connection management',
+      solution: 'Tune pool settings',
+    });
+
+    // Query has 2 tokens: 'postgresql', 'timeout'. Only 'postgresql' overlaps (1 / 2 = 0.5)
+    const hits = await client.retrieve('postgresql timeout');
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].relevanceScore, 0.5);
+    assert.ok(hits[0].effectiveScore > 0);
+  });
+
+  it('returns exactly 0.0 relevance for completely unrelated queries (no artificial +0.2 offset)', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const client = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: false });
+    await client.store({
+      task: 'PostgreSQL async connection pool exhaustion',
+      solution: 'Use max_overflow with pool_pre_ping enabled',
+    });
+
+    const hits = await client.retrieve('quantum entanglement teleportation qubit superposition');
+    assert.equal(hits.length, 1);
+    // Crucial regression verification: MUST NOT have artificial +0.2 offset
+    assert.equal(hits[0].relevanceScore, 0.0, 'Unrelated query must return exactly 0.0 relevanceScore');
+    assert.equal(hits[0].effectiveScore, 0.0, 'Unrelated query must return 0.0 effectiveScore');
+  });
+
+  it('handles empty query safely returning 0.0 relevance without NaN or errors', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const client = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: false });
+    await client.store({
+      task: 'Docker container networking',
+      solution: 'Use bridge network',
+    });
+
+    const hitsEmpty = await client.retrieve('');
+    assert.equal(hitsEmpty.length, 1);
+    assert.equal(hitsEmpty[0].relevanceScore, 0.0);
+    assert.equal(hitsEmpty[0].effectiveScore, 0.0);
+
+    const hitsWhitespace = await client.retrieve('   ');
+    assert.equal(hitsWhitespace.length, 1);
+    assert.equal(hitsWhitespace[0].relevanceScore, 0.0);
+    assert.equal(hitsWhitespace[0].effectiveScore, 0.0);
+  });
+
+  it('handles empty memory content safely returning 0.0 relevance', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const client = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: false });
+    await client.store({
+      task: '',
+      solution: '',
+    });
+
+    const hits = await client.retrieve('sqlite wal deadlock');
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0].relevanceScore, 0.0);
+    assert.equal(hits[0].effectiveScore, 0.0);
+  });
+
+  it('correctly ranks multiple memories with different overlap scores', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const client = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: false });
+
+    // Memory A: 100% overlap
+    const memA = await client.store({
+      task: 'Docker compose volume mounting',
+      solution: 'Use named volumes',
+    });
+    // Memory B: 50% overlap (docker only)
+    const memB = await client.store({
+      task: 'Docker container port binding',
+      solution: 'Expose port 8080',
+    });
+    // Memory C: 0% overlap
+    const memC = await client.store({
+      task: 'Kubernetes ingress controller routing',
+      solution: 'Install cert manager',
+    });
+
+    // Query has 2 tokens: 'docker', 'volume'
+    const hits = await client.retrieve({ query: 'docker volume', topK: 5 });
+    assert.equal(hits.length, 3);
+    // Memory A has 2/2 = 1.0 overlap
+    assert.equal(hits[0].experience.id, memA.id);
+    assert.equal(hits[0].relevanceScore, 1.0);
+
+    // Memory B has 1/2 = 0.5 overlap
+    assert.equal(hits[1].experience.id, memB.id);
+    assert.equal(hits[1].relevanceScore, 0.5);
+
+    // Memory C has 0/2 = 0.0 overlap
+    assert.equal(hits[2].experience.id, memC.id);
+    assert.equal(hits[2].relevanceScore, 0.0);
+
+    // Check strict descending order of effectiveScore
+    assert.ok(hits[0].effectiveScore > hits[1].effectiveScore, 'Mem A effectiveScore > Mem B');
+    assert.ok(hits[1].effectiveScore > hits[2].effectiveScore, 'Mem B effectiveScore > Mem C');
+    assert.equal(hits[2].effectiveScore, 0.0);
+  });
+
+  it('handles retrieval with no stored memories returning clean empty array', async () => {
+    const { AEMAClient } = await import('./client.js');
+    const client = new AEMAClient({ baseUrl: 'http://localhost:0', persistPath: false });
+    const hits = await client.retrieve('any search query');
+    assert.deepEqual(hits, []);
+  });
+});

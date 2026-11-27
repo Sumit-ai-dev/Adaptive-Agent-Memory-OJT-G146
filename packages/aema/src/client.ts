@@ -311,14 +311,18 @@ export class AEMAClient {
       candidatesList = candidatesList.filter((e) => e.metadata?.domain === options.domain);
     }
 
-    const queryTokens = new Set(tokenizeNormalized(options.query));
+    const queryStr = typeof options.query === 'string' ? options.query : '';
+    const queryTokens = new Set(tokenizeNormalized(queryStr));
     const candidates = candidatesList.map((exp) => {
-      const taskTokens = new Set(tokenizeNormalized(`${exp.task} ${exp.solution}`));
+      const taskTokens = new Set(tokenizeNormalized(`${exp.task || ''} ${exp.solution || ''}`));
       let overlap = 0;
       for (const token of queryTokens) {
         if (taskTokens.has(token)) overlap += 1;
       }
-      const semanticRelevance = queryTokens.size > 0 ? Math.min(1.0, overlap / queryTokens.size + 0.2) : 0.5;
+      const semanticRelevance =
+        queryTokens.size > 0 && overlap > 0
+          ? Math.min(1.0, overlap / queryTokens.size)
+          : 0.0;
       return { experience: exp, semanticRelevance };
     });
 
